@@ -1,10 +1,24 @@
 const supabase = require('../services/supabase');
 
+const INSCRIBIBLE_STATES = new Set(['publicado', 'abierto']);
+
+const normalizeTournamentState = (value) => {
+  if (typeof value !== 'string') return value;
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'inscripcion' ? 'publicado' : normalized;
+};
+
+const parseDateSafe = (value) => {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 /**
  * GET /api/dashboard?jugador_id=UUID
  *
  * Devuelve de una sola llamada:
- *  - proximos_torneos:  Los torneos en estado 'inscripcion' más próximos (hasta 3)
+ *  - proximos_torneos:  Los torneos publicados para inscripcion (hasta 3)
  *  - torneos_finalizados: Últimos 3 torneos finalizados (para mostrar resultados)
  *  - ranking_top5:     Top 5 del ranking ELO de la categoría del jugador logueado
  *  - estadisticas_jugador: Victorias, derrotas y H2H del jugador (si se brinda jugador_id)
@@ -33,15 +47,34 @@ const getDashboard = async (req, res) => {
     // ── 1. Próximos torneos abiertos + contador de inscritos ────────────────
     const { data: torneos_raw, error: e1 } = await supabase
       .from('torneos')
-      .select('id, titulo, fecha_inicio, cupos_max, costo, estado')
-      .in('estado', ['inscripcion', 'borrador'])
+      .select('id, titulo, fecha_inicio, fecha_inicio_inscripcion, fecha_cierre_inscripcion, cupos_max, costo, estado')
+      .in('estado', ['publicado', 'abierto', 'inscripcion'])
       .order('fecha_inicio', { ascending: true })
-      .limit(3);
+      .limit(50);
 
     if (e1) throw e1;
 
+    const ahora = new Date();
+    const torneosFiltrados = (torneos_raw || [])
+      .filter((t) => {
+        const estadoNormalizado = normalizeTournamentState(t.estado);
+        if (!INSCRIBIBLE_STATES.has(estadoNormalizado)) {
+          return false;
+        }
+
+        const inicioInscripcion = parseDateSafe(t.fecha_inicio_inscripcion);
+        const cierreInscripcion = parseDateSafe(t.fecha_cierre_inscripcion);
+
+        if (!inicioInscripcion || !cierreInscripcion) {
+          return false;
+        }
+
+        return ahora >= inicioInscripcion && ahora <= cierreInscripcion;
+      })
+      .slice(0, 3);
+
     // Para cada torneo próximo, contar inscritos
-    const proximos_torneos = await Promise.all((torneos_raw || []).map(async (t) => {
+    const proximos_torneos = await Promise.all(torneosFiltrados.map(async (t) => {
       const { count } = await supabase
         .from('inscripciones')
         .select('*', { count: 'exact', head: true })

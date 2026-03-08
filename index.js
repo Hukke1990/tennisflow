@@ -20,6 +20,7 @@ app.use('/api/torneos', require('./routes/torneosRoutes'));
 app.use('/api/partidos', require('./routes/partidosRoutes'));
 app.use('/api/perfil', require('./routes/perfilRoutes'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
+app.use('/api/rankings', require('./routes/rankingsRoutes'));
 
 
 

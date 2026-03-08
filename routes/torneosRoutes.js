@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const torneosController = require('../controllers/torneosController');
 
+// GET /api/torneos
+router.get('/', torneosController.obtenerTodosLosTorneos);
+
 // GET /api/torneos/disponibles
 router.get('/disponibles', torneosController.obtenerTorneosDisponibles);
 
@@ -11,8 +14,11 @@ router.get('/admin', torneosController.obtenerTodosLosTorneos);
 // POST /api/torneos
 router.post('/', torneosController.crearTorneo);
 
-// POST /api/torneos/:id/inscribir
-router.post('/:id/inscribir', torneosController.inscribirJugador);
+// PUT /api/torneos/:id
+router.put('/:id', torneosController.actualizarTorneo);
+
+// POST /api/torneos/:torneoId/inscribir
+router.post('/:torneoId/inscribir', torneosController.inscribirJugador);
 
 // SORTEO Y CUADRO 
 const sorteoController = require('../controllers/sorteoController');
