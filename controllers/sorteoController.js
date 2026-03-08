@@ -1,5 +1,7 @@
 const supabase = require('../services/supabase');
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 /**
  * Convierte un string de tiempo "HH:MM" o "HH:MM:SS" a minutos totales desde las 00:00
  */
@@ -281,23 +283,166 @@ const generarSorteo = async (req, res) => {
 
 const obtenerCuadroTorneo = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { data, error } = await supabase
+    const torneoId = req.params.id;
+
+    if (!UUID_REGEX.test(torneoId)) {
+      return res.status(400).json({ error: 'El torneoId es invalido.' });
+    }
+
+    const { data: torneo, error: torneoError } = await supabase
+      .from('torneos')
+      .select('id')
+      .eq('id', torneoId)
+      .single();
+
+    if (torneoError || !torneo) {
+      return res.status(404).json({ error: 'Torneo no encontrado' });
+    }
+
+    const { data: partidosRaw, error } = await supabase
       .from('partidos')
-      .select(`
-        id, ronda, ronda_orden, fecha_hora, estado, notas, ganador_id,
-        jugador1:perfiles!jugador1_id (id, nombre_completo, ranking_elo),
-        jugador2:perfiles!jugador2_id (id, nombre_completo, ranking_elo),
-        cancha:canchas (nombre)
-      `)
-      .eq('torneo_id', id)
-      .order('ronda_orden', { ascending: false });
+      .select('id, ronda, ronda_orden, fecha_hora, notas, ganador_id, jugador1_id, jugador2_id, cancha_id')
+      .eq('torneo_id', torneoId)
+      .order('ronda_orden', { ascending: false })
+      .order('fecha_hora', { ascending: true, nullsFirst: false })
+      .order('id', { ascending: true });
 
-    if (error) return res.status(500).json({ error: 'Error al obtener cuadro' });
+    if (error) {
+      console.error('Error al obtener cuadro:', {
+        torneoId,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
+      return res.status(500).json({ error: 'Error al obtener cuadro' });
+    }
 
-    res.json(data);
+    if (!partidosRaw || partidosRaw.length === 0) {
+      console.info('Cuadro consultado sin partidos:', { torneoId, cantidadPartidos: 0 });
+      return res.status(200).json([]);
+    }
+
+    const jugadorIds = [...new Set(
+      partidosRaw
+        .flatMap((p) => [p.jugador1_id, p.jugador2_id])
+        .filter(Boolean),
+    )];
+
+    const canchaIds = [...new Set(partidosRaw.map((p) => p.cancha_id).filter(Boolean))];
+
+    let perfilesRaw = [];
+    if (jugadorIds.length > 0) {
+      const profileSelectOptions = [
+        'id, nombre_completo, ranking_elo, ranking_elo_singles, ranking_elo_dobles',
+        'id, nombre_completo, ranking_elo, ranking_elo_singles',
+        'id, nombre_completo, ranking_elo',
+        'id, nombre_completo, ranking_elo_singles, ranking_elo_dobles',
+        'id, nombre_completo, ranking_elo_singles',
+        'id, nombre_completo, ranking_elo_dobles',
+        'id, nombre_completo',
+      ];
+
+      let perfilesError = null;
+
+      for (const selectColumns of profileSelectOptions) {
+        const { data: perfilesData, error: currentError } = await supabase
+          .from('perfiles')
+          .select(selectColumns)
+          .in('id', jugadorIds);
+
+        if (!currentError) {
+          perfilesRaw = perfilesData || [];
+          perfilesError = null;
+          break;
+        }
+
+        perfilesError = currentError;
+
+        const isMissingColumn = currentError.code === '42703' || /column .* does not exist/i.test(currentError.message || '');
+        if (!isMissingColumn) {
+          break;
+        }
+      }
+
+      if (perfilesError) {
+        console.error('Error al obtener perfiles para cuadro:', {
+          torneoId,
+          message: perfilesError.message,
+          details: perfilesError.details,
+          hint: perfilesError.hint,
+          code: perfilesError.code,
+        });
+        return res.status(500).json({ error: 'Error al obtener cuadro' });
+      }
+    }
+
+    let canchasRaw = [];
+    if (canchaIds.length > 0) {
+      const { data: canchasData, error: canchasError } = await supabase
+        .from('canchas')
+        .select('id, nombre')
+        .in('id', canchaIds);
+
+      if (canchasError) {
+        console.error('Error al obtener canchas para cuadro:', {
+          torneoId,
+          message: canchasError.message,
+          details: canchasError.details,
+          hint: canchasError.hint,
+          code: canchasError.code,
+        });
+        return res.status(500).json({ error: 'Error al obtener cuadro' });
+      }
+
+      canchasRaw = canchasData || [];
+    }
+
+    const perfilById = new Map(
+      perfilesRaw.map((p) => {
+        const rankingBase = p.ranking_elo ?? p.ranking_elo_singles ?? p.ranking_elo_dobles ?? null;
+        return [
+          p.id,
+          {
+            id: p.id,
+            nombre_completo: p.nombre_completo,
+            ranking_elo: rankingBase,
+          },
+        ];
+      }),
+    );
+
+    const canchaById = new Map(
+      canchasRaw.map((c) => [
+        c.id,
+        {
+          nombre: c.nombre ?? null,
+        },
+      ]),
+    );
+
+    const data = partidosRaw.map((p) => ({
+      id: p.id,
+      ronda: p.ronda,
+      ronda_orden: p.ronda_orden,
+      fecha_hora: p.fecha_hora,
+      notas: p.notas ?? null,
+      ganador_id: p.ganador_id,
+      cancha: p.cancha_id ? (canchaById.get(p.cancha_id) || null) : null,
+      jugador1: p.jugador1_id ? (perfilById.get(p.jugador1_id) || null) : null,
+      jugador2: p.jugador2_id ? (perfilById.get(p.jugador2_id) || null) : null,
+    }));
+
+    console.info('Cuadro obtenido correctamente:', { torneoId, cantidadPartidos: data.length });
+
+    return res.status(200).json(data);
   } catch (err) {
-    res.status(500).json({ error: 'Error interno' });
+    console.error('Error inesperado al obtener cuadro:', {
+      torneoId: req.params.id,
+      message: err.message,
+      stack: err.stack,
+    });
+    return res.status(500).json({ error: 'Error al obtener cuadro' });
   }
 };
 
