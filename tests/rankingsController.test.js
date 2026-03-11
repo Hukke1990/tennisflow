@@ -62,6 +62,10 @@ function mockSupabaseWithQueue(queue, calls) {
         state.filters.push({ op: 'eq', column, value });
         return this;
       },
+      in(column, values) {
+        state.filters.push({ op: 'in', column, values });
+        return this;
+      },
       not(column, operator, value) {
         state.filters.push({ op: 'not', column, operator, value });
         return this;
@@ -103,6 +107,13 @@ test('Singles + Masculino + categoria 1', async () => {
       ],
       error: null,
     },
+    {
+      data: [
+        { ganador_id: 'j1', torneo_id: 't1' },
+        { ganador_id: 'j1', torneo_id: 't2' },
+      ],
+      error: null,
+    },
   ];
   const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
 
@@ -115,7 +126,7 @@ test('Singles + Masculino + categoria 1', async () => {
   assert.equal(Array.isArray(res.payload), true);
   assert.equal(res.payload[0].id, 'j1');
 
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
   assert.equal(calls[0].table, 'vw_rankings_perfiles');
   assert.deepEqual(calls[0].filters.find((f) => f.column === 'sexo'), {
     op: 'eq', column: 'sexo', value: 'Masculino',
@@ -123,6 +134,8 @@ test('Singles + Masculino + categoria 1', async () => {
   assert.deepEqual(calls[0].filters.find((f) => f.column === 'categoria_singles'), {
     op: 'eq', column: 'categoria_singles', value: 1,
   });
+  assert.equal(calls[1].table, 'partidos');
+  assert.equal(res.payload[0].torneos, 2);
 
   assertQueueEmpty();
 });
@@ -186,7 +199,7 @@ test('query invalida modalidad=Mixta retorna 400', async () => {
   assert.equal(calls.length, 0);
 });
 
-test('ordena desc por ELO segun modalidad con fallback', async () => {
+test('ordena desc por puntos', async () => {
   const calls = [];
   const queue = [
     {
@@ -195,6 +208,8 @@ test('ordena desc por ELO segun modalidad con fallback', async () => {
           id: 'j2',
           nombre_completo: 'Jugador 2',
           foto_url: null,
+          ranking_puntos_singles: 120,
+          ranking_puntos: 120,
           ranking_elo_singles: null,
           ranking_elo_dobles: 1400,
           ranking_elo: 1700,
@@ -205,12 +220,22 @@ test('ordena desc por ELO segun modalidad con fallback', async () => {
           id: 'j1',
           nombre_completo: 'Jugador 1',
           foto_url: null,
+          ranking_puntos_singles: 80,
+          ranking_puntos: 80,
           ranking_elo_singles: 1650,
           ranking_elo_dobles: 1350,
           ranking_elo: 1600,
           torneos: 1,
           victorias: 1,
         },
+      ],
+      error: null,
+    },
+    {
+      data: [
+        { ganador_id: 'j2', torneo_id: 'torneo_1' },
+        { ganador_id: 'j1', torneo_id: 'torneo_2' },
+        { ganador_id: 'j1', torneo_id: 'torneo_3' },
       ],
       error: null,
     },
@@ -224,9 +249,12 @@ test('ordena desc por ELO segun modalidad con fallback', async () => {
 
   assert.equal(res.statusCode, 200);
   assert.equal(res.payload[0].id, 'j2');
-  assert.equal(res.payload[0].torneos, 0);
+  assert.equal(res.payload[0].ranking_puntos_singles, 120);
+  assert.equal(res.payload[0].torneos, 1);
   assert.equal(res.payload[0].victorias, 0);
   assert.equal(res.payload[1].id, 'j1');
+  assert.equal(res.payload[1].ranking_puntos_singles, 80);
+  assert.equal(res.payload[1].torneos, 2);
 
   assertQueueEmpty();
 });

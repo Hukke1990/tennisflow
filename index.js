@@ -35,6 +35,9 @@ const io = new Server(server, {
   }
 });
 
+// Disponible para controladores que necesiten emitir eventos realtime sin romper APIs actuales.
+global.__tennisflow_io = io;
+
 // Rutas que requieren la instancia de io (deben ir después de inicializar io)
 app.use('/api/canchas', require('./routes/canchasRoutes')(io));
 

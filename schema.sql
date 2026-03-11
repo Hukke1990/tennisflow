@@ -8,6 +8,9 @@ CREATE TABLE perfiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     nombre_completo VARCHAR(255) NOT NULL,
     ranking_elo INTEGER DEFAULT 1200,
+    ranking_puntos INTEGER DEFAULT 0,
+    ranking_puntos_singles INTEGER DEFAULT 0,
+    ranking_puntos_dobles INTEGER DEFAULT 0,
     es_admin BOOLEAN DEFAULT false
 );
 
@@ -28,6 +31,14 @@ CREATE TABLE torneos (
     titulo VARCHAR(255) NOT NULL,
     cupos_max INTEGER NOT NULL CHECK (cupos_max > 0),
     costo NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    rama TEXT,
+    modalidad TEXT,
+    categoria_id INTEGER,
+    puntos_ronda_32 INTEGER NOT NULL DEFAULT 5,
+    puntos_ronda_16 INTEGER NOT NULL DEFAULT 10,
+    puntos_ronda_8 INTEGER NOT NULL DEFAULT 25,
+    puntos_ronda_4 INTEGER NOT NULL DEFAULT 50,
+    puntos_ronda_2 INTEGER NOT NULL DEFAULT 100,
     fecha_inicio_inscripcion TIMESTAMP WITH TIME ZONE,
     fecha_cierre_inscripcion TIMESTAMP WITH TIME ZONE,
     fecha_inicio TIMESTAMP WITH TIME ZONE NOT NULL,

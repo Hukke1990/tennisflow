@@ -1,6 +1,89 @@
 const supabase = require('../services/supabase');
 
 const INSCRIBIBLE_STATES = new Set(['publicado', 'abierto']);
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const isMissingColumnError = (error) => {
+  return error?.code === '42703' || /column .* does not exist/i.test(error?.message || '');
+};
+
+const fetchPerfilCompat = async (jugadorId) => {
+  const selectOptions = [
+    'categoria, ranking_elo, ranking_elo_singles, ranking_elo_dobles',
+    'categoria, ranking_elo_singles, ranking_elo_dobles',
+    'categoria, ranking_elo',
+    'categoria',
+  ];
+
+  let lastError = null;
+  for (const columns of selectOptions) {
+    const { data, error } = await supabase
+      .from('perfiles')
+      .select(columns)
+      .eq('id', jugadorId)
+      .single();
+
+    if (!error) {
+      return { data, error: null };
+    }
+
+    if (error?.code === 'PGRST116') {
+      return { data: null, error: null };
+    }
+
+    lastError = error;
+    if (!isMissingColumnError(error)) {
+      break;
+    }
+  }
+
+  return { data: null, error: lastError };
+};
+
+const fetchRankingCompat = async () => {
+  const selectOptions = [
+    'id, nombre_completo, ranking_elo, ranking_elo_singles, ranking_elo_dobles, categoria, foto_url',
+    'id, nombre_completo, ranking_elo_singles, ranking_elo_dobles, categoria, foto_url',
+    'id, nombre_completo, ranking_elo, categoria, foto_url',
+    'id, nombre_completo, ranking_elo_singles, categoria, foto_url',
+    'id, nombre_completo, ranking_elo_dobles, categoria, foto_url',
+    'id, nombre_completo, ranking_elo, categoria',
+    'id, nombre_completo, ranking_elo_singles, categoria',
+    'id, nombre_completo, ranking_elo_dobles, categoria',
+    'id, nombre_completo, categoria',
+    'id, nombre_completo',
+  ];
+
+  let lastError = null;
+  for (const columns of selectOptions) {
+    const { data, error } = await supabase
+      .from('perfiles')
+      .select(columns)
+      .limit(200);
+
+    if (!error) {
+      return { data: data || [], error: null };
+    }
+
+    lastError = error;
+    if (!isMissingColumnError(error)) {
+      break;
+    }
+  }
+
+  return { data: [], error: lastError };
+};
+
+const resolveRankingValue = (perfil = {}) => {
+  const value = Number(
+    perfil.ranking_elo
+    ?? perfil.ranking_elo_singles
+    ?? perfil.ranking_elo_dobles
+    ?? 0,
+  );
+
+  return Number.isFinite(value) ? value : 0;
+};
 
 const normalizeTournamentState = (value) => {
   if (typeof value !== 'string') return value;
@@ -96,42 +179,47 @@ const getDashboard = async (req, res) => {
     let ranking_top5 = [];
     let categoria_jugador = null;
 
-    if (jugador_id) {
-      const { data: perfil } = await supabase
-        .from('perfiles')
-        .select('categoria, ranking_elo')
-        .eq('id', jugador_id)
-        .single();
+    const jugadorIdNormalizado = String(jugador_id || '').trim();
+    const jugadorIdValido = UUID_REGEX.test(jugadorIdNormalizado);
+
+    if (jugadorIdValido) {
+      const { data: perfil, error: perfilError } = await fetchPerfilCompat(jugadorIdNormalizado);
+      if (perfilError && !isMissingColumnError(perfilError)) {
+        throw perfilError;
+      }
+
       categoria_jugador = perfil?.categoria ?? null;
     }
 
-    const { data: rankingData, error: e3 } = await supabase
-      .from('perfiles')
-      .select('id, nombre_completo, ranking_elo, categoria, foto_url')
-      .order('ranking_elo', { ascending: false })
-      .limit(5);
+    const { data: rankingData, error: e3 } = await fetchRankingCompat();
 
     if (e3) throw e3;
 
-    ranking_top5 = (rankingData || []).map((j, idx) => ({
+    const rankingOrdenado = [...(rankingData || [])]
+      .sort((a, b) => resolveRankingValue(b) - resolveRankingValue(a))
+      .slice(0, 5);
+
+    ranking_top5 = rankingOrdenado.map((j, idx) => ({
       posicion: idx + 1,
       id: j.id,
       nombre_completo: j.nombre_completo,
-      ranking_elo: j.ranking_elo,
-      categoria: j.categoria,
-      foto_url: j.foto_url,
-      es_yo: j.id === jugador_id,
+      ranking_elo: resolveRankingValue(j),
+      categoria: j.categoria ?? null,
+      foto_url: j.foto_url ?? null,
+      es_yo: j.id === jugadorIdNormalizado,
     }));
 
     // ── 4. Estadísticas del jugador (victorias / derrotas / H2H) ───────────
     let estadisticas_jugador = null;
 
-    if (jugador_id) {
-      const { data: partidos } = await supabase
+    if (jugadorIdValido) {
+      const { data: partidos, error: partidosError } = await supabase
         .from('partidos')
         .select('jugador1_id, jugador2_id, ganador_id')
         .eq('estado', 'finalizado')
-        .or(`jugador1_id.eq.${jugador_id},jugador2_id.eq.${jugador_id}`);
+        .or(`jugador1_id.eq.${jugadorIdNormalizado},jugador2_id.eq.${jugadorIdNormalizado}`);
+
+      if (partidosError) throw partidosError;
 
       let victorias = 0;
       let derrotas = 0;
@@ -139,8 +227,8 @@ const getDashboard = async (req, res) => {
 
       for (const p of (partidos || [])) {
         if (!p.ganador_id) continue;
-        const rival_id = p.jugador1_id === jugador_id ? p.jugador2_id : p.jugador1_id;
-        const gano = p.ganador_id === jugador_id;
+        const rival_id = p.jugador1_id === jugadorIdNormalizado ? p.jugador2_id : p.jugador1_id;
+        const gano = p.ganador_id === jugadorIdNormalizado;
         if (gano) victorias++; else derrotas++;
         if (rival_id) {
           if (!h2h[rival_id]) h2h[rival_id] = { victorias: 0, derrotas: 0 };
@@ -149,7 +237,7 @@ const getDashboard = async (req, res) => {
       }
 
       estadisticas_jugador = {
-        jugador_id, victorias, derrotas,
+        jugador_id: jugadorIdNormalizado, victorias, derrotas,
         total_partidos: victorias + derrotas,
         win_rate: victorias + derrotas > 0 ? Math.round((victorias / (victorias + derrotas)) * 100) : 0,
         h2h,
