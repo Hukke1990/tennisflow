@@ -787,6 +787,11 @@ const formatTournamentListItem = (torneo, inscriptionSummary = null) => {
 
 const crearTorneo = async (req, res) => {
   try {
+    const { clubId, error: clubError } = resolveClubIdFromRequest(req);
+    if (clubError) {
+      return res.status(400).json({ error: clubError });
+    }
+
     const {
       titulo,
       cupos_max,
@@ -887,6 +892,7 @@ const crearTorneo = async (req, res) => {
     payload.puntos_ronda_4 = pointsByRound[4];
     payload.puntos_ronda_2 = pointsByRound[2];
     payload.puntos_campeon = championPoints;
+    payload.club_id = clubId;
 
     if (!payload.estado || typeof payload.estado !== 'string') {
       return res.status(400).json({ error: 'El estado del torneo es invalido.' });

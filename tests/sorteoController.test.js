@@ -670,6 +670,76 @@ test('generarSorteo agenda cuadro completo y prioriza domingo para la final', as
   assertQueueEmpty();
 });
 
+test('generarSorteo en dobles interpreta cupos_max como jugadores (8 => 4 parejas)', async () => {
+  const calls = [];
+  const torneoId = '80aa40d8-f99f-4ff3-af3b-75d621d6d137';
+
+  const inscripcionesDobles = [
+    { jugador_id: 'j1', pareja_id: 'pair-1', pareja_jugador_id: 'j2', estado_inscripcion: 'aprobada' },
+    { jugador_id: 'j2', pareja_id: 'pair-1', pareja_jugador_id: 'j1', estado_inscripcion: 'aprobada' },
+    { jugador_id: 'j3', pareja_id: 'pair-2', pareja_jugador_id: 'j4', estado_inscripcion: 'aprobada' },
+    { jugador_id: 'j4', pareja_id: 'pair-2', pareja_jugador_id: 'j3', estado_inscripcion: 'aprobada' },
+    { jugador_id: 'j5', pareja_id: 'pair-3', pareja_jugador_id: 'j6', estado_inscripcion: 'aprobada' },
+    { jugador_id: 'j6', pareja_id: 'pair-3', pareja_jugador_id: 'j5', estado_inscripcion: 'aprobada' },
+    { jugador_id: 'j7', pareja_id: 'pair-4', pareja_jugador_id: 'j8', estado_inscripcion: 'aprobada' },
+    { jugador_id: 'j8', pareja_id: 'pair-4', pareja_jugador_id: 'j7', estado_inscripcion: 'aprobada' },
+  ];
+
+  const perfiles = Array.from({ length: 8 }, (_, idx) => ({
+    id: `j${idx + 1}`,
+    nombre_completo: `Jugador ${idx + 1}`,
+    ranking_puntos_dobles: 100 - idx,
+  }));
+
+  const disponibilidadInscripcion = Array.from({ length: 8 }, (_, idx) => ({
+    jugador_id: `j${idx + 1}`,
+    fecha: '2026-03-07',
+    dia_semana: 6,
+    hora_inicio: '09:00',
+    hora_fin: '22:00',
+  }));
+
+  const queue = [
+    {
+      data: {
+        id: torneoId,
+        modalidad: 'Dobles',
+        cupos_max: 8,
+        fecha_inicio: '2026-03-07T09:00:00Z',
+        fecha_fin: '2026-03-08T22:00:00Z',
+      },
+      error: null,
+    },
+    { count: 0, error: null },
+    { data: [{ cancha_id: 'c1' }, { cancha_id: 'c2' }], error: null },
+    { data: [{ id: 'c1' }, { id: 'c2' }], error: null },
+    { data: inscripcionesDobles, error: null },
+    { data: perfiles, error: null },
+    { data: disponibilidadInscripcion, error: null },
+    (state) => ({ data: state.payload.map((p, i) => ({ id: `p_${i + 1}`, ...p })), error: null }),
+    { data: null, error: null },
+  ];
+  const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
+
+  const req = createReq({ params: { id: torneoId }, body: {} });
+  const res = createRes();
+
+  await generarSorteo(req, res);
+
+  assert.equal(res.statusCode, 200);
+
+  const insertCall = calls.find((c) => c.table === 'partidos' && c.action === 'insert');
+  assert.ok(insertCall, 'Se esperaba insercion de partidos');
+
+  // Con 4 parejas reales, el cuadro debe ser de 4 (2 semis + final), sin ronda extra de BYEs.
+  assert.equal(insertCall.payload.length, 3);
+  assert.equal(insertCall.payload.filter((p) => p.ronda_orden === 4).length, 2);
+  assert.equal(insertCall.payload.filter((p) => p.ronda_orden === 2).length, 1);
+  assert.equal(insertCall.payload.filter((p) => p.ronda_orden === 8).length, 0);
+
+  assertQueueEmpty();
+});
+
 test('generarSorteo tolera perfiles sin ranking_elo legacy', async () => {
   const calls = [];
   const torneoId = '80aa40d8-f99f-4ff3-af3b-75d621d6d137';

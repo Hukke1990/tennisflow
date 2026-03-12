@@ -867,10 +867,14 @@ const generarSorteo = async (req, res) => {
       });
 
     // 3. Definir tamano de cuadro segun capacidad del torneo (sin perder inscritos actuales).
+    // En Dobles, cupos_max se expresa en jugadores, por lo que se convierte a cupos de pareja.
     const inscritosCount = jugadoresOrdenados.length;
     const cuposMax = Number.parseInt(String(torneo?.cupos_max ?? ''), 10);
-    const targetSlots = Number.isInteger(cuposMax) && cuposMax > 0
-      ? Math.max(cuposMax, inscritosCount)
+    const cuposMaxEntrants = Number.isInteger(cuposMax) && cuposMax > 0
+      ? (torneoEsDobles ? Math.ceil(cuposMax / 2) : cuposMax)
+      : null;
+    const targetSlots = Number.isInteger(cuposMaxEntrants) && cuposMaxEntrants > 0
+      ? Math.max(cuposMaxEntrants, inscritosCount)
       : inscritosCount;
 
     let bracketSize = 2;

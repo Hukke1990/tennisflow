@@ -5,9 +5,18 @@ const supabase = require('../services/supabase');
 const torneosController = require('../controllers/torneosController');
 
 const originalFrom = supabase.from;
+const TEST_CLUB_ID = '11111111-1111-4111-8111-111111111111';
 
-function createReq({ params = {}, body = {} } = {}) {
-  return { params, body };
+function createReq({ params = {}, body = {}, query = {}, headers = {} } = {}) {
+  return {
+    params,
+    body,
+    query: {
+      club_id: TEST_CLUB_ID,
+      ...query,
+    },
+    headers,
+  };
 }
 
 function createRes() {
