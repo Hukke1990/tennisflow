@@ -52,7 +52,8 @@ function isApprovedInscription(row = {}) {
 
 async function fetchApprovedInscriptionsForTournament(torneoId) {
   const selectOptions = [
-    'jugador_id, estado, estado_inscripcion',
+    'jugador_id, pareja_id, pareja_jugador_id, estado, estado_inscripcion',
+    'jugador_id, pareja_jugador_id, estado, estado_inscripcion',
     'jugador_id, estado',
   ];
 
@@ -75,6 +76,103 @@ async function fetchApprovedInscriptionsForTournament(torneoId) {
   }
 
   return { data: [], error: lastError };
+}
+
+function normalizeId(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function makePairFallbackKey(a, b) {
+  const first = normalizeId(a);
+  const second = normalizeId(b);
+  if (!first || !second || first === second) return null;
+  return [first, second].sort().join('::');
+}
+
+function buildDoublesEntrantsFromApprovedInscriptions(rows = []) {
+  const byPlayer = new Map();
+  for (const row of rows || []) {
+    const jugadorId = normalizeId(row?.jugador_id);
+    if (!jugadorId) continue;
+    byPlayer.set(jugadorId, row);
+  }
+
+  const pairGroups = new Map();
+  for (const row of rows || []) {
+    const jugadorId = normalizeId(row?.jugador_id);
+    const parejaJugadorId = normalizeId(row?.pareja_jugador_id);
+    const parejaId = normalizeId(row?.pareja_id);
+    if (!jugadorId || !parejaJugadorId || jugadorId === parejaJugadorId) continue;
+
+    const key = parejaId || makePairFallbackKey(jugadorId, parejaJugadorId);
+    if (!key) continue;
+    if (!pairGroups.has(key)) pairGroups.set(key, []);
+    pairGroups.get(key).push(row);
+  }
+
+  const entrants = [];
+  for (const [pairKey, pairRows] of pairGroups.entries()) {
+    const uniquePlayerIds = [...new Set(
+      pairRows
+        .map((row) => normalizeId(row?.jugador_id))
+        .filter(Boolean),
+    )];
+
+    if (uniquePlayerIds.length !== 2) {
+      continue;
+    }
+
+    const [playerA, playerB] = uniquePlayerIds.sort();
+    const rowA = byPlayer.get(playerA);
+    const rowB = byPlayer.get(playerB);
+    const reciprocalPair = normalizeId(rowA?.pareja_jugador_id) === playerB
+      && normalizeId(rowB?.pareja_jugador_id) === playerA;
+
+    if (!reciprocalPair) {
+      continue;
+    }
+
+    entrants.push({
+      pairKey,
+      captain_id: playerA,
+      partner_id: playerB,
+      members: [playerA, playerB],
+    });
+  }
+
+  return entrants;
+}
+
+function intersectAvailability(recordsA = [], recordsB = []) {
+  if (!Array.isArray(recordsA) || !Array.isArray(recordsB) || recordsA.length === 0 || recordsB.length === 0) {
+    return [];
+  }
+
+  const merged = [];
+  for (const left of recordsA) {
+    for (const right of recordsB) {
+      const leftDate = left?.dateKey;
+      const rightDate = right?.dateKey;
+      if (leftDate && rightDate && leftDate !== rightDate) continue;
+
+      const leftDow = Number.isInteger(left?.dayOfWeek) ? left.dayOfWeek : null;
+      const rightDow = Number.isInteger(right?.dayOfWeek) ? right.dayOfWeek : null;
+      if (leftDow !== null && rightDow !== null && leftDow !== rightDow) continue;
+
+      const startMin = Math.max(Number(left?.startMin), Number(right?.startMin));
+      const endMin = Math.min(Number(left?.endMin), Number(right?.endMin));
+      if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || startMin >= endMin) continue;
+
+      merged.push({
+        startMin,
+        endMin,
+        dateKey: leftDate || rightDate || undefined,
+        dayOfWeek: leftDow !== null ? leftDow : rightDow,
+      });
+    }
+  }
+
+  return merged;
 }
 
 /**
@@ -384,14 +482,30 @@ function assignSlotToMatch(match, slot, usedSlotIds, playerDayIntervals) {
   }
 }
 
-function makeRoundMatch({ torneoId, rondaOrden, jugador1Id = null, jugador2Id = null, ganadorId = null, estado = 'programado', notas = null, candidatePlayers = [], dependencies = [] }) {
+function makeRoundMatch({
+  torneoId,
+  rondaOrden,
+  jugador1Id = null,
+  jugador2Id = null,
+  jugador1ParejaId = null,
+  jugador2ParejaId = null,
+  ganadorId = null,
+  ganadorParejaId = null,
+  estado = 'programado',
+  notas = null,
+  candidatePlayers = [],
+  dependencies = [],
+}) {
   return {
     torneo_id: torneoId,
     ronda: getRoundName(rondaOrden),
     ronda_orden: rondaOrden,
     jugador1_id: jugador1Id,
     jugador2_id: jugador2Id,
+    jugador1_pareja_id: jugador1ParejaId,
+    jugador2_pareja_id: jugador2ParejaId,
     ganador_id: ganadorId,
+    ganador_pareja_id: ganadorParejaId,
     fecha_hora: null,
     cancha_id: null,
     estado,
@@ -614,20 +728,36 @@ const generarSorteo = async (req, res) => {
       console.error('Error al obtener inscripciones:', errI);
       return res.status(500).json({ error: 'Error al obtener inscripciones', details: errI.message });
     }
-    
-    const jugadorIds = [...new Set((inscripcionesConfirmadas || []).map((i) => i.jugador_id).filter(Boolean))];
 
-    if (jugadorIds.length < 2) {
-      return res.status(400).json({ error: 'Se requiere un minimo de 2 jugadores con inscripcion aprobada.' });
+    const modalidadTorneo = normalizeTournamentModalidad(torneo?.modalidad);
+    const torneoEsDobles = modalidadTorneo === 'Dobles';
+    const doublesEntrants = torneoEsDobles
+      ? buildDoublesEntrantsFromApprovedInscriptions(inscripcionesConfirmadas || [])
+      : [];
+
+    const singlesEntrants = [...new Set((inscripcionesConfirmadas || []).map((i) => normalizeId(i?.jugador_id)).filter(Boolean))]
+      .map((jugadorId) => ({
+        captain_id: jugadorId,
+        partner_id: null,
+        members: [jugadorId],
+      }));
+
+    const bracketEntrants = torneoEsDobles ? doublesEntrants : singlesEntrants;
+    if (bracketEntrants.length < 2) {
+      return res.status(400).json({
+        error: torneoEsDobles
+          ? 'Se requieren al menos 2 parejas con inscripcion aprobada para generar el sorteo.'
+          : 'Se requiere un minimo de 2 jugadores con inscripcion aprobada.',
+      });
     }
 
-    const { data: perfilesInscritos, error: perfilesError } = await fetchProfilesWithRankingFallback(jugadorIds);
+    const playerIdsForProfiles = [...new Set(bracketEntrants.flatMap((entry) => entry.members))];
+
+    const { data: perfilesInscritos, error: perfilesError } = await fetchProfilesWithRankingFallback(playerIdsForProfiles);
     if (perfilesError) {
       console.error('Error al obtener perfiles de inscritos:', perfilesError);
       return res.status(500).json({ error: 'Error al obtener perfiles de inscritos', details: perfilesError.message });
     }
-
-    const modalidadTorneo = normalizeTournamentModalidad(torneo?.modalidad);
 
     const perfilByJugadorId = new Map(
       (perfilesInscritos || []).map((p) => [
@@ -645,7 +775,7 @@ const generarSorteo = async (req, res) => {
       .from('disponibilidad_inscripcion')
       .select('jugador_id, fecha, dia_semana, hora_inicio, hora_fin')
       .eq('torneo_id', torneo_id)
-      .in('jugador_id', jugadorIds);
+      .in('jugador_id', playerIdsForProfiles);
 
     if (errDispInsc) {
       console.error('Error al obtener disponibilidad de inscripcion:', errDispInsc);
@@ -653,7 +783,7 @@ const generarSorteo = async (req, res) => {
     }
 
     const dispInscripcionMap = normalizeAvailabilityRows(disponibilidadInscripcion || []);
-    const jugadoresSinDisponibilidadInscripcion = jugadorIds.filter((id) => !dispInscripcionMap.has(id));
+    const jugadoresSinDisponibilidadInscripcion = playerIdsForProfiles.filter((id) => !dispInscripcionMap.has(id));
 
     let disponibilidadLegacyMap = new Map();
     if (jugadoresSinDisponibilidadInscripcion.length > 0) {
@@ -671,18 +801,60 @@ const generarSorteo = async (req, res) => {
     }
 
     const disponibilidadPorJugador = new Map();
-    for (const jugadorId of jugadorIds) {
+    for (const jugadorId of playerIdsForProfiles) {
       const records = dispInscripcionMap.get(jugadorId) || disponibilidadLegacyMap.get(jugadorId) || [];
       disponibilidadPorJugador.set(jugadorId, records);
     }
 
+    const partnerByCaptain = new Map();
+    for (const entry of bracketEntrants) {
+      if (entry.partner_id) {
+        partnerByCaptain.set(entry.captain_id, entry.partner_id);
+      }
+    }
+
     // 2. Ordenar por Ranking de puntos (Mayor a Menor) para sembrar
-    const jugadoresOrdenados = jugadorIds
-      .map((jugadorId) => ({
-        jugador_id: jugadorId,
-        perfil: perfilByJugadorId.get(jugadorId) || { id: jugadorId, nombre_completo: null, ranking_puntos: 0 },
-        disponibilidad_jugador: disponibilidadPorJugador.get(jugadorId) || [],
-      }))
+    const jugadoresOrdenados = bracketEntrants
+      .map((entry) => {
+        const captainProfile = perfilByJugadorId.get(entry.captain_id) || {
+          id: entry.captain_id,
+          nombre_completo: null,
+          ranking_puntos: 0,
+        };
+
+        if (!torneoEsDobles) {
+          return {
+            jugador_id: entry.captain_id,
+            jugador_pareja_id: null,
+            perfil: captainProfile,
+            disponibilidad_jugador: disponibilidadPorJugador.get(entry.captain_id) || [],
+          };
+        }
+
+        const partnerProfile = perfilByJugadorId.get(entry.partner_id) || {
+          id: entry.partner_id,
+          nombre_completo: null,
+          ranking_puntos: 0,
+        };
+        const nameA = String(captainProfile.nombre_completo || entry.captain_id).trim();
+        const nameB = String(partnerProfile.nombre_completo || entry.partner_id).trim();
+        const rankingA = Number(captainProfile.ranking_puntos || 0);
+        const rankingB = Number(partnerProfile.ranking_puntos || 0);
+
+        return {
+          jugador_id: entry.captain_id,
+          jugador_pareja_id: entry.partner_id,
+          perfil: {
+            id: entry.captain_id,
+            nombre_completo: `${nameA} / ${nameB}`,
+            ranking_puntos: Math.round((rankingA + rankingB) / 2),
+          },
+          disponibilidad_jugador: intersectAvailability(
+            disponibilidadPorJugador.get(entry.captain_id) || [],
+            disponibilidadPorJugador.get(entry.partner_id) || [],
+          ),
+        };
+      })
       .sort((a, b) => {
         const diff = (b.perfil.ranking_puntos || 0) - (a.perfil.ranking_puntos || 0);
         if (diff !== 0) return diff;
@@ -711,10 +883,20 @@ const generarSorteo = async (req, res) => {
 
     const rounds = new Map();
     const firstRoundMatches = [];
+    const resolveEntryPartner = (entry) => {
+      if (!torneoEsDobles) return null;
+      return entry?.jugador_pareja_id || partnerByCaptain.get(normalizeId(entry?.jugador_id)) || null;
+    };
+    const resolvePartnerByWinner = (winnerId) => {
+      if (!torneoEsDobles || !winnerId) return null;
+      return partnerByCaptain.get(normalizeId(winnerId)) || null;
+    };
 
     for (const pair of paresDeBracketIdces) {
       const j1 = completados[pair[0]];
       const j2 = completados[pair[1]];
+      const j1ParejaId = resolveEntryPartner(j1);
+      const j2ParejaId = resolveEntryPartner(j2);
 
       if (j1.isBye && j2.isBye) {
         firstRoundMatches.push(makeRoundMatch({
@@ -732,7 +914,9 @@ const generarSorteo = async (req, res) => {
           torneoId: torneo_id,
           rondaOrden: bracketSize,
           jugador1Id: j1.jugador_id,
+          jugador1ParejaId: j1ParejaId,
           ganadorId: j1.jugador_id,
+          ganadorParejaId: resolvePartnerByWinner(j1.jugador_id),
           estado: 'finalizado',
           notas: 'Avanza por BYE',
           candidatePlayers: [j1.jugador_id],
@@ -745,7 +929,9 @@ const generarSorteo = async (req, res) => {
           torneoId: torneo_id,
           rondaOrden: bracketSize,
           jugador2Id: j2.jugador_id,
+          jugador2ParejaId: j2ParejaId,
           ganadorId: j2.jugador_id,
+          ganadorParejaId: resolvePartnerByWinner(j2.jugador_id),
           estado: 'finalizado',
           notas: 'Avanza por BYE',
           candidatePlayers: [j2.jugador_id],
@@ -758,6 +944,8 @@ const generarSorteo = async (req, res) => {
         rondaOrden: bracketSize,
         jugador1Id: j1.jugador_id,
         jugador2Id: j2.jugador_id,
+        jugador1ParejaId: j1ParejaId,
+        jugador2ParejaId: j2ParejaId,
         candidatePlayers: [j1.jugador_id, j2.jugador_id],
       }));
     }
@@ -778,16 +966,21 @@ const generarSorteo = async (req, res) => {
 
         let jugador1Id = left ? (left.ganador_id || null) : null;
         let jugador2Id = right ? (right.ganador_id || null) : null;
+        let jugador1ParejaId = left ? (left.ganador_pareja_id || resolvePartnerByWinner(left.ganador_id)) : null;
+        let jugador2ParejaId = right ? (right.ganador_pareja_id || resolvePartnerByWinner(right.ganador_id)) : null;
         let ganadorId = null;
+        let ganadorParejaId = null;
         let estado = 'programado';
         let notas = null;
 
         if (jugador1Id && !jugador2Id && rightCandidates.size === 0) {
           ganadorId = jugador1Id;
+          ganadorParejaId = jugador1ParejaId;
           estado = 'finalizado';
           notas = 'Avanza por BYE';
         } else if (jugador2Id && !jugador1Id && leftCandidates.size === 0) {
           ganadorId = jugador2Id;
+          ganadorParejaId = jugador2ParejaId;
           estado = 'finalizado';
           notas = 'Avanza por BYE';
         } else if (!jugador1Id && !jugador2Id && candidatePlayers.length === 0) {
@@ -800,7 +993,10 @@ const generarSorteo = async (req, res) => {
           rondaOrden: currentOrder,
           jugador1Id,
           jugador2Id,
+          jugador1ParejaId,
+          jugador2ParejaId,
           ganadorId,
+          ganadorParejaId,
           estado,
           notas,
           candidatePlayers,
@@ -908,7 +1104,16 @@ const generarSorteo = async (req, res) => {
         ronda_orden: match.ronda_orden,
         jugador1_id: match.jugador1_id,
         jugador2_id: match.jugador2_id,
+        ...(torneoEsDobles
+          ? {
+            jugador1_pareja_id: match.jugador1_pareja_id || null,
+            jugador2_pareja_id: match.jugador2_pareja_id || null,
+          }
+          : {}),
         ganador_id: match.ganador_id,
+        ...(torneoEsDobles
+          ? { ganador_pareja_id: match.ganador_pareja_id || null }
+          : {}),
         fecha_hora: match.fecha_hora,
         cancha_id: match.cancha_id,
         estado: match.estado,
@@ -922,6 +1127,12 @@ const generarSorteo = async (req, res) => {
       .select();
 
     if (errP) {
+      if (torneoEsDobles && isMissingColumnError(errP)) {
+        return res.status(409).json({
+          error: 'La base de datos no tiene columnas para parejas en partidos. Ejecuta migration_v28.sql.',
+        });
+      }
+
       console.error('Error insertando partidos:', errP);
       return res.status(500).json({ error: 'Error al generar el cuadro de torneo.' });
     }
@@ -958,11 +1169,11 @@ const generarSorteo = async (req, res) => {
 const fetchPartidosCuadroCompat = async (torneoId) => {
   const selectOptions = [
     {
-      columns: 'id, torneo_id, ronda, ronda_orden, orden_en_ronda, estado, fecha_hora, cancha_id, marcador_en_vivo, score, resultado, ganador_id, jugador1_id, jugador2_id, jugador1_origen_partido_id, jugador2_origen_partido_id, notas',
+      columns: 'id, torneo_id, ronda, ronda_orden, orden_en_ronda, estado, fecha_hora, cancha_id, marcador_en_vivo, score, resultado, ganador_id, ganador_pareja_id, jugador1_id, jugador2_id, jugador1_pareja_id, jugador2_pareja_id, jugador1_origen_partido_id, jugador2_origen_partido_id, notas',
       withOrderInRound: true,
     },
     {
-      columns: 'id, torneo_id, ronda, ronda_orden, orden_en_ronda, estado, fecha_hora, cancha_id, marcador_en_vivo, ganador_id, jugador1_id, jugador2_id, notas',
+      columns: 'id, torneo_id, ronda, ronda_orden, orden_en_ronda, estado, fecha_hora, cancha_id, marcador_en_vivo, ganador_id, jugador1_id, jugador2_id, jugador1_pareja_id, jugador2_pareja_id, notas',
       withOrderInRound: true,
     },
     {
@@ -1171,7 +1382,7 @@ const obtenerCuadroTorneo = async (req, res) => {
 
     const { data: torneo, error: torneoError } = await supabase
       .from('torneos')
-      .select('id')
+      .select('id, modalidad')
       .eq('id', torneoId)
       .single();
 
@@ -1219,6 +1430,7 @@ const obtenerCuadroTorneo = async (req, res) => {
 
         if (sorted[i].ganador_id && !winnerBelongsToMatchCompat(sorted[i])) {
           sorted[i].ganador_id = null;
+          sorted[i].ganador_pareja_id = null;
         }
       }
       rounds.set(order, sorted);
@@ -1259,16 +1471,29 @@ const obtenerCuadroTorneo = async (req, res) => {
         const source2Winner = source2?.ganador_id && winnerBelongsToMatchCompat(source2)
           ? source2.ganador_id
           : null;
+        const source1WinnerPartner = source1?.ganador_pareja_id || null;
+        const source2WinnerPartner = source2?.ganador_pareja_id || null;
 
         if (source1 || current.jugador1_origen_partido_id) {
           current.jugador1_id = source1Winner || null;
+          current.jugador1_pareja_id = source1WinnerPartner || null;
         }
         if (source2 || current.jugador2_origen_partido_id) {
           current.jugador2_id = source2Winner || null;
+          current.jugador2_pareja_id = source2WinnerPartner || null;
+        }
+
+        if (current.ganador_id) {
+          if (sameEntityIdCompat(current.ganador_id, current.jugador1_id)) {
+            current.ganador_pareja_id = current.jugador1_pareja_id || null;
+          } else if (sameEntityIdCompat(current.ganador_id, current.jugador2_id)) {
+            current.ganador_pareja_id = current.jugador2_pareja_id || null;
+          }
         }
 
         if (current.ganador_id && !winnerBelongsToMatchCompat(current)) {
           current.ganador_id = null;
+          current.ganador_pareja_id = null;
           if (String(current.estado || '').trim().toLowerCase() === 'finalizado') {
             current.estado = 'programado';
           }
@@ -1278,7 +1503,14 @@ const obtenerCuadroTorneo = async (req, res) => {
 
     const jugadorIds = [...new Set(
       [...workingMatches]
-        .flatMap((p) => [p.jugador1_id, p.jugador2_id, p.ganador_id])
+        .flatMap((p) => [
+          p.jugador1_id,
+          p.jugador2_id,
+          p.jugador1_pareja_id,
+          p.jugador2_pareja_id,
+          p.ganador_id,
+          p.ganador_pareja_id,
+        ])
         .filter(Boolean),
     )];
 
@@ -1374,10 +1606,25 @@ const obtenerCuadroTorneo = async (req, res) => {
       ]),
     );
 
+    const cuadroEsDobles = normalizeTournamentModalidad(torneo?.modalidad) === 'Dobles';
+    const resolveTeamName = (titular, pareja) => {
+      if (!titular) return null;
+      if (!cuadroEsDobles || !pareja) return titular.nombre_completo ?? null;
+
+      const first = String(titular.nombre_completo || titular.id || '').trim();
+      const second = String(pareja.nombre_completo || pareja.id || '').trim();
+      if (!first && !second) return null;
+      if (!first) return second;
+      if (!second) return first;
+      return `${first} / ${second}`;
+    };
+
     const flattened = roundOrders.flatMap((order) => rounds.get(order) || []);
     const data = flattened.map((p) => {
       const jugador1 = p.jugador1_id ? (perfilById.get(p.jugador1_id) || { id: p.jugador1_id, nombre_completo: null, ranking_elo: null }) : null;
       const jugador2 = p.jugador2_id ? (perfilById.get(p.jugador2_id) || { id: p.jugador2_id, nombre_completo: null, ranking_elo: null }) : null;
+      const jugador1Pareja = p.jugador1_pareja_id ? (perfilById.get(p.jugador1_pareja_id) || { id: p.jugador1_pareja_id, nombre_completo: null, ranking_elo: null }) : null;
+      const jugador2Pareja = p.jugador2_pareja_id ? (perfilById.get(p.jugador2_pareja_id) || { id: p.jugador2_pareja_id, nombre_completo: null, ranking_elo: null }) : null;
       const resolvedResultado = resolveScoreResultadoPartido(p);
 
       return {
@@ -1394,12 +1641,17 @@ const obtenerCuadroTorneo = async (req, res) => {
         score: resolvedResultado.score,
         resultado: resolvedResultado.resultado,
         ganador_id: p.ganador_id ?? null,
+        ganador_pareja_id: p.ganador_pareja_id ?? null,
         jugador1_id: p.jugador1_id ?? null,
         jugador2_id: p.jugador2_id ?? null,
-        jugador1_nombre: jugador1?.nombre_completo ?? null,
-        jugador2_nombre: jugador2?.nombre_completo ?? null,
+        jugador1_pareja_id: p.jugador1_pareja_id ?? null,
+        jugador2_pareja_id: p.jugador2_pareja_id ?? null,
+        jugador1_nombre: resolveTeamName(jugador1, jugador1Pareja),
+        jugador2_nombre: resolveTeamName(jugador2, jugador2Pareja),
         jugador1,
         jugador2,
+        jugador1_pareja: jugador1Pareja,
+        jugador2_pareja: jugador2Pareja,
         jugador1_origen_partido_id: p.jugador1_origen_partido_id ?? null,
         jugador2_origen_partido_id: p.jugador2_origen_partido_id ?? null,
         notas: p.notas ?? null,

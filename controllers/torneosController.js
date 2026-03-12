@@ -1,4 +1,5 @@
 const supabase = require('../services/supabase');
+const { randomUUID } = require('crypto');
 
 const DEFAULT_INSCRIBIBLE_STATE = 'publicado';
 const INSCRIBIBLE_STATES = new Set(['publicado', 'abierto']);
@@ -367,6 +368,52 @@ const parseTimeToMinutes = (timeValue) => {
   const minutes = Number(match[2]);
   return hours * 60 + minutes;
 };
+
+const isDoblesModalidad = (modalidad) => normalizeModalidad(modalidad) === 'Dobles';
+
+const fetchInscripcionByTournamentPlayerCompat = async ({ torneoId, jugadorId, clubId }) => {
+  const selectOptions = [
+    'id, torneo_id, jugador_id, pareja_id, pareja_jugador_id, estado, estado_inscripcion',
+    'id, torneo_id, jugador_id, estado, estado_inscripcion',
+    'id, torneo_id, jugador_id, estado',
+  ];
+
+  let lastError = null;
+  for (const selectColumns of selectOptions) {
+    const { data, error } = await supabase
+      .from('inscripciones')
+      .select(selectColumns)
+      .eq('torneo_id', torneoId)
+      .eq('jugador_id', jugadorId)
+      .eq('club_id', clubId)
+      .single();
+
+    if (!error) {
+      return { data, error: null };
+    }
+
+    if (error?.code === 'PGRST116') {
+      return { data: null, error: null };
+    }
+
+    lastError = error;
+    if (!isMissingColumnError(error)) {
+      break;
+    }
+  }
+
+  return { data: null, error: lastError };
+};
+
+const areOppositeSexes = (sexoA, sexoB) => {
+  if (!sexoA || !sexoB) return false;
+  return (
+    (sexoA === 'Masculino' && sexoB === 'Femenino')
+    || (sexoA === 'Femenino' && sexoB === 'Masculino')
+  );
+};
+
+const normalizeQueryText = (value) => String(value || '').trim();
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -1303,6 +1350,126 @@ const obtenerTodosLosTorneos = async (req, res) => {
   }
 };
 
+const listarCompanerosDoblesDisponibles = async (req, res) => {
+  try {
+    const { clubId, error: clubError } = resolveClubIdFromRequest(req);
+    if (clubError) {
+      return res.status(400).json({ error: clubError });
+    }
+
+    const torneoId = String(req.params?.torneoId || req.params?.id || '').trim();
+    const jugadorBaseId = normalizeQueryText(req.query?.jugador_id || req.authUser?.id);
+    const q = normalizeQueryText(req.query?.q);
+
+    if (!UUID_REGEX.test(torneoId)) {
+      return res.status(400).json({ error: 'torneoId invalido.' });
+    }
+
+    if (!UUID_REGEX.test(jugadorBaseId)) {
+      return res.status(400).json({ error: 'jugador_id invalido.' });
+    }
+
+    const { data: torneo, error: torneoError } = await supabase
+      .from('torneos')
+      .select('id, modalidad, rama, categoria_id')
+      .eq('id', torneoId)
+      .eq('club_id', clubId)
+      .single();
+
+    if (torneoError || !torneo) {
+      return res.status(404).json({ error: 'Torneo no encontrado.' });
+    }
+
+    if (!isDoblesModalidad(torneo.modalidad)) {
+      return res.status(200).json([]);
+    }
+
+    const modalidadTorneo = normalizeModalidad(torneo.modalidad);
+    const ramaTorneo = normalizeRama(torneo.rama);
+    const categoriaTorneo = parseCategoria(torneo.categoria_id);
+
+    const { data: perfilBase, error: perfilBaseError } = await fetchPerfilCompat(jugadorBaseId, clubId);
+    if (perfilBaseError || !perfilBase) {
+      return res.status(404).json({ error: 'Perfil del jugador base no encontrado.' });
+    }
+
+    const categoriaBase = resolveCategoriaPerfilPorModalidad(perfilBase, modalidadTorneo);
+    const sexoBase = normalizeRama(perfilBase.sexo);
+
+    let candidatosQuery = supabase
+      .from('perfiles')
+      .select('id, nombre_completo, sexo, categoria, categoria_singles, categoria_dobles')
+      .eq('club_id', clubId)
+      .neq('id', jugadorBaseId)
+      .order('nombre_completo', { ascending: true })
+      .limit(25);
+
+    if (q) {
+      candidatosQuery = candidatosQuery.ilike('nombre_completo', `%${q}%`);
+    }
+
+    const { data: candidatosRaw, error: candidatosError } = await candidatosQuery;
+    if (candidatosError) {
+      console.error('Error al buscar companeros de dobles:', candidatosError);
+      return res.status(500).json({ error: 'No se pudieron buscar companeros.' });
+    }
+
+    const { data: inscripcionesRaw, error: inscripcionesError } = await supabase
+      .from('inscripciones')
+      .select('jugador_id')
+      .eq('torneo_id', torneoId)
+      .eq('club_id', clubId);
+
+    if (inscripcionesError) {
+      console.error('Error al listar inscripciones para filtrar companeros:', inscripcionesError);
+      return res.status(500).json({ error: 'No se pudo validar la disponibilidad de companeros.' });
+    }
+
+    const inscritosSet = new Set((inscripcionesRaw || []).map((row) => String(row?.jugador_id || '').trim()).filter(Boolean));
+    inscritosSet.add(jugadorBaseId);
+
+    const candidatos = (candidatosRaw || []).filter((perfil) => {
+      if (!perfil?.id || inscritosSet.has(String(perfil.id).trim())) {
+        return false;
+      }
+
+      const sexoPerfil = normalizeRama(perfil.sexo);
+      const categoriaPerfil = resolveCategoriaPerfilPorModalidad(perfil, modalidadTorneo);
+
+      if (!sexoPerfil || categoriaPerfil === null) {
+        return false;
+      }
+
+      if (categoriaTorneo !== null && categoriaPerfil !== categoriaTorneo) {
+        return false;
+      }
+
+      if (categoriaBase !== null && categoriaPerfil !== categoriaBase) {
+        return false;
+      }
+
+      if (ramaTorneo === 'Masculino' && sexoPerfil !== 'Masculino') {
+        return false;
+      }
+
+      if (ramaTorneo === 'Femenino' && sexoPerfil !== 'Femenino') {
+        return false;
+      }
+
+      if (ramaTorneo === 'Mixto' && sexoBase && !areOppositeSexes(sexoBase, sexoPerfil)) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return res.status(200).json(candidatos);
+  } catch (err) {
+    console.error('Error inesperado al listar companeros de dobles:', err);
+    return res.status(500).json({ error: 'Error interno del servidor.' });
+  }
+};
+
 const inscribirJugador = async (req, res) => {
   try {
     const { clubId, error: clubError } = resolveClubIdFromRequest(req);
@@ -1311,7 +1478,8 @@ const inscribirJugador = async (req, res) => {
     }
 
     const torneo_id = req.params.torneoId || req.params.id;
-    const { jugador_id, disponibilidad_inscripcion, disponibilidad } = req.body;
+    const { jugador_id, pareja_jugador_id, disponibilidad_inscripcion, disponibilidad } = req.body;
+    const parejaJugadorId = normalizeQueryText(pareja_jugador_id);
     const franjasEntrada = Array.isArray(disponibilidad_inscripcion)
       ? disponibilidad_inscripcion
       : disponibilidad;
@@ -1392,6 +1560,54 @@ const inscribirJugador = async (req, res) => {
       });
     }
 
+    const torneoEsDobles = isDoblesModalidad(modalidadTorneo);
+
+    if (torneoEsDobles) {
+      if (!parejaJugadorId) {
+        return res.status(400).json({ error: 'En torneos de dobles debes indicar pareja_jugador_id.' });
+      }
+
+      if (!UUID_REGEX.test(parejaJugadorId)) {
+        return res.status(400).json({ error: 'pareja_jugador_id debe ser un UUID valido.' });
+      }
+
+      if (String(jugador_id).trim() === parejaJugadorId) {
+        return res.status(400).json({ error: 'No puedes inscribirte contigo mismo como pareja.' });
+      }
+
+      const { data: perfilParejaRaw, error: perfilParejaError } = await fetchPerfilCompat(parejaJugadorId, clubId);
+      if (perfilParejaError || !perfilParejaRaw) {
+        return res.status(404).json({ error: 'El perfil de la pareja no fue encontrado en este club.' });
+      }
+
+      const sexoPareja = normalizeRama(perfilParejaRaw.sexo);
+      const categoriaPareja = resolveCategoriaPerfilPorModalidad(perfilParejaRaw, modalidadTorneo);
+
+      if (!sexoPareja || categoriaPareja === null) {
+        return res.status(409).json({
+          error: 'El perfil de la pareja no tiene sexo/categoria configurados para esta modalidad.',
+        });
+      }
+
+      if (categoriaPareja !== categoriaTorneo || categoriaPareja !== categoriaJugador) {
+        return res.status(409).json({
+          error: 'La pareja debe coincidir con la misma categoria del torneo y del jugador titular.',
+        });
+      }
+
+      if (ramaTorneo === 'Masculino' && sexoPareja !== 'Masculino') {
+        return res.status(409).json({ error: 'La pareja no cumple con la rama Masculino del torneo.' });
+      }
+
+      if (ramaTorneo === 'Femenino' && sexoPareja !== 'Femenino') {
+        return res.status(409).json({ error: 'La pareja no cumple con la rama Femenino del torneo.' });
+      }
+
+      if (ramaTorneo === 'Mixto' && !areOppositeSexes(sexoJugador, sexoPareja)) {
+        return res.status(409).json({ error: 'En dobles mixto la pareja debe estar compuesta por un Masculino y un Femenino.' });
+      }
+    }
+
     const fechaInicioTorneo = toUtcDateOnly(torneoInfo.fecha_inicio);
     const fechaFinTorneo = toUtcDateOnly(torneoInfo.fecha_fin);
     if (!fechaInicioTorneo || !fechaFinTorneo) {
@@ -1443,39 +1659,11 @@ const inscribirJugador = async (req, res) => {
       });
     }
 
-    const existingSelectOptions = [
-      'id, torneo_id, jugador_id, estado, estado_inscripcion',
-      'id, torneo_id, jugador_id, estado',
-    ];
-
-    let existingFetchError = null;
-    let inscripcionExistente = null;
-    for (const selectColumns of existingSelectOptions) {
-      const { data, error } = await supabase
-        .from('inscripciones')
-        .select(selectColumns)
-        .eq('torneo_id', torneo_id)
-        .eq('jugador_id', jugador_id)
-        .eq('club_id', clubId)
-        .single();
-
-      if (!error) {
-        inscripcionExistente = data;
-        existingFetchError = null;
-        break;
-      }
-
-      if (error?.code === 'PGRST116') {
-        inscripcionExistente = null;
-        existingFetchError = null;
-        break;
-      }
-
-      existingFetchError = error;
-      if (!isMissingColumnError(error)) {
-        break;
-      }
-    }
+    const { data: inscripcionExistente, error: existingFetchError } = await fetchInscripcionByTournamentPlayerCompat({
+      torneoId: torneo_id,
+      jugadorId: jugador_id,
+      clubId,
+    });
 
     if (existingFetchError) {
       console.error('Error al verificar inscripcion existente:', existingFetchError);
@@ -1500,39 +1688,74 @@ const inscribirJugador = async (req, res) => {
       return res.status(409).json({ error: 'El jugador ya tiene una inscripción asociada a este torneo.' });
     }
 
-    const insertPayloadWithStatus = {
+    if (torneoEsDobles) {
+      const { data: inscripcionParejaExistente, error: inscripcionParejaError } = await fetchInscripcionByTournamentPlayerCompat({
+        torneoId: torneo_id,
+        jugadorId: parejaJugadorId,
+        clubId,
+      });
+
+      if (inscripcionParejaError) {
+        console.error('Error al verificar inscripción de la pareja:', inscripcionParejaError);
+        return res.status(500).json({ error: 'No se pudo verificar la disponibilidad de la pareja.' });
+      }
+
+      if (inscripcionParejaExistente) {
+        return res.status(409).json({ error: 'La pareja seleccionada ya tiene una inscripción para este torneo.' });
+      }
+    }
+
+    const parejaId = torneoEsDobles ? randomUUID() : null;
+    const buildPayloadWithStatus = (jugadorId, parejaJugadorIdValue = null) => ({
       club_id: clubId,
       torneo_id,
-      jugador_id,
+      jugador_id: jugadorId,
+      pareja_id: parejaId,
+      pareja_jugador_id: parejaJugadorIdValue,
       estado: mapLegacyStateFromInscriptionStatus(INSCRIPTION_STATUS_PENDING),
       estado_inscripcion: INSCRIPTION_STATUS_PENDING,
       pago_confirmado: false,
       fecha_validacion: null,
       motivo_rechazo: null,
-    };
+    });
 
-    const insertPayloadLegacy = {
+    const buildPayloadLegacy = (jugadorId, parejaJugadorIdValue = null) => ({
       club_id: clubId,
       torneo_id,
-      jugador_id,
+      jugador_id: jugadorId,
+      pareja_id: parejaId,
+      pareja_jugador_id: parejaJugadorIdValue,
       estado: mapLegacyStateFromInscriptionStatus(INSCRIPTION_STATUS_PENDING),
       pago_confirmado: false,
-    };
+    });
 
-    const insertAttempts = [insertPayloadWithStatus, insertPayloadLegacy];
-    let inscripcion = null;
+    const payloadRowsWithStatus = torneoEsDobles
+      ? [
+        buildPayloadWithStatus(jugador_id, parejaJugadorId),
+        buildPayloadWithStatus(parejaJugadorId, jugador_id),
+      ]
+      : [buildPayloadWithStatus(jugador_id)];
+
+    const payloadRowsLegacy = torneoEsDobles
+      ? [
+        buildPayloadLegacy(jugador_id, parejaJugadorId),
+        buildPayloadLegacy(parejaJugadorId, jugador_id),
+      ]
+      : [buildPayloadLegacy(jugador_id)];
+
+    const insertAttempts = [payloadRowsWithStatus, payloadRowsLegacy];
+    let inscripcionesCreadas = [];
     let insertErrorFinal = null;
 
     for (let idx = 0; idx < insertAttempts.length; idx += 1) {
-      const payload = insertAttempts[idx];
+      const rowsPayload = insertAttempts[idx];
       const { data, error } = await supabase
         .from('inscripciones')
-        .insert([payload])
-        .select()
-        .single();
+        .insert(rowsPayload)
+        .select();
 
       if (!error) {
-        inscripcion = data;
+        inscripcionesCreadas = data || [];
         insertErrorFinal = null;
         break;
       }
@@ -1540,7 +1763,7 @@ const inscribirJugador = async (req, res) => {
       insertErrorFinal = error;
 
       if (error.code === '23505') {
-        return res.status(409).json({ error: 'Ya existe una solicitud o inscripción para este jugador en el torneo.' });
+        return res.status(409).json({ error: 'Ya existe una solicitud o inscripción para alguno de los jugadores de la pareja.' });
       }
 
       if (!isMissingColumnError(error) || idx === insertAttempts.length - 1) {
@@ -1549,25 +1772,43 @@ const inscribirJugador = async (req, res) => {
     }
 
     if (insertErrorFinal) {
+      if (torneoEsDobles && isMissingColumnError(insertErrorFinal)) {
+        return res.status(409).json({
+          error: 'Tu base de datos todavia no soporta inscripción por pareja en dobles. Ejecuta migration_v28.sql.',
+        });
+      }
+
       console.error('Error al inscribir:', insertErrorFinal);
       return res.status(500).json({ error: 'Error al procesar la inscripción' });
     }
 
+    const jugadoresDisponibilidad = torneoEsDobles ? [jugador_id, parejaJugadorId] : [jugador_id];
     const { error: deleteDispError } = await supabase
       .from('disponibilidad_inscripcion')
       .delete()
       .eq('torneo_id', torneo_id)
-      .eq('jugador_id', jugador_id);
+      .in('jugador_id', jugadoresDisponibilidad);
 
     if (deleteDispError) {
-      await supabase.from('inscripciones').delete().eq('id', inscripcion.id);
+      const inscriptionIds = (inscripcionesCreadas || []).map((item) => item.id).filter(Boolean);
+      if (inscriptionIds.length > 0) {
+        await supabase.from('inscripciones').delete().in('id', inscriptionIds);
+      }
+
       console.error('Error al limpiar disponibilidad de inscripcion previa:', deleteDispError);
       return res.status(500).json({ error: 'Error al guardar la disponibilidad de inscripcion.' });
     }
 
+    const disponibilidadBase = jugadoresDisponibilidad.flatMap((jugadorIdActual) => (
+      franjasNormalizadas.map((franja) => ({
+        ...franja,
+        jugador_id: jugadorIdActual,
+      }))
+    ));
+
     const disponibilidadInsertAttempts = [
-      franjasNormalizadas,
-      franjasNormalizadas.map(({ es_obligatoria_fin_semana, ...resto }) => resto),
+      disponibilidadBase,
+      disponibilidadBase.map(({ es_obligatoria_fin_semana, ...resto }) => resto),
     ];
 
     let dispInsertError = null;
@@ -1589,7 +1830,11 @@ const inscribirJugador = async (req, res) => {
     }
 
     if (dispInsertError) {
-      await supabase.from('inscripciones').delete().eq('id', inscripcion.id);
+      const inscriptionIds = (inscripcionesCreadas || []).map((item) => item.id).filter(Boolean);
+      if (inscriptionIds.length > 0) {
+        await supabase.from('inscripciones').delete().in('id', inscriptionIds);
+      }
+
       console.error('Error al guardar disponibilidad de inscripcion:', dispInsertError);
       return res.status(500).json({ error: 'Error al guardar la disponibilidad de inscripcion.' });
     }
@@ -1598,14 +1843,24 @@ const inscribirJugador = async (req, res) => {
       tipo: 'nueva_solicitud',
       torneo_id,
       jugador_id,
+      pareja_jugador_id: torneoEsDobles ? parejaJugadorId : null,
     });
 
+    const primeraInscripcion = Array.isArray(inscripcionesCreadas) && inscripcionesCreadas.length > 0
+      ? inscripcionesCreadas[0]
+      : null;
+
     res.status(201).json({
-      message: 'Tu solicitud fue enviada. Tu inscripción está siendo revisada por el administrador.',
-      inscripcion,
+      message: torneoEsDobles
+        ? 'La solicitud de la pareja fue enviada y esta siendo revisada por el administrador.'
+        : 'Tu solicitud fue enviada. Tu inscripción está siendo revisada por el administrador.',
+      inscripcion: primeraInscripcion,
+      inscripciones: inscripcionesCreadas,
       estado: mapLegacyStateFromInscriptionStatus(INSCRIPTION_STATUS_PENDING),
       estado_inscripcion: INSCRIPTION_STATUS_PENDING,
-      disponibilidad_guardada: franjasNormalizadas.length,
+      disponibilidad_guardada: disponibilidadBase.length,
+      pareja_jugador_id: torneoEsDobles ? parejaJugadorId : null,
+      pareja_id: torneoEsDobles ? parejaId : null,
     });
 
   } catch (err) {
@@ -1622,9 +1877,9 @@ const obtenerInscripcionesPendientesAdmin = async (req, res) => {
     }
 
     const selectOptions = [
-      'id, torneo_id, jugador_id, estado, estado_inscripcion, fecha_inscripcion, fecha_validacion, motivo_rechazo, torneos(id, titulo, modalidad, rama, categoria_id, cupos_max), perfiles(id, nombre_completo, telefono)',
-      'id, torneo_id, jugador_id, estado, estado_inscripcion, fecha_inscripcion, torneos(id, titulo, modalidad, rama, categoria_id, cupos_max), perfiles(id, nombre_completo, telefono)',
-      'id, torneo_id, jugador_id, estado, fecha_inscripcion, torneos(id, titulo, modalidad, rama, categoria_id, cupos_max), perfiles(id, nombre_completo, telefono)',
+      'id, torneo_id, jugador_id, pareja_id, pareja_jugador_id, estado, estado_inscripcion, fecha_inscripcion, fecha_validacion, motivo_rechazo, torneos(id, titulo, modalidad, rama, categoria_id, cupos_max), jugador_perfil:perfiles!inscripciones_jugador_id_fkey(id, nombre_completo, telefono), pareja_perfil:perfiles!inscripciones_pareja_jugador_fk(id, nombre_completo, telefono)',
+      'id, torneo_id, jugador_id, pareja_id, pareja_jugador_id, estado, estado_inscripcion, fecha_inscripcion, torneos(id, titulo, modalidad, rama, categoria_id, cupos_max), jugador_perfil:perfiles!inscripciones_jugador_id_fkey(id, nombre_completo, telefono), pareja_perfil:perfiles!inscripciones_pareja_jugador_fk(id, nombre_completo, telefono)',
+      'id, torneo_id, jugador_id, estado, fecha_inscripcion, torneos(id, titulo, modalidad, rama, categoria_id, cupos_max), jugador_perfil:perfiles!inscripciones_jugador_id_fkey(id, nombre_completo, telefono)',
     ];
 
     let pendingRows = [];
@@ -1665,12 +1920,15 @@ const obtenerInscripcionesPendientesAdmin = async (req, res) => {
     const pendientes = (pendingRows || [])
       .map((item) => {
         const torneo = Array.isArray(item?.torneos) ? item.torneos[0] : item?.torneos;
-        const jugador = Array.isArray(item?.perfiles) ? item.perfiles[0] : item?.perfiles;
+        const jugador = Array.isArray(item?.jugador_perfil) ? item.jugador_perfil[0] : item?.jugador_perfil;
+        const pareja = Array.isArray(item?.pareja_perfil) ? item.pareja_perfil[0] : item?.pareja_perfil;
 
         return {
           id: item.id,
           torneo_id: item.torneo_id,
           jugador_id: item.jugador_id,
+          pareja_id: item.pareja_id ?? null,
+          pareja_jugador_id: item.pareja_jugador_id ?? null,
           estado: item.estado ?? null,
           estado_inscripcion: resolveInscriptionStatusCompat(item) || INSCRIPTION_STATUS_PENDING,
           fecha_inscripcion: item.fecha_inscripcion ?? null,
@@ -1678,6 +1936,7 @@ const obtenerInscripcionesPendientesAdmin = async (req, res) => {
           motivo_rechazo: item.motivo_rechazo ?? null,
           torneo: torneo || null,
           jugador: jugador || null,
+          pareja: pareja || null,
         };
       })
       .filter((item) => item.estado_inscripcion === INSCRIPTION_STATUS_PENDING);
@@ -1709,6 +1968,7 @@ const validarInscripcionAdmin = async (req, res) => {
     }
 
     const selectOptions = [
+      'id, torneo_id, jugador_id, pareja_id, pareja_jugador_id, estado, estado_inscripcion, torneos(cupos_max, titulo)',
       'id, torneo_id, jugador_id, estado, estado_inscripcion, torneos(cupos_max, titulo)',
       'id, torneo_id, jugador_id, estado, torneos(cupos_max, titulo)',
     ];
@@ -1773,7 +2033,8 @@ const validarInscripcionAdmin = async (req, res) => {
       }
 
       const summary = summaryByTournament.get(String(inscripcion.torneo_id || '').trim()) || { aprobadas: 0 };
-      if (Number(summary.aprobadas || 0) >= cuposMax) {
+      const cuposRequeridos = inscripcion?.pareja_id ? 2 : 1;
+      if (Number(summary.aprobadas || 0) + cuposRequeridos > cuposMax) {
         return res.status(409).json({ error: 'No hay cupos disponibles para aprobar más inscripciones.' });
       }
     }
@@ -1798,19 +2059,29 @@ const validarInscripcionAdmin = async (req, res) => {
 
     const updateAttempts = [payloadWithStatus, payloadLegacy];
     let updateError = null;
-    let updated = null;
+    let updatedRows = [];
+    const shouldUpdatePair = Boolean(inscripcion?.pareja_id);
 
     for (let idx = 0; idx < updateAttempts.length; idx += 1) {
       const payload = updateAttempts[idx];
-      const { data, error } = await supabase
+      let query = supabase
         .from('inscripciones')
         .update(payload)
-        .eq('id', inscripcionId)
-        .select()
-        .single();
+        .select();
+
+      if (shouldUpdatePair) {
+        query = query
+          .eq('torneo_id', inscripcion.torneo_id)
+          .eq('pareja_id', inscripcion.pareja_id)
+          .eq('club_id', clubId);
+      } else {
+        query = query.eq('id', inscripcionId);
+      }
+
+      const { data, error } = await query;
 
       if (!error) {
-        updated = data;
+        updatedRows = Array.isArray(data) ? data : (data ? [data] : []);
         updateError = null;
         break;
       }
@@ -1830,17 +2101,23 @@ const validarInscripcionAdmin = async (req, res) => {
       tipo: 'resolucion_solicitud',
       torneo_id: inscripcion.torneo_id,
       jugador_id: inscripcion.jugador_id,
+      pareja_jugador_id: inscripcion?.pareja_jugador_id || null,
       estado_inscripcion: estadoObjetivo,
     });
+
+    const updatedPrincipal = updatedRows.find((row) => String(row?.jugador_id || '').trim() === String(inscripcion.jugador_id || '').trim())
+      || updatedRows[0]
+      || null;
 
     return res.status(200).json({
       message: estadoObjetivo === INSCRIPTION_STATUS_APPROVED
         ? 'Inscripción aprobada correctamente.'
         : 'Inscripción rechazada correctamente.',
       inscripcion: {
-        ...updated,
+        ...updatedPrincipal,
         estado_inscripcion: estadoObjetivo,
       },
+      inscripciones_actualizadas: updatedRows,
     });
   } catch (err) {
     console.error('Error inesperado al validar inscripción:', err);
@@ -1862,7 +2139,8 @@ const obtenerInscripcionesPorJugador = async (req, res) => {
     }
 
     const selectOptions = [
-      'id, torneo_id, jugador_id, estado, estado_inscripcion, fecha_inscripcion, fecha_validacion, motivo_rechazo',
+      'id, torneo_id, jugador_id, pareja_id, pareja_jugador_id, estado, estado_inscripcion, fecha_inscripcion, fecha_validacion, motivo_rechazo',
+      'id, torneo_id, jugador_id, estado, estado_inscripcion, fecha_inscripcion',
       'id, torneo_id, jugador_id, estado, fecha_inscripcion',
     ];
 
@@ -1897,6 +2175,8 @@ const obtenerInscripcionesPorJugador = async (req, res) => {
       id: row.id,
       torneo_id: row.torneo_id,
       jugador_id: row.jugador_id,
+      pareja_id: row.pareja_id ?? null,
+      pareja_jugador_id: row.pareja_jugador_id ?? null,
       estado: row.estado ?? null,
       estado_inscripcion: resolveInscriptionStatusCompat(row),
       fecha_inscripcion: row.fecha_inscripcion ?? null,
@@ -2147,6 +2427,7 @@ module.exports = {
   obtenerTodosLosTorneos,
   getInscripcionesWhatsappTemplate,
   updateInscripcionesWhatsappTemplate,
+  listarCompanerosDoblesDisponibles,
   inscribirJugador,
   obtenerInscripcionesPendientesAdmin,
   validarInscripcionAdmin,

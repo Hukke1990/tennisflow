@@ -50,6 +50,9 @@ router.patch('/:id', requireAuth, requireAdmin, torneosController.actualizarTorn
 // POST /api/torneos/:torneoId/inscribir
 router.post('/:torneoId/inscribir', requireAuth, enforceJugadorIdForSelfOrAdmin(), torneosController.inscribirJugador);
 
+// GET /api/torneos/:torneoId/companeros-disponibles
+router.get('/:torneoId/companeros-disponibles', requireAuth, torneosController.listarCompanerosDoblesDisponibles);
+
 // GET /api/torneos/:id/canchas
 router.get('/:id/canchas', torneosController.obtenerCanchasDelTorneo);
 

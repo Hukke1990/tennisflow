@@ -370,9 +370,17 @@ const aplicarPuntosRankingPorRonda = async ({ partidoAntes, partidoDespues, gana
     const partidoId = partidoDespues?.id || partidoAntes?.id;
     const jugador1Id = partidoDespues?.jugador1_id ?? partidoAntes?.jugador1_id ?? null;
     const jugador2Id = partidoDespues?.jugador2_id ?? partidoAntes?.jugador2_id ?? null;
+    const jugador1ParejaId = partidoDespues?.jugador1_pareja_id ?? partidoAntes?.jugador1_pareja_id ?? null;
+    const jugador2ParejaId = partidoDespues?.jugador2_pareja_id ?? partidoAntes?.jugador2_pareja_id ?? null;
     const perdedorId = sameEntityId(jugador1Id, ganador_id)
       ? jugador2Id
       : (sameEntityId(jugador2Id, ganador_id) ? jugador1Id : null);
+    const ganadorParejaId = sameEntityId(jugador1Id, ganador_id)
+      ? jugador1ParejaId
+      : (sameEntityId(jugador2Id, ganador_id) ? jugador2ParejaId : null);
+    const perdedorParejaId = sameEntityId(jugador1Id, ganador_id)
+      ? jugador2ParejaId
+      : (sameEntityId(jugador2Id, ganador_id) ? jugador1ParejaId : null);
 
     if (!torneoId || !partidoId || !ganador_id) {
       return { applied: false, reason: 'datos_incompletos' };
@@ -476,6 +484,60 @@ const aplicarPuntosRankingPorRonda = async ({ partidoAntes, partidoDespues, gana
       updatePerdedor.target = puntosObjetivoPerdedor;
     }
 
+    let updateGanadorPareja = {
+      applied: false,
+      jugador_id: ganadorParejaId,
+      delta: deltaGanador,
+      target: puntosObjetivoGanador,
+    };
+
+    if (
+      modalidad === 'Dobles'
+      && ganadorParejaId
+      && !sameEntityId(ganadorParejaId, ganador_id)
+      && deltaGanador !== 0
+    ) {
+      const winnerPairDeltaResult = await applyPlayerPointsDelta({
+        jugadorId: ganadorParejaId,
+        modalidad,
+        delta: deltaGanador,
+      });
+
+      if (winnerPairDeltaResult.error) {
+        return { applied: false, reason: 'error_otorgando_puntos_ganador_pareja', error: winnerPairDeltaResult.error };
+      }
+
+      updateGanadorPareja = winnerPairDeltaResult;
+      updateGanadorPareja.target = puntosObjetivoGanador;
+    }
+
+    let updatePerdedorPareja = {
+      applied: false,
+      jugador_id: perdedorParejaId,
+      delta: deltaPerdedor,
+      target: puntosObjetivoPerdedor,
+    };
+
+    if (
+      modalidad === 'Dobles'
+      && perdedorParejaId
+      && !sameEntityId(perdedorParejaId, perdedorId)
+      && deltaPerdedor !== 0
+    ) {
+      const loserPairDeltaResult = await applyPlayerPointsDelta({
+        jugadorId: perdedorParejaId,
+        modalidad,
+        delta: deltaPerdedor,
+      });
+
+      if (loserPairDeltaResult.error) {
+        return { applied: false, reason: 'error_otorgando_puntos_perdedor_pareja', error: loserPairDeltaResult.error };
+      }
+
+      updatePerdedorPareja = loserPairDeltaResult;
+      updatePerdedorPareja.target = puntosObjetivoPerdedor;
+    }
+
     const metadataPayload = {
       ranking_puntos_otorgados: puntosObjetivoGanador,
       ranking_puntos_jugador_id: puntosObjetivoGanador > 0 ? ganador_id : null,
@@ -491,7 +553,12 @@ const aplicarPuntosRankingPorRonda = async ({ partidoAntes, partidoDespues, gana
     }
 
     return {
-      applied: Boolean(updateGanador.applied || updatePerdedor.applied),
+      applied: Boolean(
+        updateGanador.applied
+        || updatePerdedor.applied
+        || updateGanadorPareja.applied
+        || updatePerdedorPareja.applied
+      ),
       modalidad,
       ronda_orden: rondaOrden,
       ganador: {
@@ -507,6 +574,18 @@ const aplicarPuntosRankingPorRonda = async ({ partidoAntes, partidoDespues, gana
         puntos_previos_torneo: puntosActualesPerdedor,
         delta_aplicado: deltaPerdedor,
         update: updatePerdedor,
+      },
+      ganador_pareja: {
+        jugador_id: ganadorParejaId,
+        puntos_objetivo: puntosObjetivoGanador,
+        delta_aplicado: deltaGanador,
+        update: updateGanadorPareja,
+      },
+      perdedor_pareja: {
+        jugador_id: perdedorParejaId,
+        puntos_objetivo: puntosObjetivoPerdedor,
+        delta_aplicado: deltaPerdedor,
+        update: updatePerdedorPareja,
       },
     };
   } catch (err) {
@@ -531,11 +610,24 @@ const aplicarImpactoRanking = async ({ partidoActual, ganador_id }) => {
     }
 
     const modalidad = normalizeModalidad(torneo.modalidad) || 'Singles';
+    const isDobles = modalidad === 'Dobles';
     const rama = normalizeRama(torneo.rama);
     const categoriaId = parseCategoria(torneo.categoria_id);
     const rankingField = modalidad === 'Dobles' ? 'ranking_elo_dobles' : 'ranking_elo_singles';
 
-    const { data: perfiles, error: perfilesError } = await fetchPerfilesCompat([ganador_id, perdedor_id]);
+    const ganadorParejaId = sameEntityId(ganador_id, jugador1)
+      ? (partidoActual.jugador1_pareja_id || null)
+      : (sameEntityId(ganador_id, jugador2) ? (partidoActual.jugador2_pareja_id || null) : null);
+    const perdedorParejaId = sameEntityId(perdedor_id, jugador1)
+      ? (partidoActual.jugador1_pareja_id || null)
+      : (sameEntityId(perdedor_id, jugador2) ? (partidoActual.jugador2_pareja_id || null) : null);
+
+    const participantIds = [ganador_id, perdedor_id];
+    if (isDobles && ganadorParejaId) participantIds.push(ganadorParejaId);
+    if (isDobles && perdedorParejaId) participantIds.push(perdedorParejaId);
+    const uniqueParticipantIds = [...new Set(participantIds.filter(Boolean))];
+
+    const { data: perfiles, error: perfilesError } = await fetchPerfilesCompat(uniqueParticipantIds);
     if (perfilesError) {
       return { applied: false, reason: 'perfiles_no_disponibles', error: perfilesError };
     }
@@ -543,29 +635,107 @@ const aplicarImpactoRanking = async ({ partidoActual, ganador_id }) => {
     const perfilById = new Map((perfiles || []).map((p) => [p.id, p]));
     const perfilGanador = perfilById.get(ganador_id);
     const perfilPerdedor = perfilById.get(perdedor_id);
+    const perfilGanadorPareja = ganadorParejaId ? perfilById.get(ganadorParejaId) : null;
+    const perfilPerdedorPareja = perdedorParejaId ? perfilById.get(perdedorParejaId) : null;
 
     if (!perfilGanador || !perfilPerdedor) {
       return { applied: false, reason: 'perfiles_incompletos' };
     }
 
+    const doublesPairReady = Boolean(isDobles && perfilGanadorPareja && perfilPerdedorPareja);
+
     if (rama && rama !== 'Mixto') {
-      const sexoGanador = normalizeRama(perfilGanador.sexo);
-      const sexoPerdedor = normalizeRama(perfilPerdedor.sexo);
-      if (sexoGanador !== rama || sexoPerdedor !== rama) {
+      const sexoParticipantes = [
+        normalizeRama(perfilGanador.sexo),
+        normalizeRama(perfilPerdedor.sexo),
+      ];
+      if (doublesPairReady) {
+        sexoParticipantes.push(
+          normalizeRama(perfilGanadorPareja.sexo),
+          normalizeRama(perfilPerdedorPareja.sexo),
+        );
+      }
+
+      if (sexoParticipantes.some((sexo) => sexo !== rama)) {
         return { applied: false, reason: 'sexo_no_coincide_torneo' };
+      }
+    } else if (rama === 'Mixto' && doublesPairReady) {
+      const winnerMixed = normalizeRama(perfilGanador.sexo) !== normalizeRama(perfilGanadorPareja.sexo);
+      const loserMixed = normalizeRama(perfilPerdedor.sexo) !== normalizeRama(perfilPerdedorPareja.sexo);
+      if (!winnerMixed || !loserMixed) {
+        return { applied: false, reason: 'pareja_no_mixta_en_torneo_mixto' };
       }
     }
 
     if (categoriaId !== null) {
-      const categoriaGanador = resolveCategoriaPerfil(perfilGanador, modalidad);
-      const categoriaPerdedor = resolveCategoriaPerfil(perfilPerdedor, modalidad);
-      if (categoriaGanador !== categoriaId || categoriaPerdedor !== categoriaId) {
+      const categorias = [
+        resolveCategoriaPerfil(perfilGanador, modalidad),
+        resolveCategoriaPerfil(perfilPerdedor, modalidad),
+      ];
+
+      if (doublesPairReady) {
+        categorias.push(
+          resolveCategoriaPerfil(perfilGanadorPareja, modalidad),
+          resolveCategoriaPerfil(perfilPerdedorPareja, modalidad),
+        );
+      }
+
+      if (categorias.some((categoria) => categoria !== categoriaId)) {
         return { applied: false, reason: 'categoria_no_coincide_torneo' };
       }
     }
 
     const winnerCurrent = Number(perfilGanador[rankingField] ?? perfilGanador.ranking_elo ?? 1200);
     const loserCurrent = Number(perfilPerdedor[rankingField] ?? perfilPerdedor.ranking_elo ?? 1200);
+
+    if (doublesPairReady) {
+      const winnerPartnerCurrent = Number(perfilGanadorPareja[rankingField] ?? perfilGanadorPareja.ranking_elo ?? 1200);
+      const loserPartnerCurrent = Number(perfilPerdedorPareja[rankingField] ?? perfilPerdedorPareja.ranking_elo ?? 1200);
+
+      const winnerTeamRating = Math.round((winnerCurrent + winnerPartnerCurrent) / 2);
+      const loserTeamRating = Math.round((loserCurrent + loserPartnerCurrent) / 2);
+
+      const winnerNext = nextElo(winnerCurrent, loserTeamRating, 1);
+      const winnerPartnerNext = nextElo(winnerPartnerCurrent, loserTeamRating, 1);
+      const loserNext = nextElo(loserCurrent, winnerTeamRating, 0);
+      const loserPartnerNext = nextElo(loserPartnerCurrent, winnerTeamRating, 0);
+
+      const winnerUpdate = await updateRankingField(ganador_id, rankingField, winnerNext);
+      if (winnerUpdate.error) {
+        return { applied: false, reason: 'error_actualizando_ganador', error: winnerUpdate.error };
+      }
+
+      const winnerPartnerUpdate = await updateRankingField(ganadorParejaId, rankingField, winnerPartnerNext);
+      if (winnerPartnerUpdate.error) {
+        return { applied: false, reason: 'error_actualizando_ganador_pareja', error: winnerPartnerUpdate.error };
+      }
+
+      const loserUpdate = await updateRankingField(perdedor_id, rankingField, loserNext);
+      if (loserUpdate.error) {
+        return { applied: false, reason: 'error_actualizando_perdedor', error: loserUpdate.error };
+      }
+
+      const loserPartnerUpdate = await updateRankingField(perdedorParejaId, rankingField, loserPartnerNext);
+      if (loserPartnerUpdate.error) {
+        return { applied: false, reason: 'error_actualizando_perdedor_pareja', error: loserPartnerUpdate.error };
+      }
+
+      return {
+        applied: true,
+        modalidad,
+        rama: rama || null,
+        categoria_id: categoriaId,
+        torneo_config: torneo,
+        ranking_field_ganador: winnerUpdate.appliedField,
+        ranking_field_ganador_pareja: winnerPartnerUpdate.appliedField,
+        ranking_field_perdedor: loserUpdate.appliedField,
+        ranking_field_perdedor_pareja: loserPartnerUpdate.appliedField,
+        ganador: { id: ganador_id, before: winnerCurrent, after: winnerNext },
+        ganador_pareja: { id: ganadorParejaId, before: winnerPartnerCurrent, after: winnerPartnerNext },
+        perdedor: { id: perdedor_id, before: loserCurrent, after: loserNext },
+        perdedor_pareja: { id: perdedorParejaId, before: loserPartnerCurrent, after: loserPartnerNext },
+      };
+    }
 
     const winnerNext = nextElo(winnerCurrent, loserCurrent, 1);
     const loserNext = nextElo(loserCurrent, winnerCurrent, 0);
@@ -899,8 +1069,8 @@ const inferGanadorIdFromScoreData = ({ body = {}, parsedPayload = {}, partidoAct
 
 const fetchPartidoCompat = async (partidoId) => {
   const selectOptions = [
-    'id, torneo_id, ronda, ronda_orden, orden_en_ronda, estado, jugador1_id, jugador2_id, jugador1_origen_partido_id, jugador2_origen_partido_id, ganador_id, score, resultado, marcador_en_vivo, ultima_actualizacion, ranking_puntos_otorgados, ranking_puntos_jugador_id, ranking_puntos_modalidad, ranking_puntos_perdedor_otorgados, ranking_puntos_perdedor_jugador_id, ranking_puntos_perdedor_modalidad',
-    'id, torneo_id, ronda, ronda_orden, orden_en_ronda, estado, jugador1_id, jugador2_id, jugador1_origen_partido_id, jugador2_origen_partido_id, ganador_id, marcador_en_vivo, ultima_actualizacion, ranking_puntos_otorgados, ranking_puntos_jugador_id, ranking_puntos_perdedor_otorgados, ranking_puntos_perdedor_jugador_id',
+    'id, torneo_id, ronda, ronda_orden, orden_en_ronda, estado, jugador1_id, jugador2_id, jugador1_pareja_id, jugador2_pareja_id, jugador1_origen_partido_id, jugador2_origen_partido_id, ganador_id, ganador_pareja_id, score, resultado, marcador_en_vivo, ultima_actualizacion, ranking_puntos_otorgados, ranking_puntos_jugador_id, ranking_puntos_modalidad, ranking_puntos_perdedor_otorgados, ranking_puntos_perdedor_jugador_id, ranking_puntos_perdedor_modalidad',
+    'id, torneo_id, ronda, ronda_orden, orden_en_ronda, estado, jugador1_id, jugador2_id, jugador1_pareja_id, jugador2_pareja_id, jugador1_origen_partido_id, jugador2_origen_partido_id, ganador_id, ganador_pareja_id, marcador_en_vivo, ultima_actualizacion, ranking_puntos_otorgados, ranking_puntos_jugador_id, ranking_puntos_perdedor_otorgados, ranking_puntos_perdedor_jugador_id',
     'id, torneo_id, ronda, ronda_orden, estado, jugador1_id, jugador2_id, ganador_id',
   ];
 
@@ -932,6 +1102,8 @@ const hydratePartidoPlayersFromOrigin = async (partidoActual) => {
 
   let jugador1Id = partidoActual.jugador1_id || null;
   let jugador2Id = partidoActual.jugador2_id || null;
+  let jugador1ParejaId = partidoActual.jugador1_pareja_id || null;
+  let jugador2ParejaId = partidoActual.jugador2_pareja_id || null;
 
   if (!jugador1Id && partidoActual.jugador1_origen_partido_id) {
     const originLeft = await fetchPartidoCompat(partidoActual.jugador1_origen_partido_id);
@@ -940,6 +1112,7 @@ const hydratePartidoPlayersFromOrigin = async (partidoActual) => {
     }
     if (originLeft.data?.ganador_id) {
       jugador1Id = originLeft.data.ganador_id;
+      jugador1ParejaId = originLeft.data.ganador_pareja_id || null;
     }
   }
 
@@ -950,12 +1123,15 @@ const hydratePartidoPlayersFromOrigin = async (partidoActual) => {
     }
     if (originRight.data?.ganador_id) {
       jugador2Id = originRight.data.ganador_id;
+      jugador2ParejaId = originRight.data.ganador_pareja_id || null;
     }
   }
 
   const updatePayload = {};
   if (!partidoActual.jugador1_id && jugador1Id) updatePayload.jugador1_id = jugador1Id;
   if (!partidoActual.jugador2_id && jugador2Id) updatePayload.jugador2_id = jugador2Id;
+  if (!partidoActual.jugador1_pareja_id && jugador1ParejaId) updatePayload.jugador1_pareja_id = jugador1ParejaId;
+  if (!partidoActual.jugador2_pareja_id && jugador2ParejaId) updatePayload.jugador2_pareja_id = jugador2ParejaId;
 
   if (Object.keys(updatePayload).length > 0) {
     const updateHydrated = await updatePartidoCompat(partidoActual.id, updatePayload);
@@ -977,6 +1153,8 @@ const hydratePartidoPlayersFromOrigin = async (partidoActual) => {
       ...partidoActual,
       jugador1_id: jugador1Id,
       jugador2_id: jugador2Id,
+      jugador1_pareja_id: jugador1ParejaId,
+      jugador2_pareja_id: jugador2ParejaId,
     },
     error: null,
   };
@@ -1024,10 +1202,14 @@ const hydratePartidoPlayersFromBracketContext = async (partidoActual) => {
 
   const inferredJugador1 = sourceLeft?.ganador_id || null;
   const inferredJugador2 = sourceRight?.ganador_id || null;
+  const inferredJugador1Pareja = sourceLeft?.ganador_pareja_id || null;
+  const inferredJugador2Pareja = sourceRight?.ganador_pareja_id || null;
 
   const updatePayload = {};
   if (!partidoActual.jugador1_id && inferredJugador1) updatePayload.jugador1_id = inferredJugador1;
   if (!partidoActual.jugador2_id && inferredJugador2) updatePayload.jugador2_id = inferredJugador2;
+  if (!partidoActual.jugador1_pareja_id && inferredJugador1Pareja) updatePayload.jugador1_pareja_id = inferredJugador1Pareja;
+  if (!partidoActual.jugador2_pareja_id && inferredJugador2Pareja) updatePayload.jugador2_pareja_id = inferredJugador2Pareja;
 
   if (Object.keys(updatePayload).length > 0) {
     const updateHydrated = await updatePartidoCompat(partidoActual.id, updatePayload);
@@ -1049,6 +1231,8 @@ const hydratePartidoPlayersFromBracketContext = async (partidoActual) => {
       ...partidoActual,
       jugador1_id: partidoActual.jugador1_id || inferredJugador1,
       jugador2_id: partidoActual.jugador2_id || inferredJugador2,
+      jugador1_pareja_id: partidoActual.jugador1_pareja_id || inferredJugador1Pareja,
+      jugador2_pareja_id: partidoActual.jugador2_pareja_id || inferredJugador2Pareja,
     },
     error: null,
   };
@@ -1061,6 +1245,9 @@ const updatePartidoCompat = async (partidoId, payload) => {
     'resultado',
     'marcador_en_vivo',
     'ultima_actualizacion',
+    'jugador1_pareja_id',
+    'jugador2_pareja_id',
+    'ganador_pareja_id',
     'jugador1_origen_partido_id',
     'jugador2_origen_partido_id',
     'orden_en_ronda',
@@ -1124,8 +1311,8 @@ const isNoCompatiblePayloadError = (error) => {
 
 const fetchRoundMatchesCompat = async (torneoId, rondaOrden) => {
   const selectOptions = [
-    'id, torneo_id, ronda_orden, orden_en_ronda, estado, jugador1_id, jugador2_id, ganador_id, jugador1_origen_partido_id, jugador2_origen_partido_id, fecha_hora, cancha_id',
-    'id, torneo_id, ronda_orden, orden_en_ronda, estado, jugador1_id, jugador2_id, ganador_id, fecha_hora, cancha_id',
+    'id, torneo_id, ronda_orden, orden_en_ronda, estado, jugador1_id, jugador2_id, jugador1_pareja_id, jugador2_pareja_id, ganador_id, ganador_pareja_id, jugador1_origen_partido_id, jugador2_origen_partido_id, fecha_hora, cancha_id',
+    'id, torneo_id, ronda_orden, orden_en_ronda, estado, jugador1_id, jugador2_id, jugador1_pareja_id, jugador2_pareja_id, ganador_id, ganador_pareja_id, fecha_hora, cancha_id',
     'id, torneo_id, ronda_orden, estado, jugador1_id, jugador2_id, ganador_id, fecha_hora, cancha_id',
   ];
 
@@ -1252,6 +1439,7 @@ const ensureNextRoundMatch = async (torneoId, nextRondaOrden, targetIndex) => {
 const rollbackResultadoPartido = async (partidoOriginal) => {
   const rollbackPayload = {
     ganador_id: partidoOriginal.ganador_id ?? null,
+    ganador_pareja_id: partidoOriginal.ganador_pareja_id ?? null,
     estado: partidoOriginal.estado ?? 'programado',
     score: partidoOriginal.score ?? null,
     resultado: partidoOriginal.resultado ?? null,
@@ -1304,6 +1492,9 @@ const propagarGanadorSiguienteRonda = async ({ partidoActual, ganadorId }) => {
 
   const targetIndex = Math.floor(currentIndex / 2);
   const isLeftSlot = currentIndex % 2 === 0;
+  const ganadorParejaId = sameEntityId(partidoActual.jugador1_id, ganadorId)
+    ? (partidoActual.jugador1_pareja_id || null)
+    : (sameEntityId(partidoActual.jugador2_id, ganadorId) ? (partidoActual.jugador2_pareja_id || null) : null);
 
   const nextRoundResult = await ensureNextRoundMatch(partidoActual.torneo_id, nextRondaOrden, targetIndex);
   if (nextRoundResult.error) {
@@ -1316,11 +1507,13 @@ const propagarGanadorSiguienteRonda = async ({ partidoActual, ganadorId }) => {
   const payload = isLeftSlot
     ? {
       jugador1_id: ganadorId,
+      jugador1_pareja_id: ganadorParejaId,
       jugador1_origen_partido_id: partidoActual.id,
       estado: targetMatch.estado === 'finalizado' ? targetMatch.estado : 'programado',
     }
     : {
       jugador2_id: ganadorId,
+      jugador2_pareja_id: ganadorParejaId,
       jugador2_origen_partido_id: partidoActual.id,
       estado: targetMatch.estado === 'finalizado' ? targetMatch.estado : 'programado',
     };
@@ -1512,8 +1705,12 @@ const cargarResultado = async (req, res) => {
 
     const nowIso = new Date().toISOString();
     const partidoAntesDeFinalizar = { ...partidoActual };
+    const ganadorParejaId = sameEntityId(partidoActual.jugador1_id, ganador_id)
+      ? (partidoActual.jugador1_pareja_id || null)
+      : (sameEntityId(partidoActual.jugador2_id, ganador_id) ? (partidoActual.jugador2_pareja_id || null) : null);
     const updatePayload = {
       ganador_id,
+      ganador_pareja_id: ganadorParejaId,
       estado: 'finalizado',
       ultima_actualizacion: nowIso,
     };
