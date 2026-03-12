@@ -1,6 +1,23 @@
--- migration_v7.sql
--- Trigger que crea el perfil automáticamente al registrar un usuario en auth.users
--- Ejecutar en el SQL Editor de Supabase
+-- migration_v21.sql
+-- Hotfix: asegura creacion automatica de perfiles al signup.
+-- Corrige insercion de rol cuando la columna es enum/text y agrega fallback minimo.
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_type t
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE t.typname = 'rol_usuario'
+      AND n.nspname = 'public'
+  ) THEN
+    CREATE TYPE public.rol_usuario AS ENUM ('jugador', 'admin', 'super_admin');
+  END IF;
+END;
+$$;
+
+ALTER TABLE IF EXISTS public.perfiles
+  ADD COLUMN IF NOT EXISTS rol public.rol_usuario DEFAULT 'jugador';
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
@@ -105,13 +122,11 @@ BEGIN
 
   RETURN NEW;
 EXCEPTION WHEN others THEN
-  -- Evita bloquear el signup por un drift de esquema; registrar error en logs.
   RAISE LOG 'handle_new_user fallo para user %: %', NEW.id, SQLERRM;
   RETURN NEW;
 END;
 $$ language plpgsql security definer set search_path = public;
 
--- Crear el trigger en auth.users
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users

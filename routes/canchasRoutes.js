@@ -1,4 +1,5 @@
 const express = require('express');
+const { requireAuth, requireAdmin } = require('../middlewares/auth');
 
 // Exportar como función para inyectar io
 module.exports = (io) => {
@@ -9,16 +10,16 @@ module.exports = (io) => {
   router.get('/', canchasController.obtenerCanchas);
 
   // POST /api/canchas
-  router.post('/', canchasController.crearCancha);
+  router.post('/', requireAuth, requireAdmin, canchasController.crearCancha);
 
   // PUT /api/canchas/:id/estado
-  router.put('/:id/estado', canchasController.actualizarEstadoCancha);
+  router.put('/:id/estado', requireAuth, requireAdmin, canchasController.actualizarEstadoCancha);
 
   // PUT /api/canchas/:id
-  router.put('/:id', canchasController.actualizarCancha);
+  router.put('/:id', requireAuth, requireAdmin, canchasController.actualizarCancha);
 
   // DELETE /api/canchas/:id
-  router.delete('/:id', canchasController.eliminarCancha);
+  router.delete('/:id', requireAuth, requireAdmin, canchasController.eliminarCancha);
 
   return router;
 };

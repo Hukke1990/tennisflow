@@ -7,6 +7,7 @@ CREATE TYPE estado_torneo AS ENUM ('borrador', 'publicado', 'abierto', 'en_progr
 CREATE TABLE perfiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     nombre_completo VARCHAR(255) NOT NULL,
+    telefono TEXT,
     ranking_elo INTEGER DEFAULT 1200,
     ranking_puntos INTEGER DEFAULT 0,
     ranking_puntos_singles INTEGER DEFAULT 0,
@@ -89,6 +90,15 @@ CREATE INDEX idx_torneo_canchas_torneo
 
 CREATE INDEX idx_torneo_canchas_cancha
     ON torneo_canchas (cancha_id);
+
+-- 8. Tabla de configuraciones globales de administracion
+CREATE TABLE configuracion_admin (
+    clave TEXT PRIMARY KEY,
+    valor TEXT NOT NULL,
+    descripcion TEXT,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
 
 -- (Opcional) Activar RLS (Row Level Security) - Ideal para Supabase
 -- ALTER TABLE perfiles ENABLE ROW LEVEL SECURITY;

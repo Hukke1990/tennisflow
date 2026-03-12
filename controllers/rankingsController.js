@@ -2,6 +2,7 @@ const supabase = require('../services/supabase');
 
 const MODALIDADES = new Set(['Singles', 'Dobles']);
 const SEXOS = new Set(['Masculino', 'Femenino']);
+const ADMIN_ROLES = new Set(['admin', 'super_admin']);
 
 const isMissingColumnError = (error) => {
   return error?.code === '42703' || /column .* does not exist/i.test(error?.message || '');
@@ -13,6 +14,48 @@ const resolvePointsByModalidad = (jugador = {}, modalidad = 'Singles') => {
     : Number(jugador.ranking_puntos_singles ?? jugador.ranking_puntos ?? 0);
 
   return Number.isFinite(value) ? value : 0;
+};
+
+const normalizeRole = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'superadmin' || normalized === 'super_admin') return 'super_admin';
+  if (normalized === 'admin' || normalized === 'administrador') return 'admin';
+  if (normalized === 'jugador' || normalized === 'player') return 'jugador';
+  return '';
+};
+
+const fetchAdminProfileIdsCompat = async () => {
+  const selectOptions = [
+    'id, rol, es_admin',
+    'id, es_admin',
+    'id, rol',
+  ];
+
+  let lastError = null;
+  for (const columns of selectOptions) {
+    const { data, error } = await supabase
+      .from('perfiles')
+      .select(columns);
+
+    if (!error) {
+      const adminIds = new Set(
+        (data || [])
+          .filter((perfil) => {
+            const role = normalizeRole(perfil?.rol);
+            return ADMIN_ROLES.has(role) || perfil?.es_admin === true;
+          })
+          .map((perfil) => String(perfil?.id || '').trim())
+          .filter(Boolean)
+      );
+
+      return { adminIds, error: null };
+    }
+
+    lastError = error;
+    if (!isMissingColumnError(error)) break;
+  }
+
+  return { adminIds: new Set(), error: lastError };
 };
 
 const fetchTournamentWinsByPlayers = async (playerIds = []) => {
@@ -161,7 +204,18 @@ const getRankings = async (req, res) => {
       return res.status(500).json({ error: 'Error al obtener rankings', details: error.message });
     }
 
-    const sortedRows = (data || [])
+    const rows = Array.isArray(data) ? data : [];
+    let adminIds = new Set();
+    if (rows.length > 0) {
+      const { adminIds: resolvedAdminIds, error: adminFilterError } = await fetchAdminProfileIdsCompat();
+      if (adminFilterError) {
+        console.warn('No se pudo resolver filtro de admins en ranking:', adminFilterError?.message || adminFilterError);
+      }
+      adminIds = resolvedAdminIds;
+    }
+
+    const sortedRows = rows
+      .filter((jugador) => !adminIds.has(String(jugador?.id || '').trim()))
       .sort((a, b) => {
         const aPoints = resolvePointsByModalidad(a, modalidad);
         const bPoints = resolvePointsByModalidad(b, modalidad);

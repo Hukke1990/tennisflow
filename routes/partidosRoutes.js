@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const partidosController = require('../controllers/partidosController');
+const { requireAuth, requireAdmin } = require('../middlewares/auth');
+
+router.use(requireAuth, requireAdmin);
 
 // PUT /api/partidos/:id/resultado
 router.put('/:id/resultado', partidosController.cargarResultado);

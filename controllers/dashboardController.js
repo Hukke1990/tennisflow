@@ -2,6 +2,7 @@ const supabase = require('../services/supabase');
 
 const INSCRIBIBLE_STATES = new Set(['publicado', 'abierto']);
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ADMIN_ROLES = new Set(['admin', 'super_admin']);
 
 const isMissingColumnError = (error) => {
   return error?.code === '42703' || /column .* does not exist/i.test(error?.message || '');
@@ -74,6 +75,48 @@ const fetchRankingCompat = async () => {
   return { data: [], error: lastError };
 };
 
+const normalizeRole = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'superadmin' || normalized === 'super_admin') return 'super_admin';
+  if (normalized === 'admin' || normalized === 'administrador') return 'admin';
+  if (normalized === 'jugador' || normalized === 'player') return 'jugador';
+  return '';
+};
+
+const fetchAdminProfileIdsCompat = async () => {
+  const selectOptions = [
+    'id, rol, es_admin',
+    'id, es_admin',
+    'id, rol',
+  ];
+
+  let lastError = null;
+  for (const columns of selectOptions) {
+    const { data, error } = await supabase
+      .from('perfiles')
+      .select(columns);
+
+    if (!error) {
+      const adminIds = new Set(
+        (data || [])
+          .filter((perfil) => {
+            const role = normalizeRole(perfil?.rol);
+            return ADMIN_ROLES.has(role) || perfil?.es_admin === true;
+          })
+          .map((perfil) => String(perfil?.id || '').trim())
+          .filter(Boolean)
+      );
+
+      return { adminIds, error: null };
+    }
+
+    lastError = error;
+    if (!isMissingColumnError(error)) break;
+  }
+
+  return { adminIds: new Set(), error: lastError };
+};
+
 const resolveRankingValue = (perfil = {}) => {
   const value = Number(
     perfil.ranking_elo
@@ -95,6 +138,70 @@ const parseDateSafe = (value) => {
   if (value === undefined || value === null || value === '') return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const normalizeInscriptionStatus = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized === 'approved' || normalized === 'aprobar') return 'aprobada';
+  return normalized;
+};
+
+const normalizeLegacyInscriptionState = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized === 'confirmada') return 'confirmada';
+  return normalized;
+};
+
+const isApprovedInscription = (row = {}) => {
+  const status = normalizeInscriptionStatus(row.estado_inscripcion);
+  if (status) {
+    return status === 'aprobada';
+  }
+
+  return normalizeLegacyInscriptionState(row.estado) === 'confirmada';
+};
+
+const fetchApprovedCountByTournamentCompat = async (torneoIds = []) => {
+  const normalizedIds = [...new Set((torneoIds || []).map((id) => String(id || '').trim()).filter(Boolean))];
+  if (normalizedIds.length === 0) {
+    return { countsByTournament: new Map(), error: null };
+  }
+
+  const selectOptions = [
+    'torneo_id, estado, estado_inscripcion',
+    'torneo_id, estado',
+  ];
+
+  let lastError = null;
+  for (const columns of selectOptions) {
+    const { data, error } = await supabase
+      .from('inscripciones')
+      .select(columns)
+      .in('torneo_id', normalizedIds);
+
+    if (!error) {
+      const countsByTournament = new Map();
+      for (const row of (data || [])) {
+        if (!isApprovedInscription(row)) continue;
+
+        const torneoId = String(row?.torneo_id || '').trim();
+        if (!torneoId) continue;
+
+        countsByTournament.set(torneoId, (countsByTournament.get(torneoId) || 0) + 1);
+      }
+
+      return { countsByTournament, error: null };
+    }
+
+    lastError = error;
+    if (!isMissingColumnError(error)) {
+      break;
+    }
+  }
+
+  return { countsByTournament: new Map(), error: lastError };
 };
 
 /**
@@ -156,13 +263,14 @@ const getDashboard = async (req, res) => {
       })
       .slice(0, 3);
 
-    // Para cada torneo próximo, contar inscritos
-    const proximos_torneos = await Promise.all(torneosFiltrados.map(async (t) => {
-      const { count } = await supabase
-        .from('inscripciones')
-        .select('*', { count: 'exact', head: true })
-        .eq('torneo_id', t.id);
-      return { ...t, inscritos_count: count || 0 };
+    const { countsByTournament, error: approvedCountsError } = await fetchApprovedCountByTournamentCompat(
+      torneosFiltrados.map((t) => t.id),
+    );
+    if (approvedCountsError) throw approvedCountsError;
+
+    const proximos_torneos = torneosFiltrados.map((t) => ({
+      ...t,
+      inscritos_count: countsByTournament.get(String(t.id || '').trim()) || 0,
     }));
 
     // ── 2. Últimos 3 torneos finalizados ────────────────────────────────────
@@ -195,7 +303,13 @@ const getDashboard = async (req, res) => {
 
     if (e3) throw e3;
 
+    const { adminIds, error: adminFilterError } = await fetchAdminProfileIdsCompat();
+    if (adminFilterError) {
+      console.warn('No se pudo resolver filtro de admins en dashboard ranking:', adminFilterError?.message || adminFilterError);
+    }
+
     const rankingOrdenado = [...(rankingData || [])]
+      .filter((j) => !adminIds.has(String(j?.id || '').trim()))
       .sort((a, b) => resolveRankingValue(b) - resolveRankingValue(a))
       .slice(0, 5);
 

@@ -487,7 +487,7 @@ test('inscribir dentro de ventana guarda en disponibilidad_inscripcion y no en d
       },
       error: null,
     },
-    { count: 2, error: null },
+    { data: null, error: { code: 'PGRST116', message: 'Not found' } },
     { data: { id: 'insc_1' }, error: null },
     { error: null },
     { error: null },
@@ -514,6 +514,7 @@ test('inscribir dentro de ventana guarda en disponibilidad_inscripcion y no en d
   await torneosController.inscribirJugador(req, res);
 
   assert.equal(res.statusCode, 201);
+  assert.equal(res.payload.estado_inscripcion, 'pendiente');
   assert.equal(res.payload.disponibilidad_guardada, 1);
 
   const disponibilidadInscripcionOps = calls.filter((c) => c.table === 'disponibilidad_inscripcion');
@@ -525,6 +526,172 @@ test('inscribir dentro de ventana guarda en disponibilidad_inscripcion y no en d
     (c) => c.table === 'disponibilidad_jugador' && ['insert', 'update', 'delete'].includes(c.action)
   );
   assert.equal(writesToGeneralAvailability, false);
+
+  assertQueueEmpty();
+});
+
+test('inscribir mantiene compatibilidad cuando faltan columnas nuevas en schema cache', async () => {
+  const calls = [];
+  const queue = [
+    {
+      data: {
+        cupos_max: 8,
+        estado: 'publicado',
+        fecha_inicio: '2026-06-10T10:00:00Z',
+        fecha_fin: '2026-06-20T10:00:00Z',
+        fecha_inicio_inscripcion: '2000-01-01T00:00:00Z',
+        fecha_cierre_inscripcion: '2999-01-10T00:00:00Z',
+        modalidad: 'Singles',
+        rama: 'Masculino',
+        categoria_id: 3,
+      },
+      error: null,
+    },
+    {
+      data: {
+        id: 'jugador_compat',
+        sexo: 'Masculino',
+        categoria_singles: 3,
+      },
+      error: null,
+    },
+    {
+      data: null,
+      error: { code: 'PGRST204', message: "Could not find the 'estado_inscripcion' column of 'inscripciones' in the schema cache" },
+    },
+    {
+      data: null,
+      error: { code: 'PGRST116', message: 'Not found' },
+    },
+    {
+      data: null,
+      error: { code: 'PGRST204', message: "Could not find the 'estado_inscripcion' column of 'inscripciones' in the schema cache" },
+    },
+    {
+      data: { id: 'insc_compat_1' },
+      error: null,
+    },
+    { error: null },
+    {
+      error: { code: 'PGRST204', message: "Could not find the 'es_obligatoria_fin_semana' column of 'disponibilidad_inscripcion' in the schema cache" },
+    },
+    { error: null },
+  ];
+  const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
+
+  const req = createReq({
+    params: { torneoId: 'torneo_compat' },
+    body: {
+      jugador_id: 'jugador_compat',
+      disponibilidad_inscripcion: [
+        {
+          fecha: '2026-06-12',
+          dia_semana: 5,
+          hora_inicio: '09:00',
+          hora_fin: '10:30',
+          es_obligatoria_fin_semana: true,
+        },
+      ],
+    },
+  });
+  const res = createRes();
+
+  await torneosController.inscribirJugador(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.payload.estado_inscripcion, 'pendiente');
+
+  const inscripcionesInserts = calls.filter((c) => c.table === 'inscripciones' && c.action === 'insert');
+  assert.equal(inscripcionesInserts.length, 2);
+
+  const disponibilidadInserts = calls.filter((c) => c.table === 'disponibilidad_inscripcion' && c.action === 'insert');
+  assert.equal(disponibilidadInserts.length, 2);
+  assert.equal(Object.prototype.hasOwnProperty.call(disponibilidadInserts[0].payload[0], 'es_obligatoria_fin_semana'), true);
+  assert.equal(Object.prototype.hasOwnProperty.call(disponibilidadInserts[1].payload[0], 'es_obligatoria_fin_semana'), false);
+
+  assertQueueEmpty();
+});
+
+test('admin obtiene plantilla global de WhatsApp desde configuracion_admin', async () => {
+  const calls = [];
+  const queue = [
+    {
+      data: {
+        clave: 'inscripciones_whatsapp_template',
+        valor: 'Hola {jugador}, tu solicitud para {torneo} esta en revision.',
+        updated_at: '2026-03-12T04:00:00.000Z',
+      },
+      error: null,
+    },
+  ];
+
+  const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
+  const req = createReq();
+  const res = createRes();
+
+  await torneosController.getInscripcionesWhatsappTemplate(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.template, 'Hola {jugador}, tu solicitud para {torneo} esta en revision.');
+  assert.equal(res.payload.source, 'database');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].table, 'configuracion_admin');
+
+  assertQueueEmpty();
+});
+
+test('admin obtiene plantilla default cuando no existe configuracion guardada', async () => {
+  const calls = [];
+  const queue = [
+    {
+      data: null,
+      error: { code: 'PGRST116', message: 'Not found' },
+    },
+  ];
+
+  const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
+  const req = createReq();
+  const res = createRes();
+
+  await torneosController.getInscripcionesWhatsappTemplate(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.match(res.payload.template, /\{jugador\}/);
+  assert.equal(res.payload.source, 'default');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].table, 'configuracion_admin');
+
+  assertQueueEmpty();
+});
+
+test('admin actualiza plantilla global de WhatsApp', async () => {
+  const calls = [];
+  const queue = [
+    {
+      data: {
+        clave: 'inscripciones_whatsapp_template',
+        valor: 'Hola {jugador}, necesitamos confirmar tu disponibilidad para {torneo}.',
+        updated_at: '2026-03-12T04:20:00.000Z',
+      },
+      error: null,
+    },
+  ];
+
+  const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
+  const req = createReq({
+    body: {
+      template: 'Hola {jugador}, necesitamos confirmar tu disponibilidad para {torneo}.',
+    },
+  });
+  const res = createRes();
+
+  await torneosController.updateInscripcionesWhatsappTemplate(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.match(res.payload.template, /confirmar tu disponibilidad/i);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].table, 'configuracion_admin');
+  assert.equal(calls[0].action, 'update');
 
   assertQueueEmpty();
 });
@@ -624,6 +791,143 @@ test('inscribir torneo en estado no inscribible falla con 409', async () => {
   assertQueueEmpty();
 });
 
+test('admin obtiene listado de inscripciones pendientes', async () => {
+  const calls = [];
+  const queue = [
+    {
+      data: [
+        {
+          id: '99999999-9999-4999-8999-999999999999',
+          torneo_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          jugador_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          estado: 'pendiente',
+          estado_inscripcion: 'pendiente',
+          fecha_inscripcion: '2026-05-01T10:00:00.000Z',
+          torneos: {
+            id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            titulo: 'Copa Club',
+          },
+          perfiles: {
+            id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            nombre_completo: 'Jugador Uno',
+          },
+        },
+      ],
+      error: null,
+    },
+  ];
+  const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
+
+  const req = createReq();
+  const res = createRes();
+
+  await torneosController.obtenerInscripcionesPendientesAdmin(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(Array.isArray(res.payload), true);
+  assert.equal(res.payload.length, 1);
+  assert.equal(res.payload[0].estado_inscripcion, 'pendiente');
+  assert.equal(res.payload[0].torneo.titulo, 'Copa Club');
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].table, 'inscripciones');
+
+  assertQueueEmpty();
+});
+
+test('admin aprueba una inscripcion pendiente respetando cupo', async () => {
+  const calls = [];
+  const torneoId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const inscripcionId = '99999999-9999-4999-8999-999999999999';
+  const queue = [
+    {
+      data: {
+        id: inscripcionId,
+        torneo_id: torneoId,
+        jugador_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        estado: 'pendiente',
+        estado_inscripcion: 'pendiente',
+        torneos: { cupos_max: 4, titulo: 'Copa Club' },
+      },
+      error: null,
+    },
+    {
+      data: [
+        { torneo_id: torneoId, estado_inscripcion: 'aprobada', estado: 'confirmada' },
+        { torneo_id: torneoId, estado_inscripcion: 'pendiente', estado: 'pendiente' },
+      ],
+      error: null,
+    },
+    {
+      data: {
+        id: inscripcionId,
+        torneo_id: torneoId,
+        estado: 'confirmada',
+        estado_inscripcion: 'aprobada',
+      },
+      error: null,
+    },
+  ];
+
+  const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
+
+  const req = createReq({
+    params: { inscripcionId },
+    body: { estado_inscripcion: 'aprobada' },
+  });
+  const res = createRes();
+
+  await torneosController.validarInscripcionAdmin(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.match(res.payload.message, /aprobada/i);
+  assert.equal(res.payload.inscripcion.estado_inscripcion, 'aprobada');
+
+  assert.equal(calls.length, 3);
+  assert.equal(calls[0].table, 'inscripciones');
+  assert.equal(calls[1].table, 'inscripciones');
+  assert.equal(calls[2].action, 'update');
+  assert.equal(calls[2].payload.estado, 'confirmada');
+
+  assertQueueEmpty();
+});
+
+test('jugador obtiene sus estados de inscripcion por torneo', async () => {
+  const calls = [];
+  const jugadorId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const queue = [
+    {
+      data: [
+        {
+          id: '99999999-9999-4999-8999-999999999999',
+          torneo_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          jugador_id: jugadorId,
+          estado: 'pendiente',
+          estado_inscripcion: 'pendiente',
+          fecha_inscripcion: '2026-05-01T10:00:00.000Z',
+        },
+      ],
+      error: null,
+    },
+  ];
+
+  const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
+
+  const req = createReq({ params: { id: jugadorId } });
+  const res = createRes();
+
+  await torneosController.obtenerInscripcionesPorJugador(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(Array.isArray(res.payload), true);
+  assert.equal(res.payload[0].estado_inscripcion, 'pendiente');
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].table, 'inscripciones');
+
+  assertQueueEmpty();
+});
+
 test('GET /api/torneos retorna todos e incluye finalizados', async () => {
   const calls = [];
   const queue = [
@@ -656,6 +960,15 @@ test('GET /api/torneos retorna todos e incluye finalizados', async () => {
       ],
       error: null,
     },
+    {
+      data: [
+        { torneo_id: 't_finalizado', estado_inscripcion: 'aprobada', estado: 'confirmada' },
+        { torneo_id: 't_finalizado', estado_inscripcion: 'aprobada', estado: 'confirmada' },
+        { torneo_id: 't_inscripcion', estado_inscripcion: 'aprobada', estado: 'confirmada' },
+        { torneo_id: 't_inscripcion', estado_inscripcion: 'pendiente', estado: 'pendiente' },
+      ],
+      error: null,
+    },
   ];
   const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
 
@@ -668,13 +981,17 @@ test('GET /api/torneos retorna todos e incluye finalizados', async () => {
   assert.equal(Array.isArray(res.payload), true);
   assert.equal(res.payload.length, 2);
   assert.equal(res.payload[0].estado, 'finalizado');
-  assert.equal(res.payload[0].inscritos_count, 8);
+  assert.equal(res.payload[0].inscritos_count, 2);
+  assert.equal(res.payload[0].solicitudes_pendientes, 0);
+  assert.equal(res.payload[1].inscritos_count, 1);
+  assert.equal(res.payload[1].solicitudes_pendientes, 1);
   assert.equal(res.payload[0].fecha_inicio_inscripcion, '2025-11-01T10:00:00Z');
   assert.equal(res.payload[0].fecha_cierre_inscripcion, '2025-12-01T10:00:00Z');
 
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
   assert.equal(calls[0].table, 'torneos');
   assert.equal(calls[0].action, 'select');
+  assert.equal(calls[1].table, 'inscripciones');
 
   assertQueueEmpty();
 });

@@ -13,6 +13,69 @@ const VALID_TOURNAMENT_STATES = new Set([
   'finalizado',
   'cancelado',
 ]);
+const INSCRIPTION_STATUS_APPROVED = 'aprobada';
+
+function isMissingColumnError(error) {
+  return error?.code === '42703' || /column .* does not exist/i.test(error?.message || '');
+}
+
+function normalizeInscriptionStatus(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized === 'approved' || normalized === 'aprobar') return INSCRIPTION_STATUS_APPROVED;
+  if (normalized === INSCRIPTION_STATUS_APPROVED) return INSCRIPTION_STATUS_APPROVED;
+  return normalized;
+}
+
+function normalizeLegacyInscriptionState(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized === 'confirmada') return 'confirmada';
+  return normalized;
+}
+
+function isApprovedInscription(row = {}) {
+  const hasStatusColumns = Object.prototype.hasOwnProperty.call(row, 'estado_inscripcion')
+    || Object.prototype.hasOwnProperty.call(row, 'estado');
+
+  if (!hasStatusColumns) {
+    return true;
+  }
+
+  const status = normalizeInscriptionStatus(row.estado_inscripcion);
+  if (status) {
+    return status === INSCRIPTION_STATUS_APPROVED;
+  }
+
+  return normalizeLegacyInscriptionState(row.estado) === 'confirmada';
+}
+
+async function fetchApprovedInscriptionsForTournament(torneoId) {
+  const selectOptions = [
+    'jugador_id, estado, estado_inscripcion',
+    'jugador_id, estado',
+  ];
+
+  let lastError = null;
+  for (const columns of selectOptions) {
+    const { data, error } = await supabase
+      .from('inscripciones')
+      .select(columns)
+      .eq('torneo_id', torneoId);
+
+    if (!error) {
+      const approvedRows = (data || []).filter((row) => isApprovedInscription(row));
+      return { data: approvedRows, error: null };
+    }
+
+    lastError = error;
+    if (!isMissingColumnError(error)) {
+      break;
+    }
+  }
+
+  return { data: [], error: lastError };
+}
 
 /**
  * Convierte un string de tiempo "HH:MM" o "HH:MM:SS" a minutos totales desde las 00:00
@@ -515,13 +578,8 @@ const generarSorteo = async (req, res) => {
       return res.status(400).json({ error: 'No hay canchas disponibles para el torneo.' });
     }
 
-    // 1. Obtener inscritos CON PAGO CONFIRMADO
-    const { data: inscripcionesConfirmadas, error: errI } = await supabase
-      .from('inscripciones')
-      .select('jugador_id')
-      .eq('torneo_id', torneo_id)
-      .eq('estado', 'confirmada')
-      .eq('pago_confirmado', true);
+    // 1. Obtener solo inscripciones aprobadas (compat: usa estado legacy si falta columna nueva).
+    const { data: inscripcionesConfirmadas, error: errI } = await fetchApprovedInscriptionsForTournament(torneo_id);
 
     if (errI) {
       console.error('Error al obtener inscripciones:', errI);
@@ -531,7 +589,7 @@ const generarSorteo = async (req, res) => {
     const jugadorIds = [...new Set((inscripcionesConfirmadas || []).map((i) => i.jugador_id).filter(Boolean))];
 
     if (jugadorIds.length < 2) {
-      return res.status(400).json({ error: 'Se requiere un mínimo de 2 jugadores con pago confirmado.' });
+      return res.status(400).json({ error: 'Se requiere un minimo de 2 jugadores con inscripcion aprobada.' });
     }
 
     const { data: perfilesInscritos, error: perfilesError } = await fetchProfilesWithRankingFallback(jugadorIds);

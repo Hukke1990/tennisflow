@@ -109,6 +109,12 @@ test('Singles + Masculino + categoria 1', async () => {
     },
     {
       data: [
+        { id: 'admin-1', rol: 'admin', es_admin: true },
+      ],
+      error: null,
+    },
+    {
+      data: [
         { ganador_id: 'j1', torneo_id: 't1' },
         { ganador_id: 'j1', torneo_id: 't2' },
       ],
@@ -126,15 +132,16 @@ test('Singles + Masculino + categoria 1', async () => {
   assert.equal(Array.isArray(res.payload), true);
   assert.equal(res.payload[0].id, 'j1');
 
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.equal(calls[0].table, 'vw_rankings_perfiles');
+  assert.equal(calls[1].table, 'perfiles');
   assert.deepEqual(calls[0].filters.find((f) => f.column === 'sexo'), {
     op: 'eq', column: 'sexo', value: 'Masculino',
   });
   assert.deepEqual(calls[0].filters.find((f) => f.column === 'categoria_singles'), {
     op: 'eq', column: 'categoria_singles', value: 1,
   });
-  assert.equal(calls[1].table, 'partidos');
+  assert.equal(calls[2].table, 'partidos');
   assert.equal(res.payload[0].torneos, 2);
 
   assertQueueEmpty();
@@ -232,6 +239,10 @@ test('ordena desc por puntos', async () => {
       error: null,
     },
     {
+      data: [],
+      error: null,
+    },
+    {
       data: [
         { ganador_id: 'j2', torneo_id: 'torneo_1' },
         { ganador_id: 'j1', torneo_id: 'torneo_2' },
@@ -255,6 +266,67 @@ test('ordena desc por puntos', async () => {
   assert.equal(res.payload[1].id, 'j1');
   assert.equal(res.payload[1].ranking_puntos_singles, 80);
   assert.equal(res.payload[1].torneos, 2);
+
+  assertQueueEmpty();
+});
+
+test('excluye admin y super_admin del ranking', async () => {
+  const calls = [];
+  const queue = [
+    {
+      data: [
+        {
+          id: 'admin-id',
+          nombre_completo: 'Admin User',
+          foto_url: null,
+          ranking_puntos_singles: 999,
+          ranking_puntos: 999,
+          ranking_elo_singles: 2000,
+          ranking_elo_dobles: 1900,
+          ranking_elo: 2000,
+          torneos: 0,
+          victorias: 0,
+        },
+        {
+          id: 'jugador-id',
+          nombre_completo: 'Jugador Normal',
+          foto_url: null,
+          ranking_puntos_singles: 100,
+          ranking_puntos: 100,
+          ranking_elo_singles: 1600,
+          ranking_elo_dobles: 1500,
+          ranking_elo: 1600,
+          torneos: 0,
+          victorias: 0,
+        },
+      ],
+      error: null,
+    },
+    {
+      data: [
+        { id: 'admin-id', rol: 'admin', es_admin: false },
+        { id: 'super-admin-id', rol: 'super_admin', es_admin: false },
+      ],
+      error: null,
+    },
+    {
+      data: [],
+      error: null,
+    },
+  ];
+  const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
+
+  const req = createReq({ query: { modalidad: 'Singles', sexo: 'Masculino', categoria: '3' } });
+  const res = createRes();
+
+  await rankingsController.getRankings(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.length, 1);
+  assert.equal(res.payload[0].id, 'jugador-id');
+  assert.equal(calls[0].table, 'vw_rankings_perfiles');
+  assert.equal(calls[1].table, 'perfiles');
+  assert.equal(calls[2].table, 'partidos');
 
   assertQueueEmpty();
 });
