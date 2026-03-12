@@ -56,9 +56,13 @@ app.get('/', (req, res) => {
   res.json({ message: 'API de TennisFlow funcionando correctamente 🎾' });
 });
 
-// Arrancar el servidor
-server.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
-});
+// En entornos serverless (Vercel) no se debe abrir un puerto manualmente.
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
+  });
+}
 
-module.exports = { app, server, io };
+module.exports = app;
+module.exports.server = server;
+module.exports.io = io;
