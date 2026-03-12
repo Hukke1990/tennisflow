@@ -549,6 +549,50 @@ test('helpers de cronograma: descanso minimo de 60 minutos', () => {
   );
 });
 
+test('helpers de sorteo: siembra top 4 en posiciones fijas para cuadro de 8/16/32', () => {
+  const scenarios = [
+    { size: 8, expected: { s1: 1, s2: 8, s3: 3, s4: 6 } },
+    { size: 16, expected: { s1: 1, s2: 16, s3: 5, s4: 12 } },
+    { size: 32, expected: { s1: 1, s2: 32, s3: 9, s4: 24 } },
+  ];
+
+  for (const scenario of scenarios) {
+    const jugadores = Array.from({ length: scenario.size }, (_, idx) => ({
+      jugador_id: `j${idx + 1}`,
+      perfil: { ranking_puntos: scenario.size - idx },
+    }));
+
+    const entrants = __private.placeTopSeedsByRanking(jugadores, scenario.size, () => 0);
+
+    assert.equal(entrants[scenario.expected.s1 - 1].jugador_id, 'j1');
+    assert.equal(entrants[scenario.expected.s2 - 1].jugador_id, 'j2');
+    assert.equal(entrants[scenario.expected.s3 - 1].jugador_id, 'j3');
+    assert.equal(entrants[scenario.expected.s4 - 1].jugador_id, 'j4');
+
+    const quarterSize = scenario.size / 4;
+    const quarters = [
+      Math.floor((scenario.expected.s1 - 1) / quarterSize),
+      Math.floor((scenario.expected.s2 - 1) / quarterSize),
+      Math.floor((scenario.expected.s3 - 1) / quarterSize),
+      Math.floor((scenario.expected.s4 - 1) / quarterSize),
+    ];
+
+    assert.equal(new Set(quarters).size, 4);
+  }
+});
+
+test('helpers de sorteo: seed 3 y 4 se sortean entre las dos posiciones definidas', () => {
+  const jugadores = Array.from({ length: 8 }, (_, idx) => ({ jugador_id: `j${idx + 1}` }));
+
+  const entrantsNoSwap = __private.placeTopSeedsByRanking(jugadores, 8, () => 0.1);
+  assert.equal(entrantsNoSwap[2].jugador_id, 'j3');
+  assert.equal(entrantsNoSwap[5].jugador_id, 'j4');
+
+  const entrantsSwap = __private.placeTopSeedsByRanking(jugadores, 8, () => 0.9);
+  assert.equal(entrantsSwap[2].jugador_id, 'j4');
+  assert.equal(entrantsSwap[5].jugador_id, 'j3');
+});
+
 test('generarSorteo agenda cuadro completo y prioriza domingo para la final', async () => {
   const calls = [];
   const torneoId = '80aa40d8-f99f-4ff3-af3b-75d621d6d137';

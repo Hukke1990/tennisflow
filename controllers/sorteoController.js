@@ -481,40 +481,69 @@ function mapSlotsByKey(slots) {
   return map;
 }
 
-/**
- * Genera el orden correcto del bracket asegurando que los Top Seeds (1 y 2)
- * solo se encuentren en la final.
- */
-function generarBracket(seeds) {
-   const size = seeds.length; // Debe ser potencia de 2
-   if (size === 1) return [0]; // Indice si el tornero de 1 (edge case)
+function resolveTopSeedPlacement(bracketSize) {
+  if (bracketSize === 8) {
+    return { seed1: 1, seed2: 8, seed34: [3, 6] };
+  }
 
-   // Arrancamos el bracket para 2
-   let brackets = [1, 2];
+  if (bracketSize === 16) {
+    return { seed1: 1, seed2: 16, seed34: [5, 12] };
+  }
 
-   // Lo expandimos de 2 en 2 multiplicando hasta emparejar size (ej 2->4->8->16)
-   // La fórmula mágica para bracket de tenis invertido
-   while (brackets.length < size) {
-     const nextBrackets = [];
-     const nextSize = brackets.length * 2;
-     const sumObj = nextSize + 1;
-     
-     for (let i = 0; i < brackets.length; i++) {
-        // Enlaza [A, (NextSize+1 - A)]
-        nextBrackets.push(brackets[i]);
-        nextBrackets.push(sumObj - brackets[i]);
-     }
-     brackets = nextBrackets;
-   }
-   
-   // Los brackets son el ORDEN. Ej [1, 16, 8, 9, 4, 13, 5, 12, 2, 15, 7, 10, 3, 14, 6, 11]
-   // Devuelvo en pares para hacer cruce. Los índices reales de array son bracket val - 1
-   const matches = [];
-   for (let i = 0; i < size; i += 2) {
-      matches.push([brackets[i] - 1, brackets[i+1] - 1]);
-   }
-   
-   return matches;
+  if (bracketSize === 32) {
+    return { seed1: 1, seed2: 32, seed34: [9, 24] };
+  }
+
+  return null;
+}
+
+function placeTopSeedsByRanking(jugadoresOrdenados, bracketSize, randomFn = Math.random) {
+  const players = Array.isArray(jugadoresOrdenados) ? [...jugadoresOrdenados] : [];
+  const byesNeeded = Math.max(0, bracketSize - players.length);
+  const byes = Array.from({ length: byesNeeded }, () => ({ isBye: true }));
+  const pool = [...players, ...byes];
+  const positions = Array.from({ length: bracketSize }, () => null);
+
+  const placement = resolveTopSeedPlacement(bracketSize);
+  let cursor = 0;
+
+  const assignFromPool = (positionOneBased) => {
+    if (!Number.isInteger(positionOneBased) || positionOneBased < 1 || positionOneBased > bracketSize) return;
+    if (cursor >= pool.length) return;
+    positions[positionOneBased - 1] = pool[cursor];
+    cursor += 1;
+  };
+
+  if (placement) {
+    assignFromPool(placement.seed1);
+    assignFromPool(placement.seed2);
+
+    // Seed 3 y 4 se sortean entre dos posiciones definidas para evitar cruces prematuros.
+    const shouldSwap = Number(randomFn()) >= 0.5;
+    const [firstPos, secondPos] = shouldSwap
+      ? [placement.seed34[1], placement.seed34[0]]
+      : [placement.seed34[0], placement.seed34[1]];
+
+    assignFromPool(firstPos);
+    assignFromPool(secondPos);
+  }
+
+  for (let i = 0; i < positions.length && cursor < pool.length; i += 1) {
+    if (!positions[i]) {
+      positions[i] = pool[cursor];
+      cursor += 1;
+    }
+  }
+
+  return positions;
+}
+
+function buildFirstRoundPairsByBracketLines(bracketEntries = []) {
+  const pairs = [];
+  for (let i = 0; i < bracketEntries.length; i += 2) {
+    pairs.push([i, i + 1]);
+  }
+  return pairs;
 }
 
 const generarSorteo = async (req, res) => {
@@ -675,16 +704,10 @@ const generarSorteo = async (req, res) => {
     let bracketSize = 2;
     while (bracketSize < targetSlots) bracketSize *= 2;
 
-    const completados = [...jugadoresOrdenados];
-    const byesNeeded = bracketSize - inscritosCount;
-    
-    // Anadimos objetos "BYE" fantasma al final del array
-    for (let i = 0; i < byesNeeded; i++) {
-       completados.push({ isBye: true });
-    }
+     const completados = placeTopSeedsByRanking(jugadoresOrdenados, bracketSize, Math.random);
 
-    // 4. Armar cuadro completo
-    const paresDeBracketIdces = generarBracket(completados);
+     // 4. Armar cuadro completo usando lineas adyacentes (1v2, 3v4, ...)
+     const paresDeBracketIdces = buildFirstRoundPairsByBracketLines(completados);
 
     const rounds = new Map();
     const firstRoundMatches = [];
@@ -1789,5 +1812,8 @@ module.exports = {
     isPlayerAvailableAt,
     hasRestConflict,
     getRoundName,
+    resolveTopSeedPlacement,
+    placeTopSeedsByRanking,
+    buildFirstRoundPairsByBracketLines,
   },
 };

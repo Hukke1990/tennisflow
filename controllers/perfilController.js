@@ -2,6 +2,22 @@ const supabase = require('../services/supabase');
 
 const ADMIN_ROLES = new Set(['admin', 'super_admin']);
 const INTERNATIONAL_PHONE_REGEX = /^\+[1-9]\d{7,14}$/;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const resolveClubIdFromRequestOptional = (req) => {
+  const rawClubId = req.query?.club_id ?? req.headers?.['x-club-id'];
+  const clubId = String(rawClubId || '').trim();
+
+  if (!clubId) {
+    return { clubId: null, error: null };
+  }
+
+  if (!UUID_REGEX.test(clubId)) {
+    return { clubId: null, error: 'club_id debe ser un UUID valido.' };
+  }
+
+  return { clubId, error: null };
+};
 
 const normalizeRole = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
@@ -40,11 +56,21 @@ const normalizeTelefono = (rawValue) => {
 const obtenerPerfil = async (req, res) => {
   try {
     const { id } = req.params;
-    const { data, error } = await supabase
+    const { clubId, error: clubError } = resolveClubIdFromRequestOptional(req);
+    if (clubError) {
+      return res.status(400).json({ error: clubError });
+    }
+
+    let query = supabase
       .from('perfiles')
       .select('*')
-      .eq('id', id)
-      .single();
+      .eq('id', id);
+
+    if (clubId) {
+      query = query.eq('club_id', clubId);
+    }
+
+    const { data, error } = await query.single();
 
     if (error || !data) {
       return res.status(404).json({ error: 'Perfil no encontrado' });

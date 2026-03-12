@@ -4,11 +4,26 @@ const INSCRIBIBLE_STATES = new Set(['publicado', 'abierto']);
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ADMIN_ROLES = new Set(['admin', 'super_admin']);
 
+const resolveClubIdFromRequest = (req) => {
+  const rawClubId = req.query?.club_id ?? req.headers?.['x-club-id'];
+  const clubId = String(rawClubId || '').trim();
+
+  if (!clubId) {
+    return { clubId: null, error: 'club_id es obligatorio.' };
+  }
+
+  if (!UUID_REGEX.test(clubId)) {
+    return { clubId: null, error: 'club_id debe ser un UUID valido.' };
+  }
+
+  return { clubId, error: null };
+};
+
 const isMissingColumnError = (error) => {
   return error?.code === '42703' || /column .* does not exist/i.test(error?.message || '');
 };
 
-const fetchPerfilCompat = async (jugadorId) => {
+const fetchPerfilCompat = async (jugadorId, clubId) => {
   const selectOptions = [
     'categoria, ranking_elo, ranking_elo_singles, ranking_elo_dobles',
     'categoria, ranking_elo_singles, ranking_elo_dobles',
@@ -22,6 +37,7 @@ const fetchPerfilCompat = async (jugadorId) => {
       .from('perfiles')
       .select(columns)
       .eq('id', jugadorId)
+      .eq('club_id', clubId)
       .single();
 
     if (!error) {
@@ -41,7 +57,7 @@ const fetchPerfilCompat = async (jugadorId) => {
   return { data: null, error: lastError };
 };
 
-const fetchRankingCompat = async () => {
+const fetchRankingCompat = async (clubId) => {
   const selectOptions = [
     'id, nombre_completo, ranking_elo, ranking_elo_singles, ranking_elo_dobles, categoria, foto_url',
     'id, nombre_completo, ranking_elo_singles, ranking_elo_dobles, categoria, foto_url',
@@ -60,6 +76,7 @@ const fetchRankingCompat = async () => {
     const { data, error } = await supabase
       .from('perfiles')
       .select(columns)
+      .eq('club_id', clubId)
       .limit(200);
 
     if (!error) {
@@ -83,7 +100,7 @@ const normalizeRole = (value) => {
   return '';
 };
 
-const fetchAdminProfileIdsCompat = async () => {
+const fetchAdminProfileIdsCompat = async (clubId) => {
   const selectOptions = [
     'id, rol, es_admin',
     'id, es_admin',
@@ -94,7 +111,8 @@ const fetchAdminProfileIdsCompat = async () => {
   for (const columns of selectOptions) {
     const { data, error } = await supabase
       .from('perfiles')
-      .select(columns);
+      .select(columns)
+      .eq('club_id', clubId);
 
     if (!error) {
       const adminIds = new Set(
@@ -163,7 +181,7 @@ const isApprovedInscription = (row = {}) => {
   return normalizeLegacyInscriptionState(row.estado) === 'confirmada';
 };
 
-const fetchApprovedCountByTournamentCompat = async (torneoIds = []) => {
+const fetchApprovedCountByTournamentCompat = async (torneoIds = [], clubId) => {
   const normalizedIds = [...new Set((torneoIds || []).map((id) => String(id || '').trim()).filter(Boolean))];
   if (normalizedIds.length === 0) {
     return { countsByTournament: new Map(), error: null };
@@ -179,6 +197,7 @@ const fetchApprovedCountByTournamentCompat = async (torneoIds = []) => {
     const { data, error } = await supabase
       .from('inscripciones')
       .select(columns)
+      .eq('club_id', clubId)
       .in('torneo_id', normalizedIds);
 
     if (!error) {
@@ -215,18 +234,40 @@ const fetchApprovedCountByTournamentCompat = async (torneoIds = []) => {
  */
 const getDashboard = async (req, res) => {
   try {
+    const { clubId, error: clubError } = resolveClubIdFromRequest(req);
+    if (clubError) {
+      return res.status(400).json({ error: clubError });
+    }
+
     const { jugador_id } = req.query;
 
     // ── 0. Estadísticas Globales del Club ───────────────────────────────────
-    const [
-      { count: total_jugadores },
-      { count: total_torneos_finalizados },
-      { count: total_partidos_jugados },
-    ] = await Promise.all([
-      supabase.from('perfiles').select('*', { count: 'exact', head: true }),
-      supabase.from('torneos').select('*', { count: 'exact', head: true }).eq('estado', 'finalizado'),
-      supabase.from('partidos').select('*', { count: 'exact', head: true }).eq('estado', 'finalizado'),
+    const [jugadoresCountRes, torneosFinalizadosRes] = await Promise.all([
+      supabase.from('perfiles').select('*', { count: 'exact', head: true }).eq('club_id', clubId),
+      supabase.from('torneos').select('id').eq('club_id', clubId).eq('estado', 'finalizado'),
     ]);
+
+    if (jugadoresCountRes.error) throw jugadoresCountRes.error;
+    if (torneosFinalizadosRes.error) throw torneosFinalizadosRes.error;
+
+    const torneosFinalizadosIds = (torneosFinalizadosRes.data || [])
+      .map((row) => String(row?.id || '').trim())
+      .filter(Boolean);
+
+    let total_partidos_jugados = 0;
+    if (torneosFinalizadosIds.length > 0) {
+      const partidosCountRes = await supabase
+        .from('partidos')
+        .select('*', { count: 'exact', head: true })
+        .eq('estado', 'finalizado')
+        .in('torneo_id', torneosFinalizadosIds);
+
+      if (partidosCountRes.error) throw partidosCountRes.error;
+      total_partidos_jugados = partidosCountRes.count || 0;
+    }
+
+    const total_jugadores = jugadoresCountRes.count || 0;
+    const total_torneos_finalizados = torneosFinalizadosIds.length;
 
     const estadisticas_globales = {
       total_jugadores: total_jugadores || 0,
@@ -238,6 +279,7 @@ const getDashboard = async (req, res) => {
     const { data: torneos_raw, error: e1 } = await supabase
       .from('torneos')
       .select('id, titulo, fecha_inicio, fecha_inicio_inscripcion, fecha_cierre_inscripcion, cupos_max, costo, estado')
+      .eq('club_id', clubId)
       .in('estado', ['publicado', 'abierto', 'inscripcion'])
       .order('fecha_inicio', { ascending: true })
       .limit(50);
@@ -265,6 +307,7 @@ const getDashboard = async (req, res) => {
 
     const { countsByTournament, error: approvedCountsError } = await fetchApprovedCountByTournamentCompat(
       torneosFiltrados.map((t) => t.id),
+      clubId,
     );
     if (approvedCountsError) throw approvedCountsError;
 
@@ -277,6 +320,7 @@ const getDashboard = async (req, res) => {
     const { data: torneos_finalizados, error: e2 } = await supabase
       .from('torneos')
       .select('id, titulo, fecha_inicio, estado')
+      .eq('club_id', clubId)
       .eq('estado', 'finalizado')
       .order('fecha_inicio', { ascending: false })
       .limit(3);
@@ -291,7 +335,7 @@ const getDashboard = async (req, res) => {
     const jugadorIdValido = UUID_REGEX.test(jugadorIdNormalizado);
 
     if (jugadorIdValido) {
-      const { data: perfil, error: perfilError } = await fetchPerfilCompat(jugadorIdNormalizado);
+      const { data: perfil, error: perfilError } = await fetchPerfilCompat(jugadorIdNormalizado, clubId);
       if (perfilError && !isMissingColumnError(perfilError)) {
         throw perfilError;
       }
@@ -299,11 +343,11 @@ const getDashboard = async (req, res) => {
       categoria_jugador = perfil?.categoria ?? null;
     }
 
-    const { data: rankingData, error: e3 } = await fetchRankingCompat();
+    const { data: rankingData, error: e3 } = await fetchRankingCompat(clubId);
 
     if (e3) throw e3;
 
-    const { adminIds, error: adminFilterError } = await fetchAdminProfileIdsCompat();
+    const { adminIds, error: adminFilterError } = await fetchAdminProfileIdsCompat(clubId);
     if (adminFilterError) {
       console.warn('No se pudo resolver filtro de admins en dashboard ranking:', adminFilterError?.message || adminFilterError);
     }
@@ -327,13 +371,19 @@ const getDashboard = async (req, res) => {
     let estadisticas_jugador = null;
 
     if (jugadorIdValido) {
-      const { data: partidos, error: partidosError } = await supabase
-        .from('partidos')
-        .select('jugador1_id, jugador2_id, ganador_id')
-        .eq('estado', 'finalizado')
-        .or(`jugador1_id.eq.${jugadorIdNormalizado},jugador2_id.eq.${jugadorIdNormalizado}`);
+      let partidos = [];
 
-      if (partidosError) throw partidosError;
+      if (torneosFinalizadosIds.length > 0) {
+        const { data: partidosData, error: partidosError } = await supabase
+          .from('partidos')
+          .select('jugador1_id, jugador2_id, ganador_id')
+          .eq('estado', 'finalizado')
+          .in('torneo_id', torneosFinalizadosIds)
+          .or(`jugador1_id.eq.${jugadorIdNormalizado},jugador2_id.eq.${jugadorIdNormalizado}`);
+
+        if (partidosError) throw partidosError;
+        partidos = partidosData || [];
+      }
 
       let victorias = 0;
       let derrotas = 0;

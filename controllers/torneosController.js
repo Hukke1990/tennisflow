@@ -99,7 +99,7 @@ const aggregateInscriptionSummaryByTournamentId = (rows = []) => {
   return summaryByTournament;
 };
 
-const fetchInscriptionRowsByTournamentIdsCompat = async (torneoIds = []) => {
+const fetchInscriptionRowsByTournamentIdsCompat = async (torneoIds = [], clubId) => {
   const normalizedIds = [...new Set((torneoIds || []).map((id) => String(id || '').trim()).filter(Boolean))];
   if (normalizedIds.length === 0) {
     return { data: [], error: null };
@@ -116,6 +116,7 @@ const fetchInscriptionRowsByTournamentIdsCompat = async (torneoIds = []) => {
     const { data, error } = await supabase
       .from('inscripciones')
       .select(columns)
+      .eq('club_id', clubId)
       .in('torneo_id', normalizedIds);
 
     if (!error) {
@@ -131,8 +132,8 @@ const fetchInscriptionRowsByTournamentIdsCompat = async (torneoIds = []) => {
   return { data: [], error: lastError };
 };
 
-const fetchTournamentInscriptionSummaryCompat = async (torneoIds = []) => {
-  const { data, error } = await fetchInscriptionRowsByTournamentIdsCompat(torneoIds);
+const fetchTournamentInscriptionSummaryCompat = async (torneoIds = [], clubId) => {
+  const { data, error } = await fetchInscriptionRowsByTournamentIdsCompat(torneoIds, clubId);
   if (error) {
     return { summaryByTournament: new Map(), error };
   }
@@ -256,7 +257,7 @@ const resolveCategoriaPerfilPorModalidad = (perfil, modalidad) => {
   return parseCategoria(perfil.categoria_singles ?? perfil.categoria);
 };
 
-const fetchPerfilCompat = async (jugadorId) => {
+const fetchPerfilCompat = async (jugadorId, clubId) => {
   const profileSelectOptions = [
     'id, sexo, categoria, categoria_singles, categoria_dobles',
     'id, sexo, categoria_singles, categoria_dobles',
@@ -275,6 +276,7 @@ const fetchPerfilCompat = async (jugadorId) => {
       .from('perfiles')
       .select(selectColumns)
       .eq('id', jugadorId)
+      .eq('club_id', clubId)
       .single();
 
     if (!error && data) {
@@ -367,6 +369,21 @@ const parseTimeToMinutes = (timeValue) => {
 };
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const resolveClubIdFromRequest = (req) => {
+  const rawClubId = req.query?.club_id ?? req.headers?.['x-club-id'];
+  const clubId = String(rawClubId || '').trim();
+
+  if (!clubId) {
+    return { clubId: null, error: 'club_id es obligatorio.' };
+  }
+
+  if (!UUID_REGEX.test(clubId)) {
+    return { clubId: null, error: 'club_id debe ser un UUID valido.' };
+  }
+
+  return { clubId, error: null };
+};
 
 const isMissingColumnError = (error) => {
   const code = String(error?.code || '').trim().toUpperCase();
@@ -1133,6 +1150,11 @@ const actualizarTorneoCompat = async (req, res) => {
 
 const obtenerTorneosDisponibles = async (req, res) => {
   try {
+    const { clubId, error: clubError } = resolveClubIdFromRequest(req);
+    if (clubError) {
+      return res.status(400).json({ error: clubError });
+    }
+
     const ahora = new Date();
 
     const { data: torneos, error } = await supabase
@@ -1158,6 +1180,7 @@ const obtenerTorneosDisponibles = async (req, res) => {
         fecha_cierre_inscripcion,
         inscripciones ( count ) 
       `)
+      .eq('club_id', clubId)
       .order('fecha_inicio', { ascending: true });
 
     if (error) {
@@ -1166,7 +1189,7 @@ const obtenerTorneosDisponibles = async (req, res) => {
     }
 
     const torneoIds = (torneos || []).map((t) => t.id);
-    const { summaryByTournament, error: summaryError } = await fetchTournamentInscriptionSummaryCompat(torneoIds);
+    const { summaryByTournament, error: summaryError } = await fetchTournamentInscriptionSummaryCompat(torneoIds, clubId);
     if (summaryError) {
       console.error('Error al obtener resumen de inscripciones por torneo:', summaryError);
       return res.status(500).json({ error: 'Error al listar torneos' });
@@ -1221,6 +1244,11 @@ const obtenerTorneosDisponibles = async (req, res) => {
 
 const obtenerTodosLosTorneos = async (req, res) => {
   try {
+    const { clubId, error: clubError } = resolveClubIdFromRequest(req);
+    if (clubError) {
+      return res.status(400).json({ error: clubError });
+    }
+
     const { data: torneos, error } = await supabase
       .from('torneos')
       .select(`
@@ -1244,6 +1272,7 @@ const obtenerTodosLosTorneos = async (req, res) => {
         fecha_cierre_inscripcion,
         inscripciones ( count )
       `)
+      .eq('club_id', clubId)
       .order('fecha_inicio', { ascending: false });
 
     if (error) {
@@ -1252,7 +1281,7 @@ const obtenerTodosLosTorneos = async (req, res) => {
     }
 
     const torneoIds = (torneos || []).map((t) => t.id);
-    const { summaryByTournament, error: summaryError } = await fetchTournamentInscriptionSummaryCompat(torneoIds);
+    const { summaryByTournament, error: summaryError } = await fetchTournamentInscriptionSummaryCompat(torneoIds, clubId);
     if (summaryError) {
       console.error('Error al obtener resumen de inscripciones por torneo:', summaryError);
       return res.status(500).json({ error: 'Error al listar torneos' });
@@ -1276,6 +1305,11 @@ const obtenerTodosLosTorneos = async (req, res) => {
 
 const inscribirJugador = async (req, res) => {
   try {
+    const { clubId, error: clubError } = resolveClubIdFromRequest(req);
+    if (clubError) {
+      return res.status(400).json({ error: clubError });
+    }
+
     const torneo_id = req.params.torneoId || req.params.id;
     const { jugador_id, disponibilidad_inscripcion, disponibilidad } = req.body;
     const franjasEntrada = Array.isArray(disponibilidad_inscripcion)
@@ -1296,6 +1330,7 @@ const inscribirJugador = async (req, res) => {
       .from('torneos')
       .select('cupos_max, estado, fecha_inicio, fecha_fin, fecha_inicio_inscripcion, fecha_cierre_inscripcion, modalidad, rama, categoria_id')
       .eq('id', torneo_id)
+      .eq('club_id', clubId)
       .single();
 
     if (torneoError || !torneoInfo) {
@@ -1325,7 +1360,7 @@ const inscribirJugador = async (req, res) => {
       });
     }
 
-    const { data: perfilJugador, error: perfilError } = await fetchPerfilCompat(jugador_id);
+    const { data: perfilJugador, error: perfilError } = await fetchPerfilCompat(jugador_id, clubId);
     if (perfilError || !perfilJugador) {
       return res.status(404).json({ error: 'Perfil del jugador no encontrado.' });
     }
@@ -1421,6 +1456,7 @@ const inscribirJugador = async (req, res) => {
         .select(selectColumns)
         .eq('torneo_id', torneo_id)
         .eq('jugador_id', jugador_id)
+        .eq('club_id', clubId)
         .single();
 
       if (!error) {
@@ -1465,6 +1501,7 @@ const inscribirJugador = async (req, res) => {
     }
 
     const insertPayloadWithStatus = {
+      club_id: clubId,
       torneo_id,
       jugador_id,
       estado: mapLegacyStateFromInscriptionStatus(INSCRIPTION_STATUS_PENDING),
@@ -1475,6 +1512,7 @@ const inscribirJugador = async (req, res) => {
     };
 
     const insertPayloadLegacy = {
+      club_id: clubId,
       torneo_id,
       jugador_id,
       estado: mapLegacyStateFromInscriptionStatus(INSCRIPTION_STATUS_PENDING),
@@ -1578,6 +1616,11 @@ const inscribirJugador = async (req, res) => {
 
 const obtenerInscripcionesPendientesAdmin = async (req, res) => {
   try {
+    const { clubId, error: clubError } = resolveClubIdFromRequest(req);
+    if (clubError) {
+      return res.status(400).json({ error: clubError });
+    }
+
     const selectOptions = [
       'id, torneo_id, jugador_id, estado, estado_inscripcion, fecha_inscripcion, fecha_validacion, motivo_rechazo, torneos(id, titulo, modalidad, rama, categoria_id, cupos_max), perfiles(id, nombre_completo, telefono)',
       'id, torneo_id, jugador_id, estado, estado_inscripcion, fecha_inscripcion, torneos(id, titulo, modalidad, rama, categoria_id, cupos_max), perfiles(id, nombre_completo, telefono)',
@@ -1591,6 +1634,7 @@ const obtenerInscripcionesPendientesAdmin = async (req, res) => {
       const query = supabase
         .from('inscripciones')
         .select(columns)
+        .eq('club_id', clubId)
         .order('fecha_inscripcion', { ascending: true });
 
       const usesNewStatusColumn = columns.includes('estado_inscripcion');
@@ -1647,6 +1691,11 @@ const obtenerInscripcionesPendientesAdmin = async (req, res) => {
 
 const validarInscripcionAdmin = async (req, res) => {
   try {
+    const { clubId, error: clubError } = resolveClubIdFromRequest(req);
+    if (clubError) {
+      return res.status(400).json({ error: clubError });
+    }
+
     const inscripcionId = String(req.params?.inscripcionId || '').trim();
     const estadoObjetivo = normalizeInscriptionStatus(req.body?.estado_inscripcion ?? req.body?.estado);
     const motivoRaw = typeof req.body?.motivo_rechazo === 'string' ? req.body.motivo_rechazo.trim() : '';
@@ -1672,6 +1721,7 @@ const validarInscripcionAdmin = async (req, res) => {
         .from('inscripciones')
         .select(columns)
         .eq('id', inscripcionId)
+        .eq('club_id', clubId)
         .single();
 
       if (!error) {
@@ -1716,7 +1766,7 @@ const validarInscripcionAdmin = async (req, res) => {
     const cuposMax = Number.parseInt(String(torneoMeta?.cupos_max ?? ''), 10);
 
     if (estadoObjetivo === INSCRIPTION_STATUS_APPROVED && Number.isInteger(cuposMax) && cuposMax > 0) {
-      const { summaryByTournament, error: summaryError } = await fetchTournamentInscriptionSummaryCompat([inscripcion.torneo_id]);
+      const { summaryByTournament, error: summaryError } = await fetchTournamentInscriptionSummaryCompat([inscripcion.torneo_id], clubId);
       if (summaryError) {
         console.error('Error al contar inscripciones aprobadas para validación:', summaryError);
         return res.status(500).json({ error: 'No se pudo validar el cupo del torneo.' });
@@ -1800,6 +1850,11 @@ const validarInscripcionAdmin = async (req, res) => {
 
 const obtenerInscripcionesPorJugador = async (req, res) => {
   try {
+    const { clubId, error: clubError } = resolveClubIdFromRequest(req);
+    if (clubError) {
+      return res.status(400).json({ error: clubError });
+    }
+
     const jugadorId = String(req.params?.id || '').trim();
 
     if (!UUID_REGEX.test(jugadorId)) {
@@ -1818,6 +1873,7 @@ const obtenerInscripcionesPorJugador = async (req, res) => {
         .from('inscripciones')
         .select(columns)
         .eq('jugador_id', jugadorId)
+        .eq('club_id', clubId)
         .order('fecha_inscripcion', { ascending: false });
 
       if (!error) {

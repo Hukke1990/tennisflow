@@ -5,6 +5,7 @@ const supabase = require('../services/supabase');
 const buildCanchasController = require('../controllers/canchasController');
 
 const originalFrom = supabase.from;
+const CLUB_ID = '11111111-1111-4111-8111-111111111111';
 
 function createReq({ params = {}, body = {}, query = {} } = {}) {
   return { params, body, query };
@@ -120,6 +121,7 @@ test('POST /api/canchas crea cancha valida', async () => {
 
   const controller = buildCanchasController(null);
   const req = createReq({
+    query: { club_id: CLUB_ID },
     body: {
       nombre: 'Cancha Central',
       tipo_superficie: 'polvo de ladrillo',
@@ -135,6 +137,7 @@ test('POST /api/canchas crea cancha valida', async () => {
   assert.equal(calls.length, 1);
   assert.equal(calls[0].table, 'canchas');
   assert.equal(calls[0].action, 'insert');
+  assert.equal(calls[0].payload?.[0]?.club_id, CLUB_ID);
 
   assertQueueEmpty();
 });
@@ -158,6 +161,7 @@ test('PUT /api/canchas/:id edita cancha', async () => {
   const controller = buildCanchasController(null);
   const req = createReq({
     params: { id: 'cancha_1' },
+    query: { club_id: CLUB_ID },
     body: {
       tipo_superficie: 'sintetica',
       descripcion: 'Renovada',
@@ -172,6 +176,7 @@ test('PUT /api/canchas/:id edita cancha', async () => {
   assert.equal(calls.length, 1);
   assert.equal(calls[0].table, 'canchas');
   assert.equal(calls[0].action, 'update');
+  assert.ok(calls[0].filters.some((f) => f.column === 'club_id' && f.value === CLUB_ID));
 
   assertQueueEmpty();
 });
@@ -185,7 +190,7 @@ test('DELETE /api/canchas/:id elimina cancha', async () => {
   const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
 
   const controller = buildCanchasController(null);
-  const req = createReq({ params: { id: 'cancha_1' } });
+  const req = createReq({ params: { id: 'cancha_1' }, query: { club_id: CLUB_ID } });
   const res = createRes();
 
   await controller.eliminarCancha(req, res);
@@ -195,6 +200,8 @@ test('DELETE /api/canchas/:id elimina cancha', async () => {
   assert.equal(calls.length, 2);
   assert.equal(calls[0].action, 'select');
   assert.equal(calls[1].action, 'delete');
+  assert.ok(calls[0].filters.some((f) => f.column === 'club_id' && f.value === CLUB_ID));
+  assert.ok(calls[1].filters.some((f) => f.column === 'club_id' && f.value === CLUB_ID));
 
   assertQueueEmpty();
 });
@@ -208,7 +215,7 @@ test('DELETE /api/canchas/:id retorna 409 con relacion activa', async () => {
   const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
 
   const controller = buildCanchasController(null);
-  const req = createReq({ params: { id: 'cancha_1' } });
+  const req = createReq({ params: { id: 'cancha_1' }, query: { club_id: CLUB_ID } });
   const res = createRes();
 
   await controller.eliminarCancha(req, res);
@@ -216,6 +223,8 @@ test('DELETE /api/canchas/:id retorna 409 con relacion activa', async () => {
   assert.equal(res.statusCode, 409);
   assert.match(res.payload.error, /asociada/i);
   assert.equal(calls.length, 2);
+  assert.ok(calls[0].filters.some((f) => f.column === 'club_id' && f.value === CLUB_ID));
+  assert.ok(calls[1].filters.some((f) => f.column === 'club_id' && f.value === CLUB_ID));
 
   assertQueueEmpty();
 });

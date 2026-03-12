@@ -3,6 +3,8 @@ const supabase = require('../services/supabase');
 // Exportar una función constructora que recibe "io" (la instancia de Socket.io)
 module.exports = (io) => {
 
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
   const isNonEmptyString = (value) => typeof value === 'string' && value.trim() !== '';
 
   const normalizeCanchaPayload = (body, { partial = false } = {}) => {
@@ -48,12 +50,33 @@ module.exports = (io) => {
 
     return { payload };
   };
+
+  const resolveClubIdFromRequest = (req) => {
+    const rawClubId = req.query?.club_id ?? req.headers?.['x-club-id'];
+    const clubId = String(rawClubId || '').trim();
+
+    if (!clubId) {
+      return { clubId: null, error: 'club_id es obligatorio.' };
+    }
+
+    if (!UUID_REGEX.test(clubId)) {
+      return { clubId: null, error: 'club_id debe ser un UUID valido.' };
+    }
+
+    return { clubId, error: null };
+  };
   
   const obtenerCanchas = async (req, res) => {
     try {
+      const { clubId, error: clubError } = resolveClubIdFromRequest(req);
+      if (clubError) {
+        return res.status(400).json({ error: clubError });
+      }
+
       const { data, error } = await supabase
         .from('canchas')
         .select('id, nombre, tipo_superficie, esta_disponible, descripcion')
+        .eq('club_id', clubId)
         .order('nombre', { ascending: true });
 
       if (error) {
@@ -70,14 +93,24 @@ module.exports = (io) => {
 
   const crearCancha = async (req, res) => {
     try {
+      const { clubId, error: clubError } = resolveClubIdFromRequest(req);
+      if (clubError) {
+        return res.status(400).json({ error: clubError });
+      }
+
       const { payload, error: validationError } = normalizeCanchaPayload(req.body, { partial: false });
       if (validationError) {
         return res.status(400).json({ error: validationError });
       }
 
+      const payloadWithClub = {
+        ...payload,
+        club_id: clubId,
+      };
+
       const { data, error } = await supabase
         .from('canchas')
-        .insert([payload])
+        .insert([payloadWithClub])
         .select('id, nombre, tipo_superficie, esta_disponible, descripcion')
         .single();
 
@@ -96,6 +129,11 @@ module.exports = (io) => {
   const actualizarCancha = async (req, res) => {
     try {
       const { id } = req.params;
+      const { clubId, error: clubError } = resolveClubIdFromRequest(req);
+      if (clubError) {
+        return res.status(400).json({ error: clubError });
+      }
+
       const { payload, error: validationError } = normalizeCanchaPayload(req.body, { partial: true });
 
       if (validationError) {
@@ -106,6 +144,7 @@ module.exports = (io) => {
         .from('canchas')
         .update(payload)
         .eq('id', id)
+        .eq('club_id', clubId)
         .select('id, nombre, tipo_superficie, esta_disponible, descripcion')
         .single();
 
@@ -131,11 +170,16 @@ module.exports = (io) => {
   const eliminarCancha = async (req, res) => {
     try {
       const { id } = req.params;
+      const { clubId, error: clubError } = resolveClubIdFromRequest(req);
+      if (clubError) {
+        return res.status(400).json({ error: clubError });
+      }
 
       const { data: canchaExistente, error: findError } = await supabase
         .from('canchas')
         .select('id')
         .eq('id', id)
+        .eq('club_id', clubId)
         .single();
 
       if (findError || !canchaExistente) {
@@ -145,7 +189,8 @@ module.exports = (io) => {
       const { error } = await supabase
         .from('canchas')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('club_id', clubId);
 
       if (error) {
         if (error.code === '23503') {
@@ -172,6 +217,11 @@ module.exports = (io) => {
   const actualizarEstadoCancha = async (req, res) => {
     try {
       const { id } = req.params;
+      const { clubId, error: clubError } = resolveClubIdFromRequest(req);
+      if (clubError) {
+        return res.status(400).json({ error: clubError });
+      }
+
       const { esta_disponible } = req.body; // true = disponible, false = ocupada/mantenimiento
 
       if (typeof esta_disponible !== 'boolean') {
@@ -182,6 +232,7 @@ module.exports = (io) => {
         .from('canchas')
         .update({ esta_disponible })
         .eq('id', id)
+        .eq('club_id', clubId)
         .select();
 
       if (error || data.length === 0) {

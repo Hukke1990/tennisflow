@@ -3,6 +3,22 @@ const supabase = require('../services/supabase');
 const MODALIDADES = new Set(['Singles', 'Dobles']);
 const SEXOS = new Set(['Masculino', 'Femenino']);
 const ADMIN_ROLES = new Set(['admin', 'super_admin']);
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const resolveClubIdFromRequest = (req) => {
+  const rawClubId = req.query?.club_id ?? req.headers?.['x-club-id'];
+  const clubId = String(rawClubId || '').trim();
+
+  if (!clubId) {
+    return { clubId: null, error: 'club_id es obligatorio.' };
+  }
+
+  if (!UUID_REGEX.test(clubId)) {
+    return { clubId: null, error: 'club_id debe ser un UUID valido.' };
+  }
+
+  return { clubId, error: null };
+};
 
 const isMissingColumnError = (error) => {
   return error?.code === '42703' || /column .* does not exist/i.test(error?.message || '');
@@ -24,7 +40,7 @@ const normalizeRole = (value) => {
   return '';
 };
 
-const fetchAdminProfileIdsCompat = async () => {
+const fetchAdminProfileIdsCompat = async (clubId) => {
   const selectOptions = [
     'id, rol, es_admin',
     'id, es_admin',
@@ -35,7 +51,8 @@ const fetchAdminProfileIdsCompat = async () => {
   for (const columns of selectOptions) {
     const { data, error } = await supabase
       .from('perfiles')
-      .select(columns);
+      .select(columns)
+      .eq('club_id', clubId);
 
     if (!error) {
       const adminIds = new Set(
@@ -58,8 +75,8 @@ const fetchAdminProfileIdsCompat = async () => {
   return { adminIds: new Set(), error: lastError };
 };
 
-const fetchTournamentWinsByPlayers = async (playerIds = []) => {
-  if (!Array.isArray(playerIds) || playerIds.length === 0) {
+const fetchTournamentWinsByPlayers = async (playerIds = [], clubTournamentIds = []) => {
+  if (!Array.isArray(playerIds) || playerIds.length === 0 || !Array.isArray(clubTournamentIds) || clubTournamentIds.length === 0) {
     return { winsByPlayer: new Map(), error: null };
   }
 
@@ -75,6 +92,7 @@ const fetchTournamentWinsByPlayers = async (playerIds = []) => {
       .select('ganador_id, torneo_id')
       .eq('estado', 'finalizado')
       .eq(option.column, option.value)
+      .in('torneo_id', clubTournamentIds)
       .in('ganador_id', playerIds);
 
     if (!error) {
@@ -106,52 +124,19 @@ const fetchTournamentWinsByPlayers = async (playerIds = []) => {
   return { winsByPlayer: new Map(), error: lastError };
 };
 
-const fetchRankingsCompat = async ({ sexo, categoriaField, categoria }) => {
+const fetchRankingsCompat = async ({ sexo, categoriaField, categoria, clubId }) => {
   const selectOptions = [
-    `
-      id,
-      nombre_completo,
-      foto_url,
-      sexo,
-      categoria,
-      categoria_singles,
-      categoria_dobles,
-      ranking_elo,
-      ranking_elo_singles,
-      ranking_elo_dobles,
-      ranking_elo_singles_resuelto,
-      ranking_elo_dobles_resuelto,
-      ranking_puntos,
-      ranking_puntos_singles,
-      ranking_puntos_dobles,
-      ranking_puntos_singles_resuelto,
-      ranking_puntos_dobles_resuelto,
-      torneos,
-      victorias
-    `,
-    `
-      id,
-      nombre_completo,
-      foto_url,
-      sexo,
-      categoria,
-      categoria_singles,
-      categoria_dobles,
-      ranking_elo,
-      ranking_elo_singles,
-      ranking_elo_dobles,
-      ranking_elo_singles_resuelto,
-      ranking_elo_dobles_resuelto,
-      torneos,
-      victorias
-    `,
+    'id, nombre_completo, foto_url, sexo, categoria, categoria_singles, categoria_dobles, ranking_puntos, ranking_puntos_singles, ranking_puntos_dobles, ranking_elo_singles, ranking_elo_dobles',
+    'id, nombre_completo, foto_url, sexo, categoria, categoria_singles, categoria_dobles, ranking_puntos, ranking_puntos_singles, ranking_puntos_dobles',
+    'id, nombre_completo, foto_url, sexo, categoria, categoria_singles, categoria_dobles',
   ];
 
   let lastError = null;
   for (const columns of selectOptions) {
     const { data, error } = await supabase
-      .from('vw_rankings_perfiles')
+      .from('perfiles')
       .select(columns)
+      .eq('club_id', clubId)
       .eq('sexo', sexo)
       .eq(categoriaField, categoria)
       .not('nombre_completo', 'is', null);
@@ -165,6 +150,23 @@ const fetchRankingsCompat = async ({ sexo, categoriaField, categoria }) => {
   }
 
   return { data: [], error: lastError };
+};
+
+const fetchClubTournamentIds = async (clubId) => {
+  const { data, error } = await supabase
+    .from('torneos')
+    .select('id')
+    .eq('club_id', clubId);
+
+  if (error) {
+    return { ids: [], error };
+  }
+
+  const ids = (data || [])
+    .map((row) => String(row?.id || '').trim())
+    .filter(Boolean);
+
+  return { ids, error: null };
 };
 
 const parseFilters = (query) => {
@@ -190,6 +192,11 @@ const parseFilters = (query) => {
 
 const getRankings = async (req, res) => {
   try {
+    const { clubId, error: clubError } = resolveClubIdFromRequest(req);
+    if (clubError) {
+      return res.status(400).json({ error: clubError });
+    }
+
     const { modalidad, sexo, categoria, error: filtersError } = parseFilters(req.query || {});
 
     if (filtersError) {
@@ -197,7 +204,7 @@ const getRankings = async (req, res) => {
     }
 
     const categoriaField = modalidad === 'Singles' ? 'categoria_singles' : 'categoria_dobles';
-    const { data, error } = await fetchRankingsCompat({ sexo, categoriaField, categoria });
+    const { data, error } = await fetchRankingsCompat({ sexo, categoriaField, categoria, clubId });
 
     if (error) {
       console.error('Error al obtener rankings:', error);
@@ -207,7 +214,7 @@ const getRankings = async (req, res) => {
     const rows = Array.isArray(data) ? data : [];
     let adminIds = new Set();
     if (rows.length > 0) {
-      const { adminIds: resolvedAdminIds, error: adminFilterError } = await fetchAdminProfileIdsCompat();
+      const { adminIds: resolvedAdminIds, error: adminFilterError } = await fetchAdminProfileIdsCompat(clubId);
       if (adminFilterError) {
         console.warn('No se pudo resolver filtro de admins en ranking:', adminFilterError?.message || adminFilterError);
       }
@@ -234,7 +241,13 @@ const getRankings = async (req, res) => {
       .map((jugador) => String(jugador?.id || '').trim())
       .filter(Boolean);
 
-    const { winsByPlayer, error: tournamentWinsError } = await fetchTournamentWinsByPlayers(playerIds);
+    const { ids: clubTournamentIds, error: clubTorneosError } = await fetchClubTournamentIds(clubId);
+    if (clubTorneosError) {
+      console.error('No se pudieron obtener torneos del club para ranking:', clubTorneosError);
+      return res.status(500).json({ error: 'Error al obtener rankings', details: clubTorneosError.message });
+    }
+
+    const { winsByPlayer, error: tournamentWinsError } = await fetchTournamentWinsByPlayers(playerIds, clubTournamentIds);
     if (tournamentWinsError) {
       console.warn('No se pudo calcular torneos ganados, se usa fallback:', tournamentWinsError?.message || tournamentWinsError);
     }
