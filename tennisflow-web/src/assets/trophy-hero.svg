@@ -1,0 +1,37 @@
+<svg width="640" height="820" viewBox="0 0 640 820" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="goldMain" x1="90" y1="70" x2="520" y2="680" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF3C4"/>
+      <stop offset="0.35" stop-color="#F4C357"/>
+      <stop offset="0.7" stop-color="#D6961F"/>
+      <stop offset="1" stop-color="#8E5A00"/>
+    </linearGradient>
+    <linearGradient id="goldDark" x1="120" y1="210" x2="460" y2="620" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E6A531"/>
+      <stop offset="1" stop-color="#7A4200"/>
+    </linearGradient>
+    <linearGradient id="baseGrad" x1="170" y1="650" x2="470" y2="810" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#A76910"/>
+      <stop offset="1" stop-color="#5A2F00"/>
+    </linearGradient>
+    <radialGradient id="shine" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(230 230) rotate(36) scale(250 360)">
+      <stop offset="0" stop-color="#FFF8DE" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#FFF8DE" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="320" cy="792" rx="200" ry="24" fill="#3D2100" fill-opacity="0.38"/>
+
+  <path d="M160 110H480V190C480 288 420 400 320 452C220 400 160 288 160 190V110Z" fill="url(#goldMain)" stroke="#6F4300" stroke-width="16"/>
+  <path d="M160 138H480V194C480 286 425 379 320 430C215 379 160 286 160 194V138Z" fill="url(#shine)"/>
+
+  <path d="M160 170H96C66 170 42 194 42 224C42 300 98 364 174 368" stroke="url(#goldDark)" stroke-width="28" stroke-linecap="round"/>
+  <path d="M480 170H544C574 170 598 194 598 224C598 300 542 364 466 368" stroke="url(#goldDark)" stroke-width="28" stroke-linecap="round"/>
+
+  <rect x="286" y="448" width="68" height="180" rx="26" fill="url(#goldMain)" stroke="#6F4300" stroke-width="12"/>
+  <rect x="220" y="604" width="200" height="54" rx="22" fill="url(#goldDark)" stroke="#6F4300" stroke-width="12"/>
+  <rect x="174" y="650" width="292" height="70" rx="24" fill="url(#baseGrad)" stroke="#6F4300" stroke-width="12"/>
+  <rect x="146" y="716" width="348" height="82" rx="28" fill="#7B4300" stroke="#572D00" stroke-width="12"/>
+
+  <path d="M255 238C286 222 354 214 390 235" stroke="#FFF7D2" stroke-opacity="0.85" stroke-width="14" stroke-linecap="round"/>
+</svg>
