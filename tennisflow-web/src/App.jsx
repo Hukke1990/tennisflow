@@ -1,4 +1,4 @@
-import {
+﻿import {
   BrowserRouter,
   Routes,
   Route,
@@ -7,6 +7,8 @@ import {
 } from 'react-router-dom';
 import MainLayout from './layouts/MainLayout';
 import AuthLayout from './layouts/AuthLayout';
+import LandingPage from './pages/LandingPage';
+import ClubEntryPage from './pages/ClubEntryPage';
 import DashboardPage from './pages/DashboardPage';
 import TorneosPage from './pages/TorneosPage';
 import LoginPage from './pages/LoginPage';
@@ -17,13 +19,9 @@ import RankingsPage from './pages/RankingsPage';
 import BracketPage from './pages/BracketPage';
 import ClubNotFoundPage from './pages/ClubNotFoundPage';
 import SuperAdminPage from './pages/SuperAdminPage';
-import LandingPage from './pages/LandingPage';
-import ClubEntryPage from './pages/ClubEntryPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import SuperAdminRoute from './components/SuperAdminRoute';
-import {
-  ClubProvider,
-} from './context/ClubContext';
+import { ClubProvider } from './context/ClubContext';
 import './index.css';
 
 function App() {
@@ -42,6 +40,7 @@ function App() {
         <Route path="/club-no-encontrado" element={<ClubNotFoundPage />} />
 
         <Route path="/:clubSlug" element={<ClubProvider><Outlet /></ClubProvider>}>
+          {/* Index: muestra login o redirige a inicio segun autenticacion */}
           <Route index element={<ClubEntryPage />} />
 
           {/* Rutas de autenticacion */}
@@ -67,11 +66,11 @@ function App() {
             <Route path="bracket/:torneoId" element={<BracketPage />} />
           </Route>
 
-          {/* Redirigir rutas desconocidas dentro de un club a su entrada condicional */}
-          <Route path="*" element={<Navigate to="." replace />} />
+          {/* Redirigir rutas desconocidas dentro de un club al inicio */}
+          <Route path="*" element={<Navigate to="inicio" replace />} />
         </Route>
 
-        {/* Redirigir cualquier ruta desconocida a la landing */}
+        {/* Redirigir cualquier ruta desconocida al landing */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
