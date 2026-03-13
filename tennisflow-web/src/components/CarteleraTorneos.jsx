@@ -17,7 +17,7 @@ import {
   IconUsers,
 } from './icons/UiIcons';
 
-const API_URL = 'http://localhost:3000';
+const API_URL = '';
 const ESTADOS_NO_INSCRIPCION = new Set(['borrador', 'cerrado', 'finalizado', 'cancelado', 'suspendido']);
 const ESTADOS_FINALIZADOS = new Set(['finalizado', 'disputado', 'terminado', 'completado']);
 const ESTADOS_ACTIVOS = new Set(['abierto', 'publicado', 'activo', 'en_progreso']);

@@ -9,7 +9,7 @@ import { IconAlertTriangle } from './icons/UiIcons';
 import { resolveProfilePhotoUrl } from '../lib/profilePhoto';
 import trophyHero from '../assets/trophy-hero.svg';
 
-const API_URL = 'http://localhost:3000';
+const API_URL = '';
 const SCORE_CACHE_STORAGE_KEY = 'tennisflow.bracket.scoreCache.v1';
 const PERFIL_META_CACHE = new Map();
 const REALTIME_EVENTS = [

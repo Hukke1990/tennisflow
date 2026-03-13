@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { DEFAULT_CLUB_SLUG, buildClubPath } from '../context/ClubContext';
 
-const API_URL = 'http://localhost:3000';
+const API_URL = '';
 
 const PLAN_OPTIONS = [
   { value: 'basico', label: 'Basico' },

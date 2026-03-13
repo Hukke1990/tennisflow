@@ -16,7 +16,7 @@ import {
 } from './icons/UiIcons';
 import { useClub } from '../context/ClubContext';
 
-const API_URL = 'http://localhost:3000';
+const API_URL = '';
 const HORA_FULL_TIME_INICIO = '00:00';
 const HORA_FULL_TIME_FIN = '23:59';
 const ESTADOS_NO_INSCRIPCION = new Set(['borrador', 'cerrado', 'finalizado', 'cancelado', 'suspendido']);

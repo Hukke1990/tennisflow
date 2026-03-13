@@ -3,7 +3,7 @@ import axios from 'axios';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-const API_URL = 'http://localhost:3000';
+const API_URL = '';
 
 const extractPartidos = (payload) => {
   if (Array.isArray(payload)) return payload;

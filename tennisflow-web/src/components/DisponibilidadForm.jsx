@@ -44,7 +44,7 @@ export default function DisponibilidadForm({ jugadorId }) {
     }
 
     try {
-      await axios.post('http://localhost:3000/api/disponibilidad', {
+      await axios.post('/api/disponibilidad', {
         jugador_id: jugadorId, 
         horarios: horarios.map(h => ({
           ...h,

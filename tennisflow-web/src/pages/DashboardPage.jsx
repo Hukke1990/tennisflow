@@ -24,7 +24,7 @@ import {
 import { getInscripcionWindowState } from '../lib/inscripcionWindow';
 import { resolveProfilePhotoUrl } from '../lib/profilePhoto';
 
-const API_URL = 'http://localhost:3000';
+const API_URL = '';
 const PENDING_START_STORAGE_KEY = 'tennisflow.adminLive.pendingStart.v1';
 const LIVE_UPDATE_EVENT = 'tennisflow:live-updated';
 const LIVE_UPDATE_STORAGE_KEY = 'tennisflow.live-update.v1';

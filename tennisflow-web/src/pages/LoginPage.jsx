@@ -1,15 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { IconAlertTriangle, IconArrowRight } from '../components/icons/UiIcons';
 import { useClubPath } from '../context/ClubContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const toClubPath = useClubPath();
+  const { user, loading: authLoading } = useAuth();
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+    navigate(toClubPath('/torneos'), { replace: true });
+  }, [authLoading, navigate, toClubPath, user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -34,7 +41,7 @@ export default function LoginPage() {
       return;
     }
 
-    navigate(toClubPath('/inicio'));
+    navigate(toClubPath('/torneos'), { replace: true });
   };
 
   return (

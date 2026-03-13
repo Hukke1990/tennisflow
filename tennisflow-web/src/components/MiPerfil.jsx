@@ -23,7 +23,7 @@ import {
   IconXCircle,
 } from './icons/UiIcons';
 
-const API_URL = 'http://localhost:3000';
+const API_URL = '';
 const MAX_PROFILE_PHOTO_SIZE_MB = 5;
 const PROFILE_UPDATED_EVENT = 'tennisflow:profile-updated';
 const PROFILE_UPDATED_STORAGE_KEY = 'tennisflow:profile-updated';
