@@ -17,22 +17,20 @@ import RankingsPage from './pages/RankingsPage';
 import BracketPage from './pages/BracketPage';
 import ClubNotFoundPage from './pages/ClubNotFoundPage';
 import SuperAdminPage from './pages/SuperAdminPage';
+import LandingPage from './pages/LandingPage';
+import ClubEntryPage from './pages/ClubEntryPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import SuperAdminRoute from './components/SuperAdminRoute';
 import {
   ClubProvider,
-  DEFAULT_CLUB_SLUG,
-  buildClubPath,
 } from './context/ClubContext';
 import './index.css';
 
 function App() {
-  const demoHomePath = buildClubPath(DEFAULT_CLUB_SLUG, '/inicio');
-
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to={demoHomePath} replace />} />
+        <Route path="/" element={<LandingPage />} />
         <Route
           path="/super-admin"
           element={(
@@ -44,6 +42,8 @@ function App() {
         <Route path="/club-no-encontrado" element={<ClubNotFoundPage />} />
 
         <Route path="/:clubSlug" element={<ClubProvider><Outlet /></ClubProvider>}>
+          <Route index element={<ClubEntryPage />} />
+
           {/* Rutas de autenticacion */}
           <Route element={<AuthLayout />}>
             <Route path="login" element={<LoginPage />} />
@@ -52,7 +52,6 @@ function App() {
 
           {/* Rutas principales con Navbar */}
           <Route element={<MainLayout />}>
-            <Route index element={<Navigate to="inicio" replace />} />
             <Route path="inicio" element={<DashboardPage />} />
             <Route path="torneos" element={<TorneosPage />} />
             <Route path="rankings" element={<RankingsPage />} />
@@ -68,12 +67,12 @@ function App() {
             <Route path="bracket/:torneoId" element={<BracketPage />} />
           </Route>
 
-          {/* Redirigir rutas desconocidas dentro de un club al inicio del club */}
-          <Route path="*" element={<Navigate to="inicio" replace />} />
+          {/* Redirigir rutas desconocidas dentro de un club a su entrada condicional */}
+          <Route path="*" element={<Navigate to="." replace />} />
         </Route>
 
-        {/* Redirigir cualquier ruta desconocida al club demo */}
-        <Route path="*" element={<Navigate to={demoHomePath} replace />} />
+        {/* Redirigir cualquier ruta desconocida a la landing */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { supabase } from './supabase';
 
-const API_BASE_URL = 'http://localhost:3000';
 const CURRENT_CLUB_ID_STORAGE_KEY = 'tennisflow.current-club-id';
 
 let interceptorId = null;
@@ -9,7 +8,7 @@ let interceptorId = null;
 const isApiRequest = (url = '') => {
   const target = String(url || '').trim();
   if (!target) return false;
-  return target.startsWith('/api/') || target.startsWith(`${API_BASE_URL}/api/`);
+  return target === '/api' || target.startsWith('/api/');
 };
 
 const readCurrentClubId = () => {

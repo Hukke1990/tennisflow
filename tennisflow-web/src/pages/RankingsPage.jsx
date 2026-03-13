@@ -13,7 +13,7 @@ import {
   IconUser,
 } from '../components/icons/UiIcons';
 
-const API_URL = 'http://localhost:3000';
+const API_URL = '';
 
 const MODALIDADES = ['Singles', 'Dobles'];
 const SEXOS = [

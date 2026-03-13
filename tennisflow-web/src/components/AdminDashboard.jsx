@@ -205,7 +205,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     // 1. Inicializar Socket.io
-    const newSocket = io('http://localhost:3000');
+    const newSocket = io();
     setSocket(newSocket);
 
     // 2. Cargar canchas y torneos
@@ -240,7 +240,7 @@ export default function AdminDashboard() {
 
   const fetchTorneosAdmin = async () => {
     try {
-       const { data } = await axios.get('http://localhost:3000/api/torneos/admin');
+       const { data } = await axios.get('/api/torneos/admin');
        setTorneosConfigurados(data);
     } catch (e) {
        console.error("Error obteniendo torneos para admin:", e);
@@ -250,7 +250,7 @@ export default function AdminDashboard() {
   const fetchCanchas = async () => {
     try {
       setLoadingCanchas(true);
-      const { data } = await axios.get('http://localhost:3000/api/canchas');
+      const { data } = await axios.get('/api/canchas');
       setCanchas(data);
     } catch (err) {
       console.error('Error cargando canchas:', err);
@@ -262,7 +262,7 @@ export default function AdminDashboard() {
   const fetchInscripcionesPendientes = async () => {
     try {
       setInscripcionesLoading(true);
-      const { data } = await axios.get('http://localhost:3000/api/torneos/inscripciones/pendientes');
+      const { data } = await axios.get('/api/torneos/inscripciones/pendientes');
       setInscripcionesPendientes(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error cargando inscripciones pendientes:', err);
@@ -276,7 +276,7 @@ export default function AdminDashboard() {
   const fetchWhatsappTemplateConfig = async () => {
     try {
       setWhatsappTemplateLoading(true);
-      const { data } = await axios.get('http://localhost:3000/api/torneos/inscripciones/whatsapp-template');
+      const { data } = await axios.get('/api/torneos/inscripciones/whatsapp-template');
       const template = String(data?.template || '').trim() || DEFAULT_WHATSAPP_TEMPLATE;
       setWhatsappTemplate(template);
       setWhatsappTemplateStatus({ message: null, type: null });
@@ -301,7 +301,7 @@ export default function AdminDashboard() {
     setInscripcionesStatus({ message: null, type: null });
 
     try {
-      await axios.patch(`http://localhost:3000/api/torneos/inscripciones/${inscripcionId}/estado`, {
+      await axios.patch(`/api/torneos/inscripciones/${inscripcionId}/estado`, {
         estado_inscripcion: estadoObjetivo,
         motivo_rechazo: esRechazo ? motivo : null,
       });
@@ -331,7 +331,7 @@ export default function AdminDashboard() {
 
     try {
       setWhatsappTemplateSaving(true);
-      const { data } = await axios.patch('http://localhost:3000/api/torneos/inscripciones/whatsapp-template', {
+      const { data } = await axios.patch('/api/torneos/inscripciones/whatsapp-template', {
         template: normalizedTemplate,
       });
 
@@ -366,7 +366,7 @@ export default function AdminDashboard() {
       setCanchas(prev => prev.map(c => c.id === cancha.id ? { ...c, esta_disponible: nuevoEstado } : c));
       
       // Llamada al backend
-      await axios.put(`http://localhost:3000/api/canchas/${cancha.id}/estado`, {
+      await axios.put(`/api/canchas/${cancha.id}/estado`, {
         esta_disponible: nuevoEstado
       });
 
@@ -412,7 +412,7 @@ export default function AdminDashboard() {
 
     setCanchaCrudStatus({ loading: true, error: null, success: null });
     try {
-      await axios.delete(`http://localhost:3000/api/canchas/${canchaId}`);
+      await axios.delete(`/api/canchas/${canchaId}`);
       await fetchCanchas();
       if (editingCanchaId === canchaId) {
         resetCanchaForm();
@@ -450,9 +450,9 @@ export default function AdminDashboard() {
       };
 
       if (editingCanchaId) {
-        await axios.put(`http://localhost:3000/api/canchas/${editingCanchaId}`, payload);
+        await axios.put(`/api/canchas/${editingCanchaId}`, payload);
       } else {
-        await axios.post('http://localhost:3000/api/canchas', payload);
+        await axios.post('/api/canchas', payload);
       }
 
       await fetchCanchas();
@@ -531,7 +531,7 @@ export default function AdminDashboard() {
     }
 
     try {
-      await axios.post('http://localhost:3000/api/torneos', {
+      await axios.post('/api/torneos', {
         ...torneoForm,
         rama: torneoForm.rama,
         sexo: torneoForm.rama,
@@ -595,7 +595,7 @@ export default function AdminDashboard() {
     
     setSorteoStatus({ loading: true, message: null, type: null });
     try {
-      const { data } = await axios.post(`http://localhost:3000/api/torneos/${torneoSeleccionadoAdmin}/sorteo`);
+      const { data } = await axios.post(`/api/torneos/${torneoSeleccionadoAdmin}/sorteo`);
       setSorteoStatus({ loading: false, message: data.message, type: 'success' });
       
       // Refrescar el componente CuadroTorneo forzando un re-render

@@ -156,7 +156,7 @@ export default function RegistroPage() {
 
     // Si Supabase no requiere confirmación por email, el usuario ya tiene sesión
     if (data.session) {
-      navigate(toClubPath('/inicio'));
+      navigate(toClubPath('/torneos'), { replace: true });
     } else {
       // Si requiere confirmación de email
       setSuccess('Registro exitoso. Revisa tu email para confirmar tu cuenta antes de ingresar.');

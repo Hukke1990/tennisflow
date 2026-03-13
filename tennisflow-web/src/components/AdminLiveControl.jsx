@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 
-const API_URL = 'http://localhost:3000';
+const API_URL = '';
 const FINAL_FLASH_MS = 18000;
 const PENDING_START_STORAGE_KEY = 'tennisflow.adminLive.pendingStart.v1';
 const NEXT_CHOICE_STORAGE_KEY = 'tennisflow.adminLive.nextChoice.v1';
