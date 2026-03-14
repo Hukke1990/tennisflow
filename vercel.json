@@ -31,6 +31,10 @@
       "dest": "/tennisflow-web/vite.svg"
     },
     {
+      "src": "/(.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico|webmanifest|txt|xml|json))",
+      "dest": "/tennisflow-web/$1"
+    },
+    {
       "handle": "filesystem"
     },
     {

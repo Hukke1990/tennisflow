@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useClub, useClubPath } from '../context/ClubContext';
-import { IconSettings, IconTennisBall } from './icons/UiIcons';
+import setGoMarkFallback from '../assets/setgo-mark.svg';
+import { IconSettings } from './icons/UiIcons';
 
 const navLinks = [
   { to: '/inicio', label: 'Inicio' },
@@ -11,6 +12,7 @@ const navLinks = [
 ];
 
 export default function Navbar() {
+  const logoVersion = '20260313-1';
   const location = useLocation();
   const navigate = useNavigate();
   const { club } = useClub();
@@ -18,6 +20,8 @@ export default function Navbar() {
   const { user, perfil, signOut, isAdmin, rolReal } = useAuth();
   const [avatarError, setAvatarError] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [logoSrc, setLogoSrc] = useState(`/SetGo.png?v=${logoVersion}`);
+  const [logoFallbackApplied, setLogoFallbackApplied] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -52,12 +56,22 @@ export default function Navbar() {
           
           {/* Logo */}
           <Link to={toClubPath('/inicio')} className="flex items-center gap-2.5 group min-w-0">
-            <div className="w-9 h-9 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-lg flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
-              <IconTennisBall className="h-5 w-5" />
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-white/[0.04] ring-1 ring-white/10 transition-transform group-hover:scale-105">
+              <img
+                src={logoSrc}
+                alt="Logo de SetGo"
+                className="h-8 w-8 object-contain"
+                onError={() => {
+                  if (!logoFallbackApplied) {
+                    setLogoSrc(setGoMarkFallback);
+                    setLogoFallbackApplied(true);
+                  }
+                }}
+              />
             </div>
             <div className="min-w-0">
               <span className="text-white font-black text-xl tracking-tight leading-none block">
-                Tennis<span className="text-emerald-400">Flow</span>
+                Set<span className="text-[#A6CE39]">Go</span>
               </span>
               {clubLabel && (
                 <span className="hidden sm:block text-[10px] uppercase tracking-[0.16em] text-emerald-300/90 font-bold truncate max-w-[220px]">

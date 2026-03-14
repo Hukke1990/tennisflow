@@ -82,7 +82,7 @@ export default function LandingPage() {
                 }}
               />
               <span className="-mt-1 text-4xl font-black tracking-tight text-slate-100 sm:text-5xl">
-                Set<span className="text-emerald-400">Go</span>
+                Set<span className="text-[#A6CE39]">Go</span>
               </span>
             </div>
 
