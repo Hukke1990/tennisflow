@@ -166,7 +166,7 @@ export default function RegistroPage() {
   return (
     <div>
       <h2 className="text-2xl font-black text-white mb-1">Crear Cuenta</h2>
-      <p className="text-gray-400 text-sm mb-8">Únete a TennisFlow y participá en torneos</p>
+      <p className="text-gray-400 text-sm mb-8">Únete a SetGo y participá en torneos</p>
 
       {clubLoading ? (
         <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-gray-300 inline-flex items-center gap-2">

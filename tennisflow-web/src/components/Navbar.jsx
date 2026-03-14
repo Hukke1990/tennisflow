@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useClub, useClubPath } from '../context/ClubContext';
+import { useClubPath } from '../context/ClubContext';
 import setGoMarkFallback from '../assets/setgo-mark.svg';
 import { IconSettings } from './icons/UiIcons';
 
@@ -15,7 +15,6 @@ export default function Navbar() {
   const logoVersion = '20260313-1';
   const location = useLocation();
   const navigate = useNavigate();
-  const { club } = useClub();
   const toClubPath = useClubPath();
   const { user, perfil, signOut, isAdmin, rolReal } = useAuth();
   const [avatarError, setAvatarError] = useState(false);
@@ -47,8 +46,6 @@ export default function Navbar() {
     return location.pathname === resolvedPath || location.pathname.startsWith(`${resolvedPath}/`);
   };
 
-  const clubLabel = String(club?.nombre || '').trim();
-
   return (
     <header className="sticky top-0 z-50 bg-[#0a0f1e]/95 border-b border-white/10 shadow-lg backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -70,14 +67,9 @@ export default function Navbar() {
               />
             </div>
             <div className="min-w-0">
-              <span className="text-white font-black text-xl tracking-tight leading-none block">
+              <span className="font-rajdhani text-white font-bold text-2xl tracking-[0.03em] leading-none block">
                 Set<span className="text-[#A6CE39]">Go</span>
               </span>
-              {clubLabel && (
-                <span className="hidden sm:block text-[10px] uppercase tracking-[0.16em] text-emerald-300/90 font-bold truncate max-w-[220px]">
-                  {clubLabel}
-                </span>
-              )}
             </div>
           </Link>
 
@@ -109,7 +101,7 @@ export default function Navbar() {
               <>
                 {isAdmin && (
                   <Link to={toClubPath('/admin')}
-                    className="hidden lg:block text-xs font-bold px-3 py-1.5 rounded-lg border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 transition-colors">
+                    className="hidden lg:block text-xs font-bold px-3 py-1.5 rounded-lg border border-emerald-400/45 text-emerald-300 bg-transparent hover:bg-emerald-500/16 hover:text-emerald-100 hover:border-emerald-300/70 transition-all duration-200">
                     <span className="inline-flex items-center gap-1.5">
                       <IconSettings className="h-3.5 w-3.5" />
                       Admin
@@ -118,7 +110,7 @@ export default function Navbar() {
                 )}
                 {rolReal === 'super_admin' && (
                   <Link to="/super-admin"
-                    className="hidden lg:block text-xs font-bold px-3 py-1.5 rounded-lg border border-sky-500/40 text-sky-300 hover:bg-sky-500/10 transition-colors">
+                    className="hidden lg:block text-xs font-bold px-3 py-1.5 rounded-lg border border-sky-400/45 text-sky-300 bg-transparent hover:bg-sky-500/16 hover:text-sky-100 hover:border-sky-300/70 transition-all duration-200">
                     Super Admin
                   </Link>
                 )}
@@ -205,7 +197,7 @@ export default function Navbar() {
                   {isAdmin && (
                     <Link
                       to={toClubPath('/admin')}
-                      className="block rounded-lg px-3 py-2 text-sm font-semibold text-emerald-300 border border-emerald-500/30 bg-emerald-500/10"
+                      className="block rounded-lg px-3 py-2 text-sm font-semibold text-emerald-300 border border-emerald-400/40 bg-transparent hover:bg-emerald-500/14 hover:text-emerald-100 transition-all duration-200"
                     >
                       Admin
                     </Link>
@@ -213,7 +205,7 @@ export default function Navbar() {
                   {rolReal === 'super_admin' && (
                     <Link
                       to="/super-admin"
-                      className="block rounded-lg px-3 py-2 text-sm font-semibold text-sky-300 border border-sky-500/30 bg-sky-500/10"
+                      className="block rounded-lg px-3 py-2 text-sm font-semibold text-sky-300 border border-sky-400/40 bg-transparent hover:bg-sky-500/14 hover:text-sky-100 transition-all duration-200"
                     >
                       Super Admin
                     </Link>

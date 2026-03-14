@@ -1,3 +1,6 @@
+// ...hooks y helpers...
+
+// ...existing code...
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
@@ -331,10 +334,9 @@ export default function CarteleraTorneos() {
       });
 
       const data = Array.from(torneoMap.values());
-      if (!Array.isArray(data) || data.length === 0) {
+      if (!Array.isArray(data)) {
         throw new Error('No se pudo obtener la lista de torneos.');
       }
-
       const torneosOrdenados = [...data].sort((a, b) => new Date(b.fecha_inicio) - new Date(a.fecha_inicio));
       setTorneos(torneosOrdenados);
     } catch (err) {
@@ -518,275 +520,98 @@ export default function CarteleraTorneos() {
     );
   }
 
+  // Función auxiliar para renderizar la cartelera (definida como función flecha dentro del componente, antes del return)
+  const getCarteleraContent = () => {
+    if (torneosFiltrados.length === 0) {
+      if (torneos.length === 0) {
+        return (
+          <div className="text-center py-16 bg-gradient-to-br from-[#f8fbff] to-[#f2ead0] rounded-2xl border border-dashed border-[#d5c086] flex flex-col items-center justify-center">
+            <svg className="mx-auto h-14 w-14 text-[#0f4c81]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 10c-4.41 0-8-1.79-8-4V6c0-2.21 3.59-4 8-4s8 1.79 8 4v8c0 2.21-3.59 4-8 4z" />
+            </svg>
+            <h3 className="mt-4 text-2xl font-extrabold text-[#0f4c81]">Actualmente no hay torneos para inscribirse</h3>
+            <p className="mt-2 text-slate-600 max-w-md mx-auto">¡Pronto habrá novedades! Estate atento a la cartelera para no perderte el próximo torneo. Si eres administrador, crea el primer torneo y da inicio a la competencia.</p>
+            {isAdmin && (
+              <button
+                onClick={() => navigate(toClubPath('/admin'))}
+                className="mt-6 px-6 py-3 rounded-xl bg-gradient-to-r from-[#0f4c81] to-[#d4af37] text-white font-bold shadow-lg hover:from-[#0f4c81]/90 hover:to-[#d4af37]/90 transition-all"
+              >
+                Crear nuevo torneo
+              </button>
+            )}
+          </div>
+        );
+      } else {
+        return (
+          <div className="text-center py-16 bg-gradient-to-br from-[#f8fbff] to-[#f2ead0] rounded-2xl border border-dashed border-[#d5c086]">
+            <p className="text-slate-500 font-semibold">No hay torneos que coincidan con los filtros actuales.</p>
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setSearchDraft('');
+                setEstadoFiltro('todos');
+              }}
+              className="mt-3 px-4 py-2 rounded-lg border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-white"
+            >
+              Limpiar filtros
+            </button>
+          </div>
+        );
+      }
+    } else {
+      return null; // Aquí iría el render de la lista de torneos si existieran
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6 rounded-3xl bg-gradient-to-b from-[#f7fbff] via-[#f8fafc] to-[#f6f1df]">
       <div className="px-1 sm:px-2">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-[#0f4c81]">Torneos</h1>
-            <p className="text-slate-600 mt-1">Cartelera completa con cupos, estado e inscripcion</p>
-          </div>
 
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={() => navigate(toClubPath('/admin'))}
-              className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-[#0f4c81] to-[#d4af37] text-white px-4 py-2.5 text-sm font-bold shadow-sm hover:from-[#0b3c67] hover:to-[#b8962f] transition-colors"
-            >
-              Crear Nuevo Torneo
-            </button>
-          )}
-        </div>
-      </div>
 
-      <div className="bg-gradient-to-br from-white via-slate-50 to-[#f8f3e3] border border-[#d5c086] rounded-2xl p-4 sm:p-5 mb-6 space-y-4 shadow-sm">
-        <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
-          <div className="flex-1">
-            <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Filtros</label>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <IconSearch className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  value={searchDraft}
-                  onChange={(event) => setSearchDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      setSearchTerm(searchDraft.trim());
-                    }
-                  }}
-                  placeholder="Buscar por nombre, categoria o superficie"
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white/90 focus:border-[#0f4c81] focus:ring-2 focus:ring-[#0f4c81]/20 outline-none"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setSearchTerm(searchDraft.trim())}
-                className="h-10 w-10 rounded-xl border border-slate-300 bg-white text-slate-600 hover:text-[#0f4c81] hover:border-[#0f4c81]/40 transition-colors inline-flex items-center justify-center"
-                aria-label="Buscar"
-              >
-                <IconSearch className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-
-          <div className="w-full lg:w-56">
-            <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Orden</label>
-            <select
-              value={orden}
-              onChange={(event) => setOrden(event.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-white/90 focus:border-[#0f4c81] focus:ring-2 focus:ring-[#0f4c81]/20 outline-none"
-            >
-              <option value="fecha_desc">Mas recientes primero</option>
-              <option value="fecha_asc">Mas proximos primero</option>
-              <option value="cupos_desc">Mayor ocupacion</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {filtros.map((filtro) => (
-            <button
-              key={filtro.id}
-              onClick={() => setEstadoFiltro(filtro.id)}
-              className={`px-3 py-2 rounded-xl border text-xs font-bold transition-colors ${
-                estadoFiltro === filtro.id
-                  ? 'bg-gradient-to-r from-[#0f4c81] to-[#d4af37] text-white border-[#0f4c81] shadow-sm shadow-[#0b1a2e]/20'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-[#f7fbff]'
-              }`}
-            >
-              {filtro.label} ({filtro.count})
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {torneos.length === 0 ? (
-        <div className="text-center py-16 bg-gradient-to-br from-[#f8fbff] to-[#f2ead0] rounded-2xl border border-dashed border-[#d5c086]">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-          </svg>
-          <h3 className="mt-4 text-lg font-medium text-[#0f4c81]">No hay torneos disponibles</h3>
-          <p className="mt-1 text-slate-600">Actualmente no hay torneos abiertos para inscripción.</p>
-        </div>
-      ) : torneosFiltrados.length === 0 ? (
-        <div className="text-center py-16 bg-gradient-to-br from-[#f8fbff] to-[#f2ead0] rounded-2xl border border-dashed border-[#d5c086]">
-          <p className="text-slate-500 font-semibold">No hay torneos que coincidan con los filtros actuales.</p>
-          <button
-            onClick={() => {
-              setSearchTerm('');
-              setSearchDraft('');
-              setEstadoFiltro('todos');
-            }}
-            className="mt-3 px-4 py-2 rounded-lg border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-white"
-          >
-            Limpiar filtros
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-8">
-          {torneosFiltrados.map((torneo) => {
-            return (
-              <article key={torneo.id} className="group rounded-2xl shadow-md border border-slate-200 bg-gradient-to-b from-slate-50 to-white overflow-hidden mb-8 last:mb-0">
-                <header className="relative h-44 sm:h-48 overflow-hidden">
-                  <div
-                    className="absolute inset-0"
-                    style={{
-                      backgroundImage: torneo.surfaceInfo.texture,
-                      backgroundSize: torneo.surfaceInfo.textureSize,
-                      backgroundPosition: 'center',
+                    </div>
+                    <div className="w-full lg:w-56">
+                      <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Orden</label>
+                      <select
+                        value={orden}
+                        onChange={(event) => setOrden(event.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-white/90 focus:border-[#0f4c81] focus:ring-2 focus:ring-[#0f4c81]/20 outline-none"
+                      >
+                        <option value="fecha_desc">Mas recientes primero</option>
+                        <option value="fecha_asc">Mas proximos primero</option>
+                        <option value="cupos_desc">Mayor ocupacion</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {filtros.map((filtro) => (
+                      <button
+                        key={filtro.id}
+                        onClick={() => setEstadoFiltro(filtro.id)}
+                        className={`px-3 py-2 rounded-xl border text-xs font-bold transition-colors ${
+                          estadoFiltro === filtro.id
+                            ? 'bg-gradient-to-r from-[#0f4c81] to-[#d4af37] text-white border-[#0f4c81] shadow-sm shadow-[#0b1a2e]/20'
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-[#f7fbff]'
+                        }`}
+                      >
+                        {filtro.label} ({filtro.count})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {getCarteleraContent()}
+                {torneoSeleccionado && (
+                  <InscripcionModal
+                    torneo={torneoSeleccionado}
+                    onClose={() => setTorneoSeleccionado(null)}
+                    onSuccess={(data) => {
+                      manejarInscripcionExitosa(torneoSeleccionado.id, data);
+                      setTorneoSeleccionado(null);
                     }}
                   />
-                  <div className={`absolute inset-0 bg-gradient-to-r ${torneo.surfaceInfo.tintClass}`} />
-                  <div className="absolute inset-0 backdrop-blur-[1.5px]" />
-                  <div className="absolute inset-0 z-10 pointer-events-none opacity-100">
-                    <CourtOverlay surfaceKey={torneo.surfaceInfo.key} />
-                  </div>
-
-                  <span className={`absolute top-4 right-4 z-20 text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wide ${estadoVisual(torneo.estado)}`}>
-                    {torneo.estadoTexto}
-                  </span>
-
-                  <div className="absolute inset-x-0 bottom-0 z-20 p-5 sm:p-6 text-white">
-                    <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/85">
-                      <IconCalendar className="h-4 w-4" />
-                      {formatFechaTorneo(torneo.fecha_inicio)}
-                    </p>
-                    <h3 className="mt-2 text-xl sm:text-2xl font-black leading-tight drop-shadow-sm">
-                      {torneo.titulo}
-                    </h3>
-                  </div>
-                </header>
-
-                <div className="grid gap-5 lg:gap-6 lg:grid-cols-[1fr_250px] p-5 sm:p-6">
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                      <DetailChip icon={IconTag} label="Categoria" value={torneo.categoria} />
-                      <DetailChip icon={IconTennisBall} label="Modalidad" value={torneo.modalidad} />
-                      <DetailChip
-                        icon={String(torneo.sexo || '').toLowerCase().includes('dobles') || String(torneo.modalidad || '').toLowerCase().includes('dobles') ? IconUsers : IconUser}
-                        label="Sexo"
-                        value={torneo.sexo}
-                      />
-                      <DetailChip icon={IconCourt} label="Superficie" value={torneo.surfaceInfo.label} />
-                      <DetailChip icon={IconCalendar} label="Inicio" value={formatFechaTorneo(torneo.fecha_inicio)} />
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-sm mb-1.5">
-                        <span className="font-semibold text-slate-600">Ocupacion</span>
-                        <span className="font-bold text-slate-900">{Math.round(torneo.porcentajeOcupacion)}%</span>
-                      </div>
-                      <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden pointer-events-none">
-                        <div
-                          className={`h-2.5 rounded-full ${progresoColor(torneo.porcentajeOcupacion)}`}
-                          style={{ width: `${torneo.porcentajeOcupacion}%` }}
-                        />
-                      </div>
-
-                      {torneo.isFull && torneo.puedeInscribirse && <p className="text-xs text-rose-600 font-semibold mt-2">Cupos aprobados completos. Tu solicitud quedará pendiente hasta validación.</p>}
-                      {torneo.isTerminado && <p className="text-xs text-slate-600 font-semibold mt-2">Torneo disputado. Ver cuadro de resultados.</p>}
-                      {torneo.isEnProgreso && <p className="text-xs text-indigo-700 font-semibold mt-2">Torneo en juego. Ver cuadro y cronograma en vivo.</p>}
-                      {torneo.miEstadoInscripcion === INSCRIPTION_STATUS_PENDING && (
-                        <p className="text-xs text-[#8f6a16] font-semibold mt-2">Tu inscripción está siendo revisada por el administrador.</p>
-                      )}
-                      {torneo.miEstadoInscripcion === INSCRIPTION_STATUS_APPROVED && (
-                        <p className="text-xs text-emerald-700 font-semibold mt-2">Tu inscripción fue aprobada para este torneo.</p>
-                      )}
-                      {torneo.miEstadoInscripcion === INSCRIPTION_STATUS_REJECTED && (
-                        <p className="text-xs text-rose-700 font-semibold mt-2">Tu solicitud fue rechazada. Contacta a la administración para más detalles.</p>
-                      )}
-                      {!torneo.isTerminado && torneo.bloqueadoPorVentana && torneo.ventanaInscripcion.message && (
-                        <p className="text-xs text-[#8f6a16] font-semibold mt-2">{torneo.ventanaInscripcion.message}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <aside className="rounded-2xl border border-[#d5c086] bg-gradient-to-b from-white to-[#f8f3e3] p-4 sm:p-5 shadow-sm flex flex-col justify-between">
-                    <div className="space-y-3">
-                      <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500">Inscripcion</p>
-                      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                        <p className="text-xs font-semibold text-slate-500">Inscriptos</p>
-                        <p className="text-3xl font-black text-[#0f4c81] leading-none mt-1">
-                          {torneo.inscritos}<span className="text-lg text-slate-400">/{torneo.cuposMax || '-'}</span>
-                        </p>
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                        <p className="text-xs font-semibold text-slate-500">Costo</p>
-                        <p className="text-lg font-black text-slate-900 mt-1">${Number(torneo.costo || 0).toLocaleString()}</p>
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                        <p className="text-xs font-semibold text-slate-500">Pendientes</p>
-                        <p className="text-lg font-black text-[#8f6a16] mt-1">{Number(torneo.solicitudes_pendientes || 0)}</p>
-                      </div>
-                    </div>
-
-                    {inscripcionStatus.id === torneo.id && inscripcionStatus.message && (
-                      <div className={`mt-4 p-3 rounded-md text-sm border font-medium ${
-                        inscripcionStatus.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                        inscripcionStatus.type === 'warning' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                        'bg-red-50 text-red-700 border-red-200'
-                      }`}>
-                        {inscripcionStatus.message}
-                      </div>
-                    )}
-
-                    <button
-                      onClick={() => {
-                        if (torneo.puedeVerCuadro) {
-                          navigate(`/bracket/${torneo.id}`);
-                          return;
-                        }
-                        abrirInscripcion(torneo);
-                      }}
-                      disabled={!torneo.puedeInscribirse && !torneo.puedeVerCuadro}
-                      className={`
-                        mt-4 w-full py-3 px-4 rounded-xl font-bold text-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2
-                        ${!torneo.puedeInscribirse && !torneo.puedeVerCuadro ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed' : ''}
-                        ${torneo.isTerminado ? 'bg-slate-900 text-white hover:bg-slate-800 focus:ring-slate-500' : ''}
-                        ${torneo.isEnProgreso ? 'bg-[#0f4c81] text-white hover:bg-[#0b1a2e] focus:ring-[#0f4c81]' : ''}
-                        ${torneo.miEstadoInscripcion === INSCRIPTION_STATUS_PENDING ? 'bg-[#f3e7bf] text-[#8f6a16] border border-[#e1c774]' : ''}
-                        ${torneo.miEstadoInscripcion === INSCRIPTION_STATUS_APPROVED ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : ''}
-                        ${torneo.miEstadoInscripcion === INSCRIPTION_STATUS_REJECTED ? 'bg-rose-100 text-rose-700 border border-rose-200' : ''}
-                        ${!torneo.isTerminado && torneo.puedeInscribirse && torneo.isFull ? 'bg-[#f3e7bf] text-[#8f6a16] hover:bg-[#ebd99c] focus:ring-[#d4af37] border border-[#e1c774]' : ''}
-                        ${!torneo.puedeVerCuadro && torneo.puedeInscribirse && !torneo.isFull ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-400 hover:to-teal-400 focus:ring-emerald-400 shadow-sm shadow-emerald-900/20' : ''}
-                      `}
-                    >
-                      {torneo.puedeVerCuadro
-                        ? torneo.isEnProgreso
-                          ? 'Ver cuadro y cronograma'
-                          : 'Ver cuadro y resultados'
-                        : torneo.bloqueadoPorVentana
-                        ? (torneo.ventanaInscripcion.buttonLabel || 'Inscripcion no habilitada')
-                        : torneo.miEstadoInscripcion === INSCRIPTION_STATUS_PENDING
-                        ? 'Pendiente de aprobación'
-                        : torneo.miEstadoInscripcion === INSCRIPTION_STATUS_APPROVED
-                        ? 'Inscripción aprobada'
-                        : torneo.miEstadoInscripcion === INSCRIPTION_STATUS_REJECTED
-                        ? 'Solicitud rechazada'
-                        : !torneo.puedeInscribirse
-                        ? (textoBotonPorEstado[torneo.estado] || 'Inscripción no disponible')
-                        : torneo.isFull
-                          ? 'Solicitar inscripción'
-                          : 'Inscribirme'}
-                    </button>
-                  </aside>
-                </div>
-              </article>
+                )}
+              </div>
             );
-          })}
-        </div>
-      )}
-
-      {torneoSeleccionado && (
-        <InscripcionModal
-          torneo={torneoSeleccionado}
-          onClose={() => setTorneoSeleccionado(null)}
-          onSuccess={(data) => {
-            manejarInscripcionExitosa(torneoSeleccionado.id, data);
-            setTorneoSeleccionado(null);
-          }}
-        />
-      )}
-    </div>
-  );
 }

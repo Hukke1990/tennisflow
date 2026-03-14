@@ -1,38 +1,34 @@
 ﻿import { Outlet, Link } from 'react-router-dom';
-import { useClub, useClubPath } from '../context/ClubContext';
-import { IconTennisBall } from '../components/icons/UiIcons';
+import { useClub } from '../context/ClubContext';
 
 export default function AuthLayout({ children = null }) {
-  const toClubPath = useClubPath();
   const { club } = useClub();
+  const clubName = String(club?.nombre || '').trim() || 'Club';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0f1e] via-[#0d1a2d] to-[#071225] flex flex-col items-center justify-center px-4">
-      {/* Logo */}
-      <Link to={toClubPath('/')} className="flex items-center gap-2 mb-10 group">
-        {club?.logo_url ? (
-          <img src={club.logo_url} alt={club.nombre} className="h-12 w-12 rounded-xl object-cover shadow-lg" />
-        ) : (
-          <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-900/50 group-hover:scale-105 transition-transform">
-            <IconTennisBall className="h-6 w-6" />
-          </div>
-        )}
-        <div className="flex flex-col">
-          <span className="text-white font-black text-3xl tracking-tight">
-            Tennis<span className="text-emerald-400">Flow</span>
-          </span>
-          {club?.nombre && (
-            <span className="text-gray-400 text-sm -mt-1">{club.nombre}</span>
-          )}
-        </div>
-      </Link>
-
-      {/* Card centrada */}
-      <div className="w-full max-w-md bg-white/5 rounded-2xl border border-white/10 shadow-2xl shadow-black/50 p-8 backdrop-blur-sm">
-        {children ?? <Outlet />}
+    <div className="min-h-screen bg-gradient-to-br from-[#0a0f1e] via-[#0d1a2d] to-[#071225] flex flex-col items-center justify-center px-4 text-center">
+      {/* Marca club */}
+      <div className="mb-10 w-full max-w-md flex justify-center">
+        <h1 className="min-w-0 flex-1 text-white font-black text-4xl tracking-tight leading-tight sm:text-5xl break-words whitespace-normal text-center">
+          {clubName}
+        </h1>
       </div>
 
-      <p className="mt-8 text-gray-600 text-xs">2026 TennisFlow. Todos los derechos reservados.</p>
+      {/* Card centrada */}
+      <div className="w-full max-w-md bg-white/5 rounded-2xl border border-white/10 shadow-2xl shadow-black/50 p-8 backdrop-blur-sm flex flex-col items-center text-center">
+        {children ?? <Outlet />}
+
+        <div className="mt-7 border-t border-white/10 pt-5 w-full flex justify-center text-center">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.03] px-3 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/10"
+          >
+            Volver al inicio
+          </Link>
+        </div>
+      </div>
+
+      <p className="mt-8 text-gray-600 text-xs text-center w-full">2026 SetGo. Todos los derechos reservados.</p>
     </div>
   );
 }

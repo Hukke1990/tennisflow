@@ -36,6 +36,7 @@ const RANKING_CATEGORIAS = ['1', '2', '3', '4', '5'];
 
 const FILTER_CHIP_BASE = 'px-3 py-1.5 text-xs font-bold rounded-xl border transition-all duration-150';
 const PERFIL_NOMBRE_CACHE = new Map();
+const SETGO_NEON_GREEN = '#A6CE39';
 
 const normalizeText = (value) => String(value || '').toLowerCase().trim();
 const normalizeCanchaName = (value) => normalizeText(value).replace(/\s+/g, ' ');
@@ -750,12 +751,13 @@ function DashboardSkeleton() {
 // ── Stat Global Card ──────────────────────────────────────────────────────────
 function GlobalStatCard({ icon, label, value, gradient }) {
   return (
-    <div className={`rounded-2xl p-5 text-white relative overflow-hidden shadow-lg ${gradient}`}>
-      <div className="absolute inset-0 opacity-20" style={{ background: 'radial-gradient(circle at 80% 20%, white 0%, transparent 60%)' }} />
+    <div className={`rounded-2xl border border-white/10 p-5 text-white relative overflow-hidden shadow-[0_18px_44px_rgba(15,23,42,0.18)] ${gradient}`}>
+      <div className="absolute inset-0 opacity-20" style={{ background: 'radial-gradient(circle at 80% 20%, rgba(255,255,255,0.92) 0%, transparent 58%)' }} />
+      <div className="absolute inset-0 opacity-60" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.08), transparent 42%, rgba(0,0,0,0.12))' }} />
       <div className="relative">
-        <div className="text-3xl mb-2">{icon}</div>
-        <div className="text-3xl font-black">{value}</div>
-        <div className="text-sm font-medium opacity-80 mt-0.5">{label}</div>
+        <div className="text-3xl mb-2 text-white/90">{icon}</div>
+        <div className="text-3xl font-black tracking-tight">{value}</div>
+        <div className="text-sm font-medium text-white/80 mt-0.5">{label}</div>
       </div>
     </div>
   );
@@ -867,7 +869,7 @@ function TorneoHero({ torneo }) {
 function RankingSection({ sexo, titulo, jugadorId, clubId }) {
   const toClubPath = useClubPath();
   const [modalidad, setModalidad] = useState('Singles');
-  const [categoria, setCategoria] = useState('3');
+  const [categoria, setCategoria] = useState('1');
   const [jugadores, setJugadores] = useState([]);
   const [loadingRankings, setLoadingRankings] = useState(false);
   const [rankingsError, setRankingsError] = useState('');
@@ -1302,6 +1304,7 @@ function LiveBroadcastCard({ match, cardLabel, nowMs, defaultSurface, extraCount
 }
 
 function LiveHeroHub({ liveCenter, nextTorneo, nowMs }) {
+  const { club } = useClub();
   const partidos = Array.isArray(liveCenter?.partidos) ? liveCenter.partidos : [];
   const liveMatches = partidos
     .filter(isPartidoEnJuego)
@@ -1316,9 +1319,12 @@ function LiveHeroHub({ liveCenter, nextTorneo, nowMs }) {
     const defaultSurface = liveCenter?.torneo?.superficie || '';
 
     return (
-      <section className="rounded-3xl border border-red-100 bg-gradient-to-br from-[#10253f] via-[#183f63] to-[#0f2f4e] p-4 sm:p-6 shadow-xl overflow-hidden relative">
-        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_15%_20%,rgba(255,255,255,0.25),transparent_45%),radial-gradient(circle_at_90%_15%,rgba(255,90,90,0.22),transparent_35%)]" />
-        <div className="relative grid gap-4 lg:grid-cols-2 items-stretch">
+      <section className="rounded-3xl border border-[#dbe8f4]/70 bg-gradient-to-br from-[#0d2740] via-[#16476d] to-[#123a5c] p-4 sm:p-6 shadow-[0_24px_60px_rgba(15,23,42,0.18)] overflow-hidden relative">
+        <div className="absolute inset-0 opacity-25 bg-[radial-gradient(circle_at_15%_20%,rgba(255,255,255,0.25),transparent_45%),radial-gradient(circle_at_90%_15%,rgba(166,206,57,0.16),transparent_34%)]" />
+        <div className="relative space-y-4">
+          <ClubNameGlassCard clubName={club?.nombre} />
+
+          <div className="grid gap-4 lg:grid-cols-2 items-stretch">
           <LiveBroadcastCard
             match={featured}
             cardLabel="Live Match Slider"
@@ -1326,21 +1332,22 @@ function LiveHeroHub({ liveCenter, nextTorneo, nowMs }) {
             defaultSurface={defaultSurface}
           />
 
-          <div className="h-full">
-            {secondary ? (
-              <LiveBroadcastCard
-                match={secondary}
-                cardLabel="Partido en curso"
-                nowMs={nowMs}
-                defaultSurface={defaultSurface}
-                extraCount={secondaryExtraCount}
-              />
-            ) : (
-              <article className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md p-4 sm:p-5 h-full">
-                <p className="text-xs uppercase font-bold tracking-[0.14em] text-white/65">Partido destacado</p>
-                <p className="text-sm text-white/90 mt-1">No hay otros partidos activos en este momento.</p>
-              </article>
-            )}
+            <div className="h-full">
+              {secondary ? (
+                <LiveBroadcastCard
+                  match={secondary}
+                  cardLabel="Partido en curso"
+                  nowMs={nowMs}
+                  defaultSurface={defaultSurface}
+                  extraCount={secondaryExtraCount}
+                />
+              ) : (
+                <article className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md p-4 sm:p-5 h-full">
+                  <p className="text-xs uppercase font-bold tracking-[0.14em] text-white/65">Partido destacado</p>
+                  <p className="text-sm text-white/90 mt-1">No hay otros partidos activos en este momento.</p>
+                </article>
+              )}
+            </div>
           </div>
         </div>
       </section>
@@ -1350,31 +1357,87 @@ function LiveHeroHub({ liveCenter, nextTorneo, nowMs }) {
   const countdown = formatCountdown(nextTorneo?.fecha_inicio, nowMs);
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-gradient-to-br from-[#0f304f] via-[#16476d] to-[#12395a] p-4 sm:p-6 shadow-xl overflow-hidden relative">
-      <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_20%_20%,rgba(212,175,55,0.35),transparent_40%),radial-gradient(circle_at_78%_80%,rgba(255,255,255,0.24),transparent_35%)]" />
-      <div className="relative rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md p-5">
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-white/75 mb-2">Proximo Gran Desafio</p>
-        <h2 className="text-white text-2xl sm:text-3xl font-black mb-1">{nextTorneo?.titulo || 'Sin torneo programado'}</h2>
-        <p className="text-white/70 text-sm inline-flex items-center gap-1.5 mb-4"><IconCalendar className="h-4 w-4" />{nextTorneo?.fecha_inicio ? format(new Date(nextTorneo.fecha_inicio), "d 'de' MMMM, HH:mm", { locale: es }) : 'A confirmar'}</p>
+    <section className="rounded-3xl border border-[#dbe8f4]/70 bg-gradient-to-br from-[#0d2740] via-[#16476d] to-[#123a5c] p-4 sm:p-6 shadow-[0_24px_60px_rgba(15,23,42,0.18)] overflow-hidden relative">
+      <div className="absolute inset-0 opacity-25 bg-[radial-gradient(circle_at_20%_20%,rgba(166,206,57,0.16),transparent_38%),radial-gradient(circle_at_78%_80%,rgba(255,255,255,0.18),transparent_35%)]" />
+      <div className="relative space-y-4">
+        <ClubNameGlassCard clubName={club?.nombre} />
 
-        {countdown ? (
-          <div className="grid grid-cols-3 gap-3 max-w-md">
-            {[
-              { label: 'Dias', value: countdown.days },
-              { label: 'Horas', value: countdown.hours },
-              { label: 'Min', value: countdown.minutes },
-            ].map((item) => (
-              <div key={item.label} className="rounded-xl border border-white/25 bg-white/15 p-3 text-center">
-                <p className="text-2xl font-black text-white">{item.value}</p>
-                <p className="text-[11px] uppercase font-bold tracking-[0.14em] text-white/70">{item.label}</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-white/80 text-sm">No hay actividad en vivo ni torneos proximos con fecha confirmada.</p>
-        )}
+        <div className="rounded-[28px] border border-white/12 bg-[#0b2340]/55 p-5 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_20px_44px_rgba(6,19,35,0.22)] sm:p-6">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-white/70 mb-2">Proximo Gran Desafio</p>
+          <h2 className="text-white text-2xl sm:text-3xl font-black tracking-tight mb-1">{nextTorneo?.titulo || 'Sin torneo programado'}</h2>
+          <p className="text-white/72 text-sm inline-flex items-center gap-1.5 mb-4"><IconCalendar className="h-4 w-4" />{nextTorneo?.fecha_inicio ? format(new Date(nextTorneo.fecha_inicio), "d 'de' MMMM, HH:mm", { locale: es }) : 'A confirmar'}</p>
+
+          {countdown ? (
+            <div className="grid grid-cols-3 gap-3 max-w-md">
+              {[
+                { label: 'Dias', value: countdown.days },
+                { label: 'Horas', value: countdown.hours },
+                { label: 'Min', value: countdown.minutes },
+              ].map((item) => (
+                <div key={item.label} className="rounded-xl border border-white/14 bg-white/[0.09] p-3 text-center backdrop-blur-sm">
+                  <p className="text-2xl font-black text-white">{item.value}</p>
+                  <p className="text-[11px] uppercase font-bold tracking-[0.14em] text-white/70">{item.label}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-white/80 text-sm">No hay actividad en vivo ni torneos proximos con fecha confirmada.</p>
+          )}
+        </div>
       </div>
     </section>
+  );
+}
+
+function ClubNameGlassCard({ clubName }) {
+  const { rolReal } = useAuth();
+  const [isVisible, setIsVisible] = useState(false);
+  const safeClubName = String(clubName || '').trim();
+  const isAdminViewer = rolReal === 'admin' || rolReal === 'super_admin';
+
+  useEffect(() => {
+    if (!safeClubName) return undefined;
+
+    setIsVisible(false);
+    const frameId = window.requestAnimationFrame(() => {
+      setIsVisible(true);
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [safeClubName]);
+
+  if (!safeClubName) return null;
+
+  return (
+    <div
+      className={`relative max-w-full overflow-hidden rounded-[28px] border bg-[#102740]/42 px-5 py-4 backdrop-blur-xl shadow-[0_18px_48px_rgba(5,12,26,0.24)] transition-all duration-700 ease-out motion-reduce:transform-none motion-reduce:transition-none ${
+        isVisible ? 'translate-y-0 opacity-100' : 'translate-y-5 opacity-0'
+      }`}
+      style={{
+        borderColor: 'rgba(166, 206, 57, 0.45)',
+        boxShadow: '0 0 0 1px rgba(166, 206, 57, 0.12), 0 18px 48px rgba(5, 12, 26, 0.28)',
+      }}
+    >
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.2),rgba(255,255,255,0.04))]" />
+      <div className="pointer-events-none absolute -left-8 top-1/2 h-16 w-16 -translate-y-1/2 rounded-full blur-2xl" style={{ backgroundColor: 'rgba(166, 206, 57, 0.18)' }} />
+      <div className="relative flex items-start gap-3 sm:items-center">
+        <span className="mt-2 inline-flex h-2.5 w-2.5 rounded-full shadow-[0_0_14px_rgba(166,206,57,0.7)] sm:mt-0" style={{ backgroundColor: SETGO_NEON_GREEN }} />
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#d9f1a1]">Club activo</p>
+          {isAdminViewer ? (
+            <>
+              <h1 className="mt-1 text-xl font-semibold tracking-tight text-white/92 sm:text-2xl">Gestionando <span className="font-black text-white">{safeClubName}</span></h1>
+              <p className="mt-1 text-sm text-slate-200/78">Panel operativo en tiempo real con identidad visual del club.</p>
+            </>
+          ) : (
+            <>
+              <h1 className="mt-1 text-xl font-semibold tracking-tight text-white/92 sm:text-2xl">Tu club: <span className="font-black text-white">{safeClubName}</span></h1>
+              <p className="mt-1 text-sm text-slate-200/78">¡Todo listo para tu próximo set! Revisá la actividad en vivo.</p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1957,28 +2020,28 @@ export default function DashboardPage() {
       icon: <IconSpark className="h-7 w-7" />,
       label: 'Partidos En Vivo',
       value: liveMatchesCount,
-      gradient: 'bg-gradient-to-br from-[#0f4c81] to-[#1d6aa8]',
+      gradient: 'bg-gradient-to-br from-[#0a2138] via-[#0f4c81] to-[#2b83cd]',
     },
     {
       key: 'courts',
       icon: <IconCourt className="h-7 w-7" />,
       label: 'Canchas Ocupadas',
       value: `${occupiedCourtsCount}/${liveCanchas.length || 0}`,
-      gradient: 'bg-gradient-to-br from-[#0b1a2e] to-[#23425f]',
+      gradient: 'bg-gradient-to-br from-[#081321] via-[#16314c] to-[#365c7d]',
     },
     {
       key: 'upcoming',
       icon: <IconCalendar className="h-7 w-7" />,
       label: 'Torneos Activos',
       value: proximos_torneos.length,
-      gradient: 'bg-gradient-to-br from-[#8f6a16] to-[#d4af37]',
+      gradient: 'bg-gradient-to-br from-[#5f4610] via-[#8f6a16] to-[#dcb845]',
     },
     {
       key: 'rank',
       icon: <IconChartBars className="h-7 w-7" />,
       label: 'Tu Ranking',
       value: seasonData?.rankingPosition ? `#${seasonData.rankingPosition}` : '--',
-      gradient: 'bg-gradient-to-br from-[#204a2e] to-[#2f8b50]',
+      gradient: 'bg-gradient-to-br from-[#173425] via-[#245f3a] to-[#3ea264]',
     },
   ]), [liveMatchesCount, occupiedCourtsCount, liveCanchas.length, proximos_torneos.length, seasonData?.rankingPosition]);
 
