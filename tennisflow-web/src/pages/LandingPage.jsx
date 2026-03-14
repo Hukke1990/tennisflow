@@ -1,10 +1,13 @@
 ﻿import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { IconTennisBall } from '../components/icons/UiIcons';
+import setGoMarkFallback from '../assets/setgo-mark.svg';
 
 export default function LandingPage() {
+  const logoVersion = '20260313-1';
   const [slug, setSlug] = useState('');
   const [isContactOpen, setIsContactOpen] = useState(false);
+  const [logoSrc, setLogoSrc] = useState(`/SetGo.png?v=${logoVersion}`);
+  const [logoFallbackApplied, setLogoFallbackApplied] = useState(false);
   const [requestData, setRequestData] = useState({
     clubName: '',
     cityCountry: '',
@@ -31,9 +34,9 @@ export default function LandingPage() {
   const handleContactSubmit = (e) => {
     e.preventDefault();
 
-    const subject = `Solicitud de alta de club en TennisFlow - ${requestData.clubName.trim()}`;
+    const subject = `Solicitud de alta de club en SetGo - ${requestData.clubName.trim()}`;
     const body = [
-      'Hola Gaston, quiero solicitar el alta de mi club en TennisFlow.',
+      'Hola Gaston, quiero solicitar el alta de mi club en SetGo.',
       '',
       `Nombre del club: ${requestData.clubName.trim()}`,
       `Ciudad/Pais: ${requestData.cityCountry.trim()}`,
@@ -66,17 +69,25 @@ export default function LandingPage() {
               Gestion moderna para clubes de tenis
             </span>
 
-            <div className="mt-5 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 shadow-lg shadow-emerald-900/50">
-                <IconTennisBall className="h-6 w-6" />
-              </div>
-              <span className="text-3xl font-black tracking-tight">
-                Tennis<span className="text-emerald-400">Flow</span>
+            <div className="mt-5 flex w-full flex-col items-center justify-center">
+              <img
+                src={logoSrc}
+                alt="Logo de SetGo"
+                className="h-36 w-auto object-contain sm:h-44"
+                onError={() => {
+                  if (!logoFallbackApplied) {
+                    setLogoSrc(setGoMarkFallback);
+                    setLogoFallbackApplied(true);
+                  }
+                }}
+              />
+              <span className="-mt-1 text-4xl font-black tracking-tight text-slate-100 sm:text-5xl">
+                Set<span className="text-emerald-400">Go</span>
               </span>
             </div>
 
             <h1 className="mt-8 max-w-xl text-4xl font-black leading-tight text-slate-100 sm:text-5xl">
-              TennisFlow ordena tu club en una sola pantalla.
+              SetGo ordena tu club en una sola pantalla.
             </h1>
             <p className="mt-6 max-w-xl text-base leading-relaxed text-slate-300 sm:text-lg">
               Gestiona torneos, rankings y comunicacion con tus jugadores de forma simple.
@@ -102,7 +113,7 @@ export default function LandingPage() {
           </section>
 
           <aside className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/40 backdrop-blur-sm sm:p-8">
-            <h2 className="text-xl font-extrabold text-slate-100">Por que TennisFlow</h2>
+            <h2 className="text-xl font-extrabold text-slate-100">Por que SetGo</h2>
             <ul className="mt-6 space-y-4 text-sm text-slate-300">
               <li className="flex items-start gap-3">
                 <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500/15 text-emerald-300">•</span>
@@ -210,7 +221,7 @@ export default function LandingPage() {
       )}
 
       <footer className="relative mx-auto w-full max-w-6xl pb-2 text-center text-xs text-slate-500 sm:text-left">
-        2026 TennisFlow. Todos los derechos reservados.
+        2026 SetGo. Todos los derechos reservados.
       </footer>
     </div>
   );
