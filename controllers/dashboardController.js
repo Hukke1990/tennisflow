@@ -278,7 +278,7 @@ const getDashboard = async (req, res) => {
     // ── 1. Próximos torneos abiertos + contador de inscritos ────────────────
     const { data: torneos_raw, error: e1 } = await supabase
       .from('torneos')
-      .select('id, titulo, fecha_inicio, fecha_inicio_inscripcion, fecha_cierre_inscripcion, cupos_max, costo, estado')
+      .select('id, titulo, fecha_inicio, fecha_inicio_inscripcion, fecha_cierre_inscripcion, costo, estado')
       .eq('club_id', clubId)
       .in('estado', ['publicado', 'abierto', 'inscripcion'])
       .order('fecha_inicio', { ascending: true })

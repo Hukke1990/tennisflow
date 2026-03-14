@@ -465,7 +465,6 @@ export default function CarteleraTorneos() {
       { id: 'todos', label: 'Todos', count: torneosView.length },
       { id: 'activos', label: 'Activos', count: torneosView.filter((t) => ESTADOS_ACTIVOS.has(t.estado)).length },
       { id: 'inscribibles', label: 'Inscripcion Abierta', count: torneosView.filter((t) => t.puedeInscribirse).length },
-      { id: 'completos', label: 'Cupos Completos', count: torneosView.filter((t) => t.isFull).length },
       { id: 'finalizados', label: 'Finalizados', count: torneosView.filter((t) => t.isTerminado).length },
     ];
   }, [torneosView]);
@@ -538,7 +537,7 @@ export default function CarteleraTorneos() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white">Torneos</h1>
-            <p className="text-slate-300 mt-1">Cartelera completa con cupos, estado e inscripcion</p>
+            <p className="text-slate-300 mt-1">Cartelera de torneos, estado e inscripcion</p>
           </div>
 
           {isAdmin && (
@@ -679,13 +678,13 @@ export default function CarteleraTorneos() {
 
                     <div>
                       <div className="flex justify-between text-sm mb-1.5">
-                        <span className="font-semibold text-slate-300">Ocupacion</span>
-                        <span className="font-bold text-slate-100">{Math.round(torneo.porcentajeOcupacion)}%</span>
+                        <span className="font-semibold text-slate-300">Inscriptos confirmados</span>
+                        <span className="font-bold text-slate-100">{torneo.inscritos}</span>
                       </div>
                       <div className="w-full bg-white/10 rounded-full h-2.5 overflow-hidden pointer-events-none">
                         <div
-                          className={`h-2.5 rounded-full ${progresoColor(torneo.porcentajeOcupacion)}`}
-                          style={{ width: `${torneo.porcentajeOcupacion}%` }}
+                          className="h-2.5 rounded-full bg-emerald-500"
+                          style={{ width: torneo.inscritos > 0 ? '100%' : '0%' }}
                         />
                       </div>
 
@@ -713,7 +712,7 @@ export default function CarteleraTorneos() {
                       <div className="rounded-xl border border-white/20 bg-[#061529]/80 px-4 py-3 text-slate-100">
                         <p className="text-xs font-semibold text-slate-400">Inscriptos</p>
                         <p className="text-3xl font-black text-slate-100 leading-none mt-1">
-                          {torneo.inscritos}<span className="text-lg text-slate-400">/{torneo.cuposMax || '-'}</span>
+                          {torneo.inscritos}
                         </p>
                       </div>
                       <div className="rounded-xl border border-white/20 bg-[#061529]/80 px-4 py-3 text-slate-100">

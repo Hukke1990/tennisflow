@@ -608,45 +608,93 @@ function resolveTopSeedPlacement(bracketSize) {
     return { seed1: 1, seed2: 32, seed34: [9, 24] };
   }
 
+  if (bracketSize === 64) {
+    return { seed1: 1, seed2: 64, seed34: [17, 48] };
+  }
+
+  if (bracketSize === 128) {
+    return { seed1: 1, seed2: 128, seed34: [33, 96] };
+  }
+
   return null;
 }
 
+/**
+ * Coloca a los jugadores en las posiciones del cuadro asignando BYEs a los MEJOR rankeados.
+ *
+ * Regla: si bracketSize > jugadores.length, los N MEJORES jugadores (donde N = byesNeeded)
+ * avanzan automaticamente por BYE. Los jugadores peor rankeados disputan una ronda previa.
+ *
+ * Ejemplo: 18 inscritos en cuadro de 32 → 14 BYEs → los 14 mejores pasan direct a 8vos,
+ * los 4 peores juegan 2 partidos de ronda previa.
+ */
 function placeTopSeedsByRanking(jugadoresOrdenados, bracketSize, randomFn = Math.random) {
   const players = Array.isArray(jugadoresOrdenados) ? [...jugadoresOrdenados] : [];
   const byesNeeded = Math.max(0, bracketSize - players.length);
-  const byes = Array.from({ length: byesNeeded }, () => ({ isBye: true }));
-  const pool = [...players, ...byes];
   const positions = Array.from({ length: bracketSize }, () => null);
+  const BYE = { isBye: true };
 
-  const placement = resolveTopSeedPlacement(bracketSize);
-  let cursor = 0;
+  // Obtiene la posicion (0-index) del "partner" de bracket para un slot dado
+  const getPartnerIdx = (idx) => (idx % 2 === 0 ? idx + 1 : idx - 1);
 
-  const assignFromPool = (positionOneBased) => {
-    if (!Number.isInteger(positionOneBased) || positionOneBased < 1 || positionOneBased > bracketSize) return;
-    if (cursor >= pool.length) return;
-    positions[positionOneBased - 1] = pool[cursor];
-    cursor += 1;
+  // Asigna un jugador a una posicion 1-based y,
+  // si ese jugador esta entre los top-byesNeeded, marca su partner como BYE.
+  const usedIdx = new Set();
+  let playerCursor = 0;
+
+  const assignAt = (pos1based) => {
+    if (!pos1based || pos1based < 1 || pos1based > bracketSize) return;
+    if (playerCursor >= players.length) return;
+    const idx = pos1based - 1;
+    positions[idx] = players[playerCursor];
+    usedIdx.add(idx);
+    // Si este jugador recibia BYE, marcar su partner como BYE
+    if (playerCursor < byesNeeded) {
+      const partnerIdx = getPartnerIdx(idx);
+      if (partnerIdx >= 0 && partnerIdx < bracketSize && !usedIdx.has(partnerIdx)) {
+        positions[partnerIdx] = BYE;
+        usedIdx.add(partnerIdx);
+      }
+    }
+    playerCursor += 1;
   };
 
+  // Colocar seeds 1-4 en sus posiciones estandar de cuadro
+  const placement = resolveTopSeedPlacement(bracketSize);
   if (placement) {
-    assignFromPool(placement.seed1);
-    assignFromPool(placement.seed2);
+    assignAt(placement.seed1);
+    assignAt(placement.seed2);
 
-    // Seed 3 y 4 se sortean entre dos posiciones definidas para evitar cruces prematuros.
+    // Seeds 3 y 4 se sortean entre las dos posiciones posibles (evita cruces prematuros)
     const shouldSwap = Number(randomFn()) >= 0.5;
-    const [firstPos, secondPos] = shouldSwap
+    const [pos3, pos4] = shouldSwap
       ? [placement.seed34[1], placement.seed34[0]]
       : [placement.seed34[0], placement.seed34[1]];
-
-    assignFromPool(firstPos);
-    assignFromPool(secondPos);
+    assignAt(pos3);
+    assignAt(pos4);
   }
 
-  for (let i = 0; i < positions.length && cursor < pool.length; i += 1) {
-    if (!positions[i]) {
-      positions[i] = pool[cursor];
-      cursor += 1;
+  // Rellenar posiciones restantes: jugadores con BYE primero, luego los que juegan prelim
+  for (let i = 0; i < bracketSize && playerCursor < players.length; i += 1) {
+    if (usedIdx.has(i)) continue;
+
+    positions[i] = players[playerCursor];
+    usedIdx.add(i);
+
+    if (playerCursor < byesNeeded) {
+      // Este jugador recibe BYE: marcar su partner
+      const partnerIdx = getPartnerIdx(i);
+      if (partnerIdx >= 0 && partnerIdx < bracketSize && !usedIdx.has(partnerIdx)) {
+        positions[partnerIdx] = BYE;
+        usedIdx.add(partnerIdx);
+      }
     }
+    playerCursor += 1;
+  }
+
+  // Rellenar posiciones restantes con BYE (caso: mas BYEs que jugadores)
+  for (let i = 0; i < bracketSize; i += 1) {
+    if (!positions[i]) positions[i] = BYE;
   }
 
   return positions;
@@ -866,19 +914,12 @@ const generarSorteo = async (req, res) => {
         return String(a.jugador_id || '').localeCompare(String(b.jugador_id || ''));
       });
 
-    // 3. Definir tamano de cuadro segun capacidad del torneo (sin perder inscritos actuales).
-    // En Dobles, cupos_max se expresa en jugadores, por lo que se convierte a cupos de pareja.
+    // 3. Definir tamano de cuadro como la minima potencia de 2 >= inscritos (minimo 8).
+    // Las inscripciones son ilimitadas: el tamano se calcula solo a partir de los inscriptos reales.
     const inscritosCount = jugadoresOrdenados.length;
-    const cuposMax = Number.parseInt(String(torneo?.cupos_max ?? ''), 10);
-    const cuposMaxEntrants = Number.isInteger(cuposMax) && cuposMax > 0
-      ? (torneoEsDobles ? Math.ceil(cuposMax / 2) : cuposMax)
-      : null;
-    const targetSlots = Number.isInteger(cuposMaxEntrants) && cuposMaxEntrants > 0
-      ? Math.max(cuposMaxEntrants, inscritosCount)
-      : inscritosCount;
 
-    let bracketSize = 2;
-    while (bracketSize < targetSlots) bracketSize *= 2;
+    let bracketSize = 8; // tamano minimo de cuadro
+    while (bracketSize < inscritosCount) bracketSize *= 2;
 
      const completados = placeTopSeedsByRanking(jugadoresOrdenados, bracketSize, Math.random);
 
@@ -1050,7 +1091,10 @@ const generarSorteo = async (req, res) => {
         extraCheck: (slot) => {
           const disp1 = disponibilidadPorJugador.get(match.jugador1_id) || [];
           const disp2 = disponibilidadPorJugador.get(match.jugador2_id) || [];
-          return isPlayerAvailableAt(disp1, slot) && isPlayerAvailableAt(disp2, slot);
+          // Sin disponibilidad registrada = disponible siempre
+          const ok1 = disp1.length === 0 || isPlayerAvailableAt(disp1, slot);
+          const ok2 = disp2.length === 0 || isPlayerAvailableAt(disp2, slot);
+          return ok1 && ok2;
         },
       });
 
@@ -1887,7 +1931,10 @@ const recalcularCronograma = async (req, res) => {
         extraCheck: (slot) => {
           const disp1 = disponibilidadPorJugador.get(match.jugador1_id) || [];
           const disp2 = disponibilidadPorJugador.get(match.jugador2_id) || [];
-          return isPlayerAvailableAt(disp1, slot) && isPlayerAvailableAt(disp2, slot);
+          // Sin disponibilidad registrada = disponible siempre
+          const ok1 = disp1.length === 0 || isPlayerAvailableAt(disp1, slot);
+          const ok2 = disp2.length === 0 || isPlayerAvailableAt(disp2, slot);
+          return ok1 && ok2;
         },
       });
 

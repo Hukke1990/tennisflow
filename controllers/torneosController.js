@@ -456,11 +456,16 @@ const isMissingRelationError = (error) => {
   const code = String(error?.code || '').trim().toUpperCase();
   const message = String(error?.message || '');
 
-  if (code === '42P01' || code === 'PGRST205') {
+  // PGRST200 = Could not find a relationship between tables (FK not in schema cache or doesn't exist)
+  if (code === '42P01' || code === 'PGRST200' || code === 'PGRST205') {
     return true;
   }
 
   if (/relation .* does not exist/i.test(message)) {
+    return true;
+  }
+
+  if (/could not find a relationship/i.test(message)) {
     return true;
   }
 
@@ -716,7 +721,6 @@ const buildTournamentPayload = (body) => {
 
   const payload = {
     titulo: typeof body.titulo === 'string' ? body.titulo.trim() : body.titulo,
-    cupos_max: Number(body.cupos_max),
     costo: body.costo === undefined || body.costo === null || body.costo === '' ? 0 : Number(body.costo),
     fecha_inicio: body.fecha_inicio,
     fecha_fin: body.fecha_fin,
@@ -764,7 +768,6 @@ const formatTournamentListItem = (torneo, inscriptionSummary = null) => {
     titulo: torneo.titulo,
     estado: torneo.estado,
     costo: torneo.costo,
-    cupos_max: torneo.cupos_max,
     inscritos: inscritosCount,
     inscritos_count: inscritosCount,
     solicitudes_pendientes: pendientesCount,
@@ -794,7 +797,6 @@ const crearTorneo = async (req, res) => {
 
     const {
       titulo,
-      cupos_max,
       costo,
       fecha_inicio,
       fecha_fin,
@@ -804,20 +806,18 @@ const crearTorneo = async (req, res) => {
 
     if (
       !titulo ||
-      cupos_max === undefined ||
       !fecha_inicio ||
       !fecha_fin ||
       !fecha_inicio_inscripcion ||
       !fecha_cierre_inscripcion
     ) {
       return res.status(400).json({
-        error: 'Faltan campos obligatorios: titulo, cupos_max, fecha_inicio, fecha_fin, fecha_inicio_inscripcion, fecha_cierre_inscripcion.',
+        error: 'Faltan campos obligatorios: titulo, fecha_inicio, fecha_fin, fecha_inicio_inscripcion, fecha_cierre_inscripcion.',
       });
     }
 
     const payload = buildTournamentPayload({
       titulo,
-      cupos_max,
       costo,
       modalidad: req.body.modalidad,
       tipo_modalidad: req.body.tipo_modalidad,
@@ -838,10 +838,6 @@ const crearTorneo = async (req, res) => {
 
     if (!payload.titulo || typeof payload.titulo !== 'string') {
       return res.status(400).json({ error: 'El titulo es obligatorio.' });
-    }
-
-    if (!Number.isInteger(payload.cupos_max) || payload.cupos_max <= 0) {
-      return res.status(400).json({ error: 'cupos_max debe ser un entero mayor a 0.' });
     }
 
     if (!Number.isFinite(payload.costo) || payload.costo < 0) {
@@ -981,7 +977,7 @@ const actualizarTorneo = async (req, res) => {
 
     const { data: torneoExistente, error: fetchError } = await supabase
       .from('torneos')
-      .select('id, titulo, cupos_max, costo, estado, fecha_inicio, fecha_fin, fecha_inicio_inscripcion, fecha_cierre_inscripcion, modalidad, rama, categoria_id, puntos_ronda_32, puntos_ronda_16, puntos_ronda_8, puntos_ronda_4, puntos_ronda_2, puntos_campeon')
+      .select('id, titulo, costo, estado, fecha_inicio, fecha_fin, fecha_inicio_inscripcion, fecha_cierre_inscripcion, modalidad, rama, categoria_id, puntos_ronda_32, puntos_ronda_16, puntos_ronda_8, puntos_ronda_4, puntos_ronda_2, puntos_campeon')
       .eq('id', id)
       .single();
 
@@ -991,7 +987,6 @@ const actualizarTorneo = async (req, res) => {
 
     const mergedData = {
       titulo: req.body.titulo !== undefined ? req.body.titulo : torneoExistente.titulo,
-      cupos_max: req.body.cupos_max !== undefined ? req.body.cupos_max : torneoExistente.cupos_max,
       costo: req.body.costo !== undefined ? req.body.costo : torneoExistente.costo,
       fecha_inicio: req.body.fecha_inicio !== undefined ? req.body.fecha_inicio : torneoExistente.fecha_inicio,
       fecha_fin: req.body.fecha_fin !== undefined ? req.body.fecha_fin : torneoExistente.fecha_fin,
@@ -1022,10 +1017,6 @@ const actualizarTorneo = async (req, res) => {
 
     if (!payload.titulo || typeof payload.titulo !== 'string') {
       return res.status(400).json({ error: 'El titulo es obligatorio.' });
-    }
-
-    if (!Number.isInteger(payload.cupos_max) || payload.cupos_max <= 0) {
-      return res.status(400).json({ error: 'cupos_max debe ser un entero mayor a 0.' });
     }
 
     if (!Number.isFinite(payload.costo) || payload.costo < 0) {
@@ -1076,7 +1067,6 @@ const actualizarTorneo = async (req, res) => {
 
     const updatePayload = {
       titulo: payload.titulo,
-      cupos_max: payload.cupos_max,
       costo: payload.costo,
       fecha_inicio: payload.fecha_inicio,
       fecha_fin: payload.fecha_fin,
@@ -1136,7 +1126,6 @@ const actualizarTorneoCompat = async (req, res) => {
 
   const torneoBusinessKeys = new Set([
     'titulo',
-    'cupos_max',
     'costo',
     'fecha_inicio',
     'fecha_fin',
@@ -1217,7 +1206,6 @@ const obtenerTorneosDisponibles = async (req, res) => {
         titulo,
         estado,
         costo,
-        cupos_max,
         fecha_inicio,
         fecha_fin,
         modalidad,
@@ -1230,8 +1218,7 @@ const obtenerTorneosDisponibles = async (req, res) => {
         puntos_ronda_2,
         puntos_campeon,
         fecha_inicio_inscripcion,
-        fecha_cierre_inscripcion,
-        inscripciones ( count ) 
+        fecha_cierre_inscripcion
       `)
       .eq('club_id', clubId)
       .order('fecha_inicio', { ascending: true });
@@ -1283,7 +1270,7 @@ const obtenerTorneosDisponibles = async (req, res) => {
 
         return {
           ...formatTournamentListItem(t, summary),
-          disponible: inscritos < t.cupos_max,
+          disponible: true, // inscripciones ilimitadas hasta fecha de cierre
           inscripciones: undefined,
         };
       });
@@ -1309,7 +1296,6 @@ const obtenerTodosLosTorneos = async (req, res) => {
         titulo,
         estado,
         costo,
-        cupos_max,
         fecha_inicio,
         fecha_fin,
         modalidad,
@@ -1322,8 +1308,7 @@ const obtenerTodosLosTorneos = async (req, res) => {
         puntos_ronda_2,
         puntos_campeon,
         fecha_inicio_inscripcion,
-        fecha_cierre_inscripcion,
-        inscripciones ( count )
+        fecha_cierre_inscripcion
       `)
       .eq('club_id', clubId)
       .order('fecha_inicio', { ascending: false });
@@ -1345,7 +1330,7 @@ const obtenerTodosLosTorneos = async (req, res) => {
       const item = formatTournamentListItem(t, summary);
       return {
         ...item,
-        disponible: item.inscritos < t.cupos_max,
+        disponible: true, // inscripciones ilimitadas hasta fecha de cierre
       };
     });
 
@@ -1502,7 +1487,7 @@ const inscribirJugador = async (req, res) => {
 
     const { data: torneoInfo, error: torneoError } = await supabase
       .from('torneos')
-      .select('cupos_max, estado, fecha_inicio, fecha_fin, fecha_inicio_inscripcion, fecha_cierre_inscripcion, modalidad, rama, categoria_id')
+      .select('estado, fecha_inicio, fecha_fin, fecha_inicio_inscripcion, fecha_cierre_inscripcion, modalidad, rama, categoria_id')
       .eq('id', torneo_id)
       .eq('club_id', clubId)
       .single();
@@ -1883,9 +1868,11 @@ const obtenerInscripcionesPendientesAdmin = async (req, res) => {
     }
 
     const selectOptions = [
-      'id, torneo_id, jugador_id, pareja_id, pareja_jugador_id, estado, estado_inscripcion, fecha_inscripcion, fecha_validacion, motivo_rechazo, torneos(id, titulo, modalidad, rama, categoria_id, cupos_max), jugador_perfil:perfiles!inscripciones_jugador_id_fkey(id, nombre_completo, telefono), pareja_perfil:perfiles!inscripciones_pareja_jugador_fk(id, nombre_completo, telefono)',
-      'id, torneo_id, jugador_id, pareja_id, pareja_jugador_id, estado, estado_inscripcion, fecha_inscripcion, torneos(id, titulo, modalidad, rama, categoria_id, cupos_max), jugador_perfil:perfiles!inscripciones_jugador_id_fkey(id, nombre_completo, telefono), pareja_perfil:perfiles!inscripciones_pareja_jugador_fk(id, nombre_completo, telefono)',
-      'id, torneo_id, jugador_id, estado, fecha_inscripcion, torneos(id, titulo, modalidad, rama, categoria_id, cupos_max), jugador_perfil:perfiles!inscripciones_jugador_id_fkey(id, nombre_completo, telefono)',
+      'id, torneo_id, jugador_id, pareja_id, pareja_jugador_id, estado, estado_inscripcion, fecha_inscripcion, fecha_validacion, motivo_rechazo, torneos(id, titulo, modalidad, rama, categoria_id), jugador_perfil:perfiles!inscripciones_jugador_id_fkey(id, nombre_completo, telefono), pareja_perfil:perfiles!inscripciones_pareja_jugador_fk(id, nombre_completo, telefono)',
+      'id, torneo_id, jugador_id, pareja_id, pareja_jugador_id, estado, estado_inscripcion, fecha_inscripcion, torneos(id, titulo, modalidad, rama, categoria_id), jugador_perfil:perfiles!inscripciones_jugador_id_fkey(id, nombre_completo, telefono), pareja_perfil:perfiles!inscripciones_pareja_jugador_fk(id, nombre_completo, telefono)',
+      'id, torneo_id, jugador_id, estado, fecha_inscripcion, torneos(id, titulo, modalidad, rama, categoria_id), jugador_perfil:perfiles!inscripciones_jugador_id_fkey(id, nombre_completo, telefono)',
+      // Fallback sin FK con nombre: funciona aunque el cache de schema no tenga los constraints
+      'id, torneo_id, jugador_id, pareja_jugador_id, estado, estado_inscripcion, fecha_inscripcion, fecha_validacion, motivo_rechazo, torneos(id, titulo, modalidad, rama, categoria_id)',
     ];
 
     let pendingRows = [];
@@ -1899,13 +1886,14 @@ const obtenerInscripcionesPendientesAdmin = async (req, res) => {
         .order('fecha_inscripcion', { ascending: true });
 
       const usesNewStatusColumn = columns.includes('estado_inscripcion');
+      let filteredQuery;
       if (usesNewStatusColumn) {
-        query.eq('estado_inscripcion', INSCRIPTION_STATUS_PENDING);
+        filteredQuery = query.eq('estado_inscripcion', INSCRIPTION_STATUS_PENDING);
       } else {
-        query.in('estado', ['pendiente', 'pendiente_revision', 'lista_espera']);
+        filteredQuery = query.in('estado', ['pendiente', 'pendiente_revision', 'lista_espera']);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await filteredQuery;
       if (!error) {
         pendingRows = data || [];
         fetchError = null;
@@ -1913,7 +1901,7 @@ const obtenerInscripcionesPendientesAdmin = async (req, res) => {
       }
 
       fetchError = error;
-      if (!isMissingColumnError(error)) {
+      if (!isMissingColumnError(error) && !isMissingRelationError(error)) {
         break;
       }
     }
@@ -1974,9 +1962,9 @@ const validarInscripcionAdmin = async (req, res) => {
     }
 
     const selectOptions = [
-      'id, torneo_id, jugador_id, pareja_id, pareja_jugador_id, estado, estado_inscripcion, torneos(cupos_max, titulo)',
-      'id, torneo_id, jugador_id, estado, estado_inscripcion, torneos(cupos_max, titulo)',
-      'id, torneo_id, jugador_id, estado, torneos(cupos_max, titulo)',
+      'id, torneo_id, jugador_id, pareja_id, pareja_jugador_id, estado, estado_inscripcion, torneos(titulo)',
+      'id, torneo_id, jugador_id, estado, estado_inscripcion, torneos(titulo)',
+      'id, torneo_id, jugador_id, estado, torneos(titulo)',
     ];
 
     let fetchError = null;
@@ -2028,22 +2016,7 @@ const validarInscripcionAdmin = async (req, res) => {
       });
     }
 
-    const torneoMeta = Array.isArray(inscripcion?.torneos) ? inscripcion.torneos[0] : inscripcion?.torneos;
-    const cuposMax = Number.parseInt(String(torneoMeta?.cupos_max ?? ''), 10);
-
-    if (estadoObjetivo === INSCRIPTION_STATUS_APPROVED && Number.isInteger(cuposMax) && cuposMax > 0) {
-      const { summaryByTournament, error: summaryError } = await fetchTournamentInscriptionSummaryCompat([inscripcion.torneo_id], clubId);
-      if (summaryError) {
-        console.error('Error al contar inscripciones aprobadas para validación:', summaryError);
-        return res.status(500).json({ error: 'No se pudo validar el cupo del torneo.' });
-      }
-
-      const summary = summaryByTournament.get(String(inscripcion.torneo_id || '').trim()) || { aprobadas: 0 };
-      const cuposRequeridos = inscripcion?.pareja_id ? 2 : 1;
-      if (Number(summary.aprobadas || 0) + cuposRequeridos > cuposMax) {
-        return res.status(409).json({ error: 'No hay cupos disponibles para aprobar más inscripciones.' });
-      }
-    }
+    // Inscripciones ilimitadas: se suprime el chequeo de cupos_max.
 
     const basePayload = {
       estado: mapLegacyStateFromInscriptionStatus(estadoObjetivo),
