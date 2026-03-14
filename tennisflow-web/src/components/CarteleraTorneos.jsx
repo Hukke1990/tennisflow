@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
+import { supabase } from '../lib/supabase';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
@@ -193,12 +194,12 @@ const resolveSurfaceInfo = (torneo) => {
 
 function DetailChip({ icon: Icon, label, value }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2.5">
-      <p className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-500">
-        <Icon className="h-3.5 w-3.5 text-[#0f4c81]" />
+    <div className="rounded-xl border border-white/20 bg-[#061529]/80 px-3 py-2.5">
+      <p className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-300">
+        <Icon className="h-3.5 w-3.5 text-emerald-400" />
         {label}
       </p>
-      <p className="mt-1 text-sm font-bold text-slate-800">{value}</p>
+      <p className="mt-1 text-sm font-bold text-slate-100">{value}</p>
     </div>
   );
 }
@@ -295,10 +296,22 @@ export default function CarteleraTorneos() {
 
     try {
       setLoading(true);
+      const torneosQuery = supabase
+        .from('torneos')
+        .select('*');
+
+      if (clubId) {
+        torneosQuery.eq('club_id', clubId);
+      }
+
+      const torneosPromise = torneosQuery.order('fecha_inicio', { ascending: false });
+      const disponiblesPromise = axios.get(`${API_URL}/api/torneos/disponibles`, { params: { club_id: clubId } });
+      const dashboardPromise = axios.get(`${API_URL}/api/dashboard`, { params: { club_id: clubId } });
+
       const [torneosRes, disponiblesRes, dashboardRes] = await Promise.allSettled([
-        axios.get(`${API_URL}/api/torneos`, { params: { club_id: clubId } }),
-        axios.get(`${API_URL}/api/torneos/disponibles`, { params: { club_id: clubId } }),
-        axios.get(`${API_URL}/api/dashboard`, { params: { club_id: clubId } }),
+        torneosPromise,
+        disponiblesPromise,
+        dashboardPromise,
       ]);
 
       const torneosEndpoint = torneosRes.status === 'fulfilled' && Array.isArray(torneosRes.value?.data)
@@ -401,9 +414,10 @@ export default function CarteleraTorneos() {
   const torneosView = useMemo(() => {
     return torneos.map((torneo) => {
       const inscritos = torneo.inscritos ?? torneo.inscritos_count ?? 0;
-      const cuposMax = torneo.cupos_max || 0;
-      const porcentajeOcupacion = cuposMax > 0 ? Math.min((inscritos / cuposMax) * 100, 100) : 0;
-      const isFull = cuposMax > 0 ? inscritos >= cuposMax : false;
+      // Ignorar cupos_maximos: permitir todas las inscripciones y generar cuadro por potencias de 2
+      const cuposMax = 0;
+      const porcentajeOcupacion = 0;
+      const isFull = false;
       const estado = normalizarEstado(torneo.estado);
       const isTerminado = esFinalizado(estado);
       const isEnProgreso = estado === 'en_progreso';
@@ -519,12 +533,12 @@ export default function CarteleraTorneos() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6 rounded-3xl bg-gradient-to-b from-[#f7fbff] via-[#f8fafc] to-[#f6f1df]">
+    <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6 rounded-3xl border border-[#dbe8f4]/70 bg-gradient-to-br from-[#0d2740] via-[#16476d] to-[#123a5c] shadow-[0_24px_60px_rgba(15,23,42,0.18)] text-slate-100">
       <div className="px-1 sm:px-2">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-[#0f4c81]">Torneos</h1>
-            <p className="text-slate-600 mt-1">Cartelera completa con cupos, estado e inscripcion</p>
+            <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white">Torneos</h1>
+            <p className="text-slate-300 mt-1">Cartelera completa con cupos, estado e inscripcion</p>
           </div>
 
           {isAdmin && (
@@ -539,7 +553,7 @@ export default function CarteleraTorneos() {
         </div>
       </div>
 
-      <div className="bg-gradient-to-br from-white via-slate-50 to-[#f8f3e3] border border-[#d5c086] rounded-2xl p-4 sm:p-5 mb-6 space-y-4 shadow-sm">
+      <div className="bg-[#0b2340]/55 border border-white/12 rounded-2xl p-4 sm:p-5 mb-6 space-y-4 shadow-sm backdrop-blur-xl">
         <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
           <div className="flex-1">
             <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Filtros</label>
@@ -555,13 +569,13 @@ export default function CarteleraTorneos() {
                     }
                   }}
                   placeholder="Buscar por nombre, categoria o superficie"
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white/90 focus:border-[#0f4c81] focus:ring-2 focus:ring-[#0f4c81]/20 outline-none"
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-white/10 bg-[#061529]/80 text-slate-100 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 outline-none"
                 />
               </div>
               <button
                 type="button"
                 onClick={() => setSearchTerm(searchDraft.trim())}
-                className="h-10 w-10 rounded-xl border border-slate-300 bg-white text-slate-600 hover:text-[#0f4c81] hover:border-[#0f4c81]/40 transition-colors inline-flex items-center justify-center"
+                className="h-10 w-10 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:text-white hover:border-white/20 transition-colors inline-flex items-center justify-center"
                 aria-label="Buscar"
               >
                 <IconSearch className="h-4 w-4" />
@@ -574,7 +588,7 @@ export default function CarteleraTorneos() {
             <select
               value={orden}
               onChange={(event) => setOrden(event.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-white/90 focus:border-[#0f4c81] focus:ring-2 focus:ring-[#0f4c81]/20 outline-none"
+              className="w-full px-3 py-2.5 rounded-xl border border-white/10 bg-[#061529]/80 text-slate-100 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 outline-none"
             >
               <option value="fecha_desc">Mas recientes primero</option>
               <option value="fecha_asc">Mas proximos primero</option>
@@ -591,7 +605,7 @@ export default function CarteleraTorneos() {
               className={`px-3 py-2 rounded-xl border text-xs font-bold transition-colors ${
                 estadoFiltro === filtro.id
                   ? 'bg-gradient-to-r from-[#0f4c81] to-[#d4af37] text-white border-[#0f4c81] shadow-sm shadow-[#0b1a2e]/20'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-[#f7fbff]'
+                  : 'bg-transparent text-slate-300 border-white/12 hover:bg-[#061529]/60'
               }`}
             >
               {filtro.label} ({filtro.count})
@@ -600,16 +614,16 @@ export default function CarteleraTorneos() {
         </div>
       </div>
 
-      ) : torneosFiltrados.length === 0 ? (
-        <div className="text-center py-16 bg-gradient-to-br from-[#f8fbff] to-[#f2ead0] rounded-2xl border border-dashed border-[#d5c086]">
-          <p className="text-slate-500 font-semibold">No hay torneos que coincidan con los filtros actuales.</p>
+      {torneosFiltrados.length === 0 ? (
+        <div className="text-center py-16 bg-[#0b2340]/55 rounded-2xl border border-dashed border-white/20">
+          <p className="text-slate-300 font-semibold">No hay torneos que coincidan con los filtros actuales.</p>
           <button
             onClick={() => {
               setSearchTerm('');
               setSearchDraft('');
               setEstadoFiltro('todos');
             }}
-            className="mt-3 px-4 py-2 rounded-lg border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-white"
+            className="mt-3 px-4 py-2 rounded-lg border border-white/10 text-sm font-semibold text-slate-200 hover:bg-white/5"
           >
             Limpiar filtros
           </button>
@@ -618,7 +632,7 @@ export default function CarteleraTorneos() {
         <div className="space-y-8">
           {torneosFiltrados.map((torneo) => {
             return (
-              <article key={torneo.id} className="group rounded-2xl shadow-md border border-slate-200 bg-gradient-to-b from-slate-50 to-white overflow-hidden mb-8 last:mb-0">
+              <article key={torneo.id} className="group rounded-2xl shadow-lg border border-white/12 bg-[#0b2340]/55 backdrop-blur-xl overflow-hidden mb-8 last:mb-0">
                 <header className="relative h-44 sm:h-48 overflow-hidden">
                   <div
                     className="absolute inset-0"
@@ -665,27 +679,27 @@ export default function CarteleraTorneos() {
 
                     <div>
                       <div className="flex justify-between text-sm mb-1.5">
-                        <span className="font-semibold text-slate-600">Ocupacion</span>
-                        <span className="font-bold text-slate-900">{Math.round(torneo.porcentajeOcupacion)}%</span>
+                        <span className="font-semibold text-slate-300">Ocupacion</span>
+                        <span className="font-bold text-slate-100">{Math.round(torneo.porcentajeOcupacion)}%</span>
                       </div>
-                      <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden pointer-events-none">
+                      <div className="w-full bg-white/10 rounded-full h-2.5 overflow-hidden pointer-events-none">
                         <div
                           className={`h-2.5 rounded-full ${progresoColor(torneo.porcentajeOcupacion)}`}
                           style={{ width: `${torneo.porcentajeOcupacion}%` }}
                         />
                       </div>
 
-                      {torneo.isFull && torneo.puedeInscribirse && <p className="text-xs text-rose-600 font-semibold mt-2">Cupos aprobados completos. Tu solicitud quedará pendiente hasta validación.</p>}
-                      {torneo.isTerminado && <p className="text-xs text-slate-600 font-semibold mt-2">Torneo disputado. Ver cuadro de resultados.</p>}
-                      {torneo.isEnProgreso && <p className="text-xs text-indigo-700 font-semibold mt-2">Torneo en juego. Ver cuadro y cronograma en vivo.</p>}
+                      {torneo.isFull && torneo.puedeInscribirse && <p className="text-xs text-rose-400 font-semibold mt-2">Cupos aprobados completos. Tu solicitud quedará pendiente hasta validación.</p>}
+                      {torneo.isTerminado && <p className="text-xs text-slate-300 font-semibold mt-2">Torneo disputado. Ver cuadro de resultados.</p>}
+                      {torneo.isEnProgreso && <p className="text-xs text-indigo-300 font-semibold mt-2">Torneo en juego. Ver cuadro y cronograma en vivo.</p>}
                       {torneo.miEstadoInscripcion === INSCRIPTION_STATUS_PENDING && (
                         <p className="text-xs text-[#8f6a16] font-semibold mt-2">Tu inscripción está siendo revisada por el administrador.</p>
                       )}
                       {torneo.miEstadoInscripcion === INSCRIPTION_STATUS_APPROVED && (
-                        <p className="text-xs text-emerald-700 font-semibold mt-2">Tu inscripción fue aprobada para este torneo.</p>
+                        <p className="text-xs text-emerald-400 font-semibold mt-2">Tu inscripción fue aprobada para este torneo.</p>
                       )}
                       {torneo.miEstadoInscripcion === INSCRIPTION_STATUS_REJECTED && (
-                        <p className="text-xs text-rose-700 font-semibold mt-2">Tu solicitud fue rechazada. Contacta a la administración para más detalles.</p>
+                        <p className="text-xs text-rose-400 font-semibold mt-2">Tu solicitud fue rechazada. Contacta a la administración para más detalles.</p>
                       )}
                       {!torneo.isTerminado && torneo.bloqueadoPorVentana && torneo.ventanaInscripcion.message && (
                         <p className="text-xs text-[#8f6a16] font-semibold mt-2">{torneo.ventanaInscripcion.message}</p>
@@ -693,21 +707,21 @@ export default function CarteleraTorneos() {
                     </div>
                   </div>
 
-                  <aside className="rounded-2xl border border-[#d5c086] bg-gradient-to-b from-white to-[#f8f3e3] p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+                  <aside className="rounded-2xl border border-white/12 bg-[#0b2340]/55 backdrop-blur-xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
                     <div className="space-y-3">
                       <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500">Inscripcion</p>
-                      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                        <p className="text-xs font-semibold text-slate-500">Inscriptos</p>
-                        <p className="text-3xl font-black text-[#0f4c81] leading-none mt-1">
+                      <div className="rounded-xl border border-white/20 bg-[#061529]/80 px-4 py-3 text-slate-100">
+                        <p className="text-xs font-semibold text-slate-400">Inscriptos</p>
+                        <p className="text-3xl font-black text-slate-100 leading-none mt-1">
                           {torneo.inscritos}<span className="text-lg text-slate-400">/{torneo.cuposMax || '-'}</span>
                         </p>
                       </div>
-                      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                        <p className="text-xs font-semibold text-slate-500">Costo</p>
-                        <p className="text-lg font-black text-slate-900 mt-1">${Number(torneo.costo || 0).toLocaleString()}</p>
+                      <div className="rounded-xl border border-white/20 bg-[#061529]/80 px-4 py-3 text-slate-100">
+                        <p className="text-xs font-semibold text-slate-400">Costo</p>
+                        <p className="text-lg font-black text-slate-100 mt-1">${Number(torneo.costo || 0).toLocaleString()}</p>
                       </div>
-                      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                        <p className="text-xs font-semibold text-slate-500">Pendientes</p>
+                      <div className="rounded-xl border border-white/20 bg-[#061529]/80 px-4 py-3 text-slate-100">
+                        <p className="text-xs font-semibold text-slate-400">Pendientes</p>
                         <p className="text-lg font-black text-[#8f6a16] mt-1">{Number(torneo.solicitudes_pendientes || 0)}</p>
                       </div>
                     </div>
@@ -740,7 +754,7 @@ export default function CarteleraTorneos() {
                         ${torneo.miEstadoInscripcion === INSCRIPTION_STATUS_APPROVED ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : ''}
                         ${torneo.miEstadoInscripcion === INSCRIPTION_STATUS_REJECTED ? 'bg-rose-100 text-rose-700 border border-rose-200' : ''}
                         ${!torneo.isTerminado && torneo.puedeInscribirse && torneo.isFull ? 'bg-[#f3e7bf] text-[#8f6a16] hover:bg-[#ebd99c] focus:ring-[#d4af37] border border-[#e1c774]' : ''}
-                        ${!torneo.puedeVerCuadro && torneo.puedeInscribirse && !torneo.isFull ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-400 hover:to-teal-400 focus:ring-emerald-400 shadow-sm shadow-emerald-900/20' : ''}
+                        ${!torneo.puedeVerCuadro && torneo.puedeInscribirse && !torneo.isFull ? 'bg-emerald-500 text-white hover:bg-emerald-600 focus:ring-emerald-400 shadow-sm' : ''}
                       `}
                     >
                       {torneo.puedeVerCuadro
