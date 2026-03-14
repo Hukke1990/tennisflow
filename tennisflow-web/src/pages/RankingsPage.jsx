@@ -261,7 +261,7 @@ export default function RankingsPage() {
   const { clubId } = useClub();
   const [modalidad, setModalidad] = useState('Singles');
   const [sexo, setSexo] = useState('Masculino');
-  const [categoria, setCategoria] = useState('3');
+  const [categoria, setCategoria] = useState('1');
   const [searchDraft, setSearchDraft] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [openFilter, setOpenFilter] = useState('');

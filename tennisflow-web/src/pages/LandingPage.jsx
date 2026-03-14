@@ -81,7 +81,7 @@ export default function LandingPage() {
                   }
                 }}
               />
-              <span className="-mt-1 text-4xl font-black tracking-tight text-slate-100 sm:text-5xl">
+              <span className="font-rajdhani -mt-1 text-5xl font-bold tracking-[0.03em] text-slate-100 sm:text-6xl">
                 Set<span className="text-[#A6CE39]">Go</span>
               </span>
             </div>
