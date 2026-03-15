@@ -263,7 +263,7 @@ export default function CarteleraTorneos() {
   const navigate = useNavigate();
   const { clubId } = useClub();
   const toClubPath = useClubPath();
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, user, perfil } = useAuth();
   const [torneos, setTorneos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -412,6 +412,20 @@ export default function CarteleraTorneos() {
   };
 
   const torneosView = useMemo(() => {
+    // Normaliza el sexo del perfil al formato que usa el torneo (rama)
+    const normalizarSexo = (v) => {
+      const s = String(v || '').trim().toLowerCase();
+      if (s === 'masculino' || s === 'm') return 'Masculino';
+      if (s === 'femenino' || s === 'f') return 'Femenino';
+      return null;
+    };
+    const sexoPerfil = normalizarSexo(perfil?.sexo);
+    const categoriaPerfil = (modalidad) => {
+      const m = String(modalidad || '').trim().toLowerCase();
+      if (m === 'dobles' || m === 'doubles') return perfil?.categoria_dobles ?? perfil?.categoria ?? null;
+      return perfil?.categoria_singles ?? perfil?.categoria ?? null;
+    };
+
     return torneos.map((torneo) => {
       const inscritos = torneo.inscritos ?? torneo.inscritos_count ?? 0;
       // Ignorar cupos_maximos: permitir todas las inscripciones y generar cuadro por potencias de 2
@@ -430,6 +444,27 @@ export default function CarteleraTorneos() {
         INSCRIPTION_STATUS_REJECTED,
       ].includes(miEstadoInscripcion);
       const puedeInscribirse = !ESTADOS_NO_INSCRIPCION.has(estado) && !bloqueadoPorVentana && !tieneInscripcionRegistrada;
+
+      // Validar si el jugador logueado cumple sexo/categoria del torneo
+      let cumpleRequisitos = true;
+      let mensajeRequisito = null;
+      if (user && perfil && !tieneInscripcionRegistrada) {
+        const ramaT = String(torneo.rama || torneo.sexo || '').trim();
+        const categoriaT = torneo.categoria_id != null ? Number(torneo.categoria_id) : null;
+        const catJugador = categoriaPerfil(torneo.modalidad);
+        const sexoOk = !ramaT || ramaT === 'Mixto' || sexoPerfil === ramaT;
+        const catOk = categoriaT == null || catJugador == null || Number(catJugador) === categoriaT;
+        if (!sexoOk && !catOk) {
+          cumpleRequisitos = false;
+          mensajeRequisito = `Este torneo es para jugadores ${ramaT} de categoría ${categoriaT}. Tu perfil no cumple estos requisitos.`;
+        } else if (!sexoOk) {
+          cumpleRequisitos = false;
+          mensajeRequisito = `Este torneo es exclusivo para jugadores ${ramaT}.`;
+        } else if (!catOk) {
+          cumpleRequisitos = false;
+          mensajeRequisito = `Tu categoría (${catJugador}) no coincide con la requerida para este torneo (Cat ${categoriaT}).`;
+        }
+      }
       const puedeVerCuadro = isTerminado || isEnProgreso;
       const surfaceInfo = resolveSurfaceInfo(torneo);
       const modalidad = torneo.modalidad || 'Singles';
@@ -448,7 +483,9 @@ export default function CarteleraTorneos() {
         puedeVerCuadro,
         ventanaInscripcion,
         bloqueadoPorVentana,
-        puedeInscribirse,
+        puedeInscribirse: puedeInscribirse && cumpleRequisitos,
+        cumpleRequisitos,
+        mensajeRequisito,
         miEstadoInscripcion,
         tieneInscripcionRegistrada,
         estadoTexto: etiquetaEstado(estado),
@@ -691,6 +728,9 @@ export default function CarteleraTorneos() {
                       {torneo.isFull && torneo.puedeInscribirse && <p className="text-xs text-rose-400 font-semibold mt-2">Cupos aprobados completos. Tu solicitud quedará pendiente hasta validación.</p>}
                       {torneo.isTerminado && <p className="text-xs text-slate-300 font-semibold mt-2">Torneo disputado. Ver cuadro de resultados.</p>}
                       {torneo.isEnProgreso && <p className="text-xs text-indigo-300 font-semibold mt-2">Torneo en juego. Ver cuadro y cronograma en vivo.</p>}
+                      {!torneo.cumpleRequisitos && !torneo.tieneInscripcionRegistrada && torneo.mensajeRequisito && (
+                        <p className="text-xs text-rose-400 font-semibold mt-2">⛔ {torneo.mensajeRequisito}</p>
+                      )}
                       {torneo.miEstadoInscripcion === INSCRIPTION_STATUS_PENDING && (
                         <p className="text-xs text-[#8f6a16] font-semibold mt-2">Tu inscripción está siendo revisada por el administrador.</p>
                       )}
@@ -744,6 +784,7 @@ export default function CarteleraTorneos() {
                         abrirInscripcion(torneo);
                       }}
                       disabled={!torneo.puedeInscribirse && !torneo.puedeVerCuadro}
+                      title={!torneo.cumpleRequisitos && !torneo.puedeVerCuadro ? (torneo.mensajeRequisito || 'No cumplís los requisitos del torneo') : undefined}
                       className={`
                         mt-4 w-full py-3 px-4 rounded-xl font-bold text-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2
                         ${!torneo.puedeInscribirse && !torneo.puedeVerCuadro ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed' : ''}
@@ -768,6 +809,8 @@ export default function CarteleraTorneos() {
                         ? 'Inscripción aprobada'
                         : torneo.miEstadoInscripcion === INSCRIPTION_STATUS_REJECTED
                         ? 'Solicitud rechazada'
+                        : !torneo.cumpleRequisitos
+                        ? 'No cumplís los requisitos'
                         : !torneo.puedeInscribirse
                         ? (textoBotonPorEstado[torneo.estado] || 'Inscripción no disponible')
                         : torneo.isFull

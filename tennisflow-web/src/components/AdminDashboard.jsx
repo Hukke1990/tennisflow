@@ -1268,9 +1268,9 @@ export default function AdminDashboard() {
                  <p className="text-gray-300 text-sm">El algoritmo cruzará la lista de inscritos ordenados por puntos de ranking y buscará un hueco de disponibilidad horaria común para programar el encuentro automáticamente.</p>
              </div>
              
-             <div className="flex flex-col sm:flex-row gap-3 min-w-[250px]">
+             <div className="flex flex-col gap-3 w-full md:w-auto md:min-w-[340px]">
                <select 
-                 className="p-3 rounded-lg border-none bg-white text-gray-800 focus:ring-2 focus:ring-blue-500 font-medium"
+                 className="p-3 rounded-lg border-none bg-white text-gray-800 focus:ring-2 focus:ring-blue-500 font-medium w-full"
                  value={torneoSeleccionadoAdmin || ''}
                  onChange={(e) => setTorneoSeleccionadoAdmin(e.target.value)}
                >
@@ -1283,7 +1283,7 @@ export default function AdminDashboard() {
                <button
                  onClick={handleGenerarSorteo}
                  disabled={!torneoSeleccionadoAdmin || sorteoStatus.loading}
-                 className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                 className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                >
                  {sorteoStatus.loading ? 'Generando...' : '2. Generar Sorteo'}
                </button>
