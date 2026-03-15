@@ -321,6 +321,8 @@ export default function RankingsPage() {
               victorias: Number(jugador?.victorias ?? jugador?.partidos_ganados ?? 0),
               foto_url: fotoResuelta || fotoRaw,
               categoriaJugador: resolveCategoriaJugador(jugador, modalidad, categoria),
+              companeroHabitual: jugador?.companero_habitual_nombre ?? null,
+              companeroHabitualId: jugador?.companero_habitual_id ?? null,
               rawTrend: TREND_FIELDS.reduce((acc, field) => {
                 if (acc !== null) return acc;
                 const value = Number(jugador?.[field]);
@@ -427,6 +429,29 @@ export default function RankingsPage() {
     const byPos = new Map(topThree.map((jugador) => [jugador.pos, jugador]));
     return [byPos.get(2), byPos.get(1), byPos.get(3)].filter(Boolean);
   }, [topThree]);
+
+  // Detect players in podium/table that form a current pair (same points + mutual partnership)
+  const parejaActualIds = useMemo(() => {
+    if (modalidad !== 'Dobles') return new Set();
+    const result = new Set();
+    for (let i = 0; i < topThree.length; i++) {
+      for (let k = i + 1; k < topThree.length; k++) {
+        const a = topThree[i];
+        const b = topThree[k];
+        if (a.puntos !== b.puntos) continue;
+        const linked =
+          (a.companeroHabitualId && a.companeroHabitualId === b.id) ||
+          (b.companeroHabitualId && b.companeroHabitualId === a.id) ||
+          (a.companeroHabitual && a.companeroHabitual === b.nombre) ||
+          (b.companeroHabitual && b.companeroHabitual === a.nombre);
+        if (linked) {
+          result.add(String(a.id));
+          result.add(String(b.id));
+        }
+      }
+    }
+    return result;
+  }, [topThree, modalidad]);
 
   const renderPosicion = (posicion) => {
     if (posicion === 1) return <IconMedal tone="gold" className="h-5 w-5" />;
@@ -600,13 +625,14 @@ export default function RankingsPage() {
 
                   const categoriaTone = CATEGORY_TONES[jugador.categoriaJugador] || CATEGORY_TONES.default;
                   const initials = jugador.nombre.split(' ').map((n) => n[0]).join('').slice(0, 2);
+                  const esParejaActual = parejaActualIds.has(String(jugador.id));
 
                   return (
                     <button
                       key={`podium-${jugador.id}`}
                       type="button"
                       onClick={() => setSelectedPlayerId(jugador.id)}
-                      className={`relative w-full sm:max-w-[230px] rounded-2xl border-2 bg-gradient-to-b ${podiumConfig.bg} ${podiumConfig.frame} px-4 pt-7 pb-4 text-center transition-transform hover:-translate-y-1.5 ${podiumConfig.height} ${podiumConfig.order}`}
+                      className={`relative w-full sm:max-w-[230px] rounded-2xl border-2 bg-gradient-to-b ${podiumConfig.bg} ${podiumConfig.frame} px-4 pt-7 pb-4 text-center transition-transform hover:-translate-y-1.5 ${podiumConfig.height} ${podiumConfig.order}${esParejaActual ? ' ring-2 ring-cyan-400/70 ring-offset-1' : ''}`}
                     >
                       {podiumConfig.crown ? (
                         <span className="absolute -top-4 left-1/2 -translate-x-1/2 inline-flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-b from-[#f8dd7b] to-[#d4af37] border-2 border-[#d5b24a] shadow-lg shadow-amber-900/30">
@@ -644,6 +670,12 @@ export default function RankingsPage() {
                       </div>
 
                       <p className="mt-3 text-[1.08rem] font-black text-slate-900 truncate">{jugador.nombre}</p>
+                      {esParejaActual ? (
+                        <span className="mt-2 inline-flex items-center gap-1 rounded-full border border-cyan-300 bg-cyan-50 px-2 py-0.5 text-[10px] font-bold text-cyan-700 shadow-sm">
+                          <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M13 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM18 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM14 15a4 4 0 0 0-8 0v1h8v-1zM6 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM2 15v-1a4 4 0 0 1 4-4 6.07 6.07 0 0 0-.034.5A6 6 0 0 0 2 15z"/></svg>
+                          Pareja Actual
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -664,7 +696,8 @@ export default function RankingsPage() {
 
             <div className="hidden sm:grid grid-cols-12 gap-3 px-3 text-[11px] font-black uppercase tracking-[0.15em] text-slate-500 mb-2">
               <div className="col-span-2">Puesto</div>
-              <div className="col-span-5">Jugador</div>
+              <div className={modalidad === 'Dobles' ? 'col-span-4' : 'col-span-5'}>{modalidad === 'Dobles' ? 'Jugador / Compañero' : 'Jugador'}</div>
+              {modalidad === 'Dobles' && <div className="col-span-1" />}
               <div className="col-span-2">Categoria</div>
               <div className="col-span-2 text-center">ELO</div>
               <div className="col-span-1 text-right">Perfil</div>
@@ -675,6 +708,7 @@ export default function RankingsPage() {
                 const categoriaTone = CATEGORY_TONES[j.categoriaJugador] || CATEGORY_TONES.default;
                 const isCurrentUser = currentUserId && String(j.id) === currentUserId;
                 const initials = j.nombre.split(' ').map((n) => n[0]).join('').slice(0, 2);
+                const esParejaActualRow = parejaActualIds.has(String(j.id));
 
                 return (
                   <div
@@ -696,7 +730,7 @@ export default function RankingsPage() {
                         <TrendIndicator direction={j.trendDirection} />
                       </div>
 
-                      <div className="sm:col-span-5 flex items-center gap-3 min-w-0">
+                      <div className={`${modalidad === 'Dobles' ? 'sm:col-span-5' : 'sm:col-span-5'} flex items-center gap-3 min-w-0`}>
                         {j.foto_url && !avatarErrors[j.id] ? (
                           <div className="relative">
                             <img
@@ -716,6 +750,18 @@ export default function RankingsPage() {
                         <div className="min-w-0">
                           <p className="font-bold text-slate-900 truncate">{j.nombre}</p>
                           <p className="text-xs text-slate-500">{j.torneos} torneos · {j.victorias} victorias</p>
+                          {modalidad === 'Dobles' && j.companeroHabitual ? (
+                            <span className="mt-0.5 inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-semibold text-cyan-700">
+                              <svg className="h-2.5 w-2.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M13 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM18 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM14 15a4 4 0 0 0-8 0v1h8v-1zM6 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM2 15v-1a4 4 0 0 1 4-4 6.07 6.07 0 0 0-.034.5A6 6 0 0 0 2 15z"/></svg>
+                              {j.companeroHabitual}
+                            </span>
+                          ) : null}
+                          {esParejaActualRow ? (
+                            <span className="mt-0.5 inline-flex items-center gap-1 rounded-full border border-cyan-400 bg-cyan-100 px-2 py-0.5 text-[10px] font-bold text-cyan-800">
+                              <svg className="h-2.5 w-2.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M3.172 5.172a4 4 0 0 1 5.656 0L10 6.343l1.172-1.171a4 4 0 1 1 5.656 5.656L10 17.657l-6.828-6.829a4 4 0 0 1 0-5.656z" clipRule="evenodd"/></svg>
+                              Pareja Actual
+                            </span>
+                          ) : null}
                         </div>
                       </div>
 

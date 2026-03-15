@@ -169,6 +169,81 @@ const fetchClubTournamentIds = async (clubId) => {
   return { ids, error: null };
 };
 
+const fetchUsualPartnersForDobles = async (playerIds = [], clubId) => {
+  if (playerIds.length === 0) return { partnersByPlayer: new Map(), error: null };
+
+  // Get Dobles tournament IDs for this club
+  const { data: doblesTorneos, error: torneoError } = await supabase
+    .from('torneos')
+    .select('id')
+    .eq('club_id', clubId)
+    .ilike('modalidad', 'Dobles');
+
+  if (torneoError) return { partnersByPlayer: new Map(), error: torneoError };
+
+  const doblesTorneoIds = (doblesTorneos || []).map((t) => String(t?.id || '').trim()).filter(Boolean);
+  if (doblesTorneoIds.length === 0) return { partnersByPlayer: new Map(), error: null };
+
+  // Query inscriptions with partner names (compat: try with join first, then without)
+  const selectOptions = [
+    'jugador_id, pareja_jugador_id, pareja_perfil:perfiles!inscripciones_pareja_jugador_fk(id, nombre_completo)',
+    'jugador_id, pareja_jugador_id',
+  ];
+
+  let lastError = null;
+  for (const cols of selectOptions) {
+    const { data, error } = await supabase
+      .from('inscripciones')
+      .select(cols)
+      .eq('club_id', clubId)
+      .in('torneo_id', doblesTorneoIds)
+      .in('jugador_id', playerIds)
+      .not('pareja_jugador_id', 'is', null);
+
+    if (!error) {
+      const partnerCounts = new Map(); // playerId -> Map<partnerId, count>
+      const partnerNames = new Map(); // partnerId -> nombre
+
+      for (const row of (data || [])) {
+        const jugadorId = String(row?.jugador_id || '').trim();
+        const parejaId = String(row?.pareja_jugador_id || '').trim();
+        if (!jugadorId || !parejaId) continue;
+
+        if (row.pareja_perfil?.nombre_completo) {
+          partnerNames.set(parejaId, row.pareja_perfil.nombre_completo);
+        }
+
+        if (!partnerCounts.has(jugadorId)) partnerCounts.set(jugadorId, new Map());
+        const counts = partnerCounts.get(jugadorId);
+        counts.set(parejaId, (counts.get(parejaId) || 0) + 1);
+      }
+
+      const partnersByPlayer = new Map();
+      for (const [playerId, counts] of partnerCounts.entries()) {
+        let maxPartnerId = null;
+        let maxCount = 0;
+        for (const [partnerId, count] of counts.entries()) {
+          if (count > maxCount) { maxCount = count; maxPartnerId = partnerId; }
+        }
+        if (maxPartnerId) {
+          partnersByPlayer.set(playerId, {
+            id: maxPartnerId,
+            nombre: partnerNames.get(maxPartnerId) || null,
+            partidos: maxCount,
+          });
+        }
+      }
+
+      return { partnersByPlayer, error: null };
+    }
+
+    lastError = error;
+    if (!isMissingColumnError(error)) break;
+  }
+
+  return { partnersByPlayer: new Map(), error: lastError };
+};
+
 const parseFilters = (query) => {
   const modalidad = query.modalidad || 'Singles';
   const sexo = query.sexo || 'Masculino';
@@ -252,6 +327,17 @@ const getRankings = async (req, res) => {
       console.warn('No se pudo calcular torneos ganados, se usa fallback:', tournamentWinsError?.message || tournamentWinsError);
     }
 
+    // For Dobles: find the most usual partner per player
+    let partnersByPlayer = new Map();
+    if (modalidad === 'Dobles' && playerIds.length > 0) {
+      const { partnersByPlayer: resolved, error: partnerError } = await fetchUsualPartnersForDobles(playerIds, clubId);
+      if (partnerError) {
+        console.warn('No se pudo calcular compañeros habituales:', partnerError?.message || partnerError);
+      } else {
+        partnersByPlayer = resolved;
+      }
+    }
+
     const jugadores = sortedRows
       .map((jugador) => ({
         id: jugador.id,
@@ -266,6 +352,8 @@ const getRankings = async (req, res) => {
         torneos: Number(winsByPlayer.get(String(jugador.id || '')) ?? 0),
         torneos_ganados: Number(winsByPlayer.get(String(jugador.id || '')) ?? 0),
         victorias: Number(jugador.victorias || 0),
+        companero_habitual_id: partnersByPlayer.get(String(jugador.id || ''))?.id ?? null,
+        companero_habitual_nombre: partnersByPlayer.get(String(jugador.id || ''))?.nombre ?? null,
       }));
 
     return res.json(jugadores);
