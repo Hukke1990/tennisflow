@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { supabase } from '../lib/supabase';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
@@ -296,26 +295,15 @@ export default function CarteleraTorneos() {
 
     try {
       setLoading(true);
-      const torneosQuery = supabase
-        .from('torneos')
-        .select('*');
-
-      if (clubId) {
-        torneosQuery.eq('club_id', clubId);
-      }
-
-      const torneosPromise = torneosQuery.order('fecha_inicio', { ascending: false });
-      const disponiblesPromise = axios.get(`${API_URL}/api/torneos/disponibles`, { params: { club_id: clubId } });
-      const dashboardPromise = axios.get(`${API_URL}/api/dashboard`, { params: { club_id: clubId } });
-
-      const [torneosRes, disponiblesRes, dashboardRes] = await Promise.allSettled([
-        torneosPromise,
-        disponiblesPromise,
-        dashboardPromise,
+      // /api/torneos already returns all tournaments with correct inscription counts
+      const [todosRes, disponiblesRes, dashboardRes] = await Promise.allSettled([
+        axios.get(`${API_URL}/api/torneos`, { params: { club_id: clubId } }),
+        axios.get(`${API_URL}/api/torneos/disponibles`, { params: { club_id: clubId } }),
+        axios.get(`${API_URL}/api/dashboard`, { params: { club_id: clubId } }),
       ]);
 
-      const torneosEndpoint = torneosRes.status === 'fulfilled' && Array.isArray(torneosRes.value?.data)
-        ? torneosRes.value.data
+      const torneosEndpoint = todosRes.status === 'fulfilled' && Array.isArray(todosRes.value?.data)
+        ? todosRes.value.data
         : [];
 
       const torneosDisponibles = disponiblesRes.status === 'fulfilled' && Array.isArray(disponiblesRes.value?.data)
@@ -331,15 +319,26 @@ export default function CarteleraTorneos() {
         ? dashboardData.torneos_finalizados.map((t) => ({ ...t, estado: t.estado || 'finalizado' }))
         : [];
 
+      // torneosEndpoint already has inscritos/inscritos_count/solicitudes_pendientes from backend
       const fuenteBase = torneosEndpoint.length > 0 ? torneosEndpoint : torneosDisponibles;
       const torneoMap = new Map();
 
-      [...fuenteBase, ...dashboardProximos, ...dashboardFinalizados].forEach((torneo) => {
+      // Put backend data first (has counts), then merge dashboard data without overwriting counts
+      fuenteBase.forEach((torneo) => {
+        if (!torneo?.id) return;
+        torneoMap.set(torneo.id, { ...torneo });
+      });
+
+      [...dashboardProximos, ...dashboardFinalizados].forEach((torneo) => {
         if (!torneo?.id) return;
         const previo = torneoMap.get(torneo.id) || {};
         torneoMap.set(torneo.id, {
-          ...previo,
           ...torneo,
+          // Preserve counts from backend source if available
+          inscritos: previo.inscritos ?? torneo.inscritos ?? 0,
+          inscritos_count: previo.inscritos_count ?? torneo.inscritos_count ?? 0,
+          solicitudes_pendientes: previo.solicitudes_pendientes ?? torneo.solicitudes_pendientes ?? 0,
+          ...previo,
         });
       });
 
@@ -778,7 +777,7 @@ export default function CarteleraTorneos() {
                     <button
                       onClick={() => {
                         if (torneo.puedeVerCuadro) {
-                          navigate(`/bracket/${torneo.id}`);
+                          navigate(toClubPath(`/bracket/${torneo.id}`));
                           return;
                         }
                         abrirInscripcion(torneo);
