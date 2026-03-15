@@ -54,14 +54,8 @@ const normalizeCanchaSurface = (rawValue = '') => {
   return exactMatch ? exactMatch.value : '';
 };
 
-const resolveBracketSizeByCupos = (cuposRaw) => {
-  const cupos = Number.parseInt(String(cuposRaw || ''), 10);
-  if (!Number.isInteger(cupos) || cupos <= 0) return 8;
-
-  let size = 2;
-  while (size < cupos) size *= 2;
-  return Math.min(size, 32);
-};
+// Con inscripciones ilimitadas, siempre se muestran todas las rondas hasta 32
+const DEFAULT_BRACKET_SIZE_FOR_FORM = 32;
 
 const normalizeInternationalPhone = (rawValue = '') => {
   const text = String(rawValue || '');
@@ -179,7 +173,6 @@ export default function AdminDashboard() {
     rama: 'Masculino',
     modalidad: 'Singles',
     categoria: '3',
-    cupos_max: '',
     costo: '',
     fecha_inicio: '',
     fecha_fin: '',
@@ -537,7 +530,6 @@ export default function AdminDashboard() {
         sexo: torneoForm.rama,
         modalidad: torneoForm.modalidad,
         categoria: parseInt(torneoForm.categoria, 10),
-        cupos_max: parseInt(torneoForm.cupos_max, 10),
         costo: parseFloat(torneoForm.costo),
         puntos_ronda_32: parseInt(torneoForm.puntos_ronda_32 || '0', 10),
         puntos_ronda_16: parseInt(torneoForm.puntos_ronda_16 || '0', 10),
@@ -563,7 +555,6 @@ export default function AdminDashboard() {
         rama: 'Masculino',
         modalidad: 'Singles',
         categoria: '3',
-        cupos_max: '',
         costo: '',
         fecha_inicio: '',
         fecha_fin: '',
@@ -614,10 +605,9 @@ export default function AdminDashboard() {
   };
 
   const canchasDisponibles = canchas.filter((cancha) => cancha.esta_disponible);
-  const bracketSizeByCupos = useMemo(() => resolveBracketSizeByCupos(torneoForm.cupos_max), [torneoForm.cupos_max]);
-  const roundsToConfigure = useMemo(() => {
-    return [32, 16, 8, 4, 2].filter((roundOrder) => roundOrder <= bracketSizeByCupos);
-  }, [bracketSizeByCupos]);
+  // Sin cupos máximos: siempre se muestran todas las rondas en la configuración de puntos
+  const bracketSizeByCupos = DEFAULT_BRACKET_SIZE_FOR_FORM;
+  const roundsToConfigure = [32, 16, 8, 4, 2];
 
   const TAB_ITEMS = [
     { id: 'canchas', label: 'Canchas' },
@@ -928,20 +918,6 @@ export default function AdminDashboard() {
                   <option value="4">4ª</option>
                   <option value="5">5ª</option>
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Cupos Máximos</label>
-                <input
-                  type="number"
-                  name="cupos_max"
-                  value={torneoForm.cupos_max}
-                  onChange={handleTorneoChange}
-                  min="2"
-                  placeholder="Ej. 16"
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                  required
-                />
               </div>
 
               <div className="sm:col-span-2">
@@ -1292,22 +1268,22 @@ export default function AdminDashboard() {
                  <p className="text-gray-300 text-sm">El algoritmo cruzará la lista de inscritos ordenados por puntos de ranking y buscará un hueco de disponibilidad horaria común para programar el encuentro automáticamente.</p>
              </div>
              
-             <div className="flex flex-col sm:flex-row gap-3 min-w-[250px]">
+             <div className="flex flex-col gap-3 w-full md:w-auto md:min-w-[340px]">
                <select 
-                 className="p-3 rounded-lg border-none bg-white text-gray-800 focus:ring-2 focus:ring-blue-500 font-medium"
+                 className="p-3 rounded-lg border-none bg-white text-gray-800 focus:ring-2 focus:ring-blue-500 font-medium w-full"
                  value={torneoSeleccionadoAdmin || ''}
                  onChange={(e) => setTorneoSeleccionadoAdmin(e.target.value)}
                >
                  <option value="" disabled>1. Selecciona un Torneo...</option>
                  {torneosConfigurados.map(t => (
-                   <option key={t.id} value={t.id}>{t.titulo} ({t.inscritos}/{t.cupos_max})</option>
+                   <option key={t.id} value={t.id}>{t.titulo} ({t.inscritos} inscriptos)</option>
                  ))}
                </select>
 
                <button
                  onClick={handleGenerarSorteo}
                  disabled={!torneoSeleccionadoAdmin || sorteoStatus.loading}
-                 className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                 className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                >
                  {sorteoStatus.loading ? 'Generando...' : '2. Generar Sorteo'}
                </button>

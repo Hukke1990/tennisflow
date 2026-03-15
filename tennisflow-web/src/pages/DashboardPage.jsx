@@ -23,6 +23,7 @@ import {
 } from '../components/icons/UiIcons';
 import { getInscripcionWindowState } from '../lib/inscripcionWindow';
 import { resolveProfilePhotoUrl } from '../lib/profilePhoto';
+import { supabase } from '../lib/supabase';
 
 const API_URL = '';
 const PENDING_START_STORAGE_KEY = 'tennisflow.adminLive.pendingStart.v1';
@@ -1582,7 +1583,9 @@ export default function DashboardPage() {
 
       if (torneosPool.length === 0) {
         try {
-          const { data: torneosRaw } = await axios.get(`${API_URL}/api/torneos`, { params: { club_id: clubId } });
+          const query = supabase.from('torneos').select('*').order('fecha_inicio', { ascending: true });
+          if (clubId) query.eq('club_id', clubId);
+          const { data: torneosRaw } = await query;
           torneosPool = Array.isArray(torneosRaw) ? torneosRaw : [];
         } catch (_) {
           return;
@@ -1652,8 +1655,10 @@ export default function DashboardPage() {
     const cargarDashboard = async () => {
       setLoading(true);
 
+      const torneosQuery = supabase.from('torneos').select('*').order('fecha_inicio', { ascending: true });
+      if (clubId) torneosQuery.eq('club_id', clubId);
       const [torneosRes] = await Promise.allSettled([
-        axios.get(`${API_URL}/api/torneos`, { params: { club_id: clubId } }),
+        torneosQuery,
       ]);
 
       const torneosRaw = torneosRes.status === 'fulfilled' && Array.isArray(torneosRes.value?.data)

@@ -550,10 +550,12 @@ test('helpers de cronograma: descanso minimo de 60 minutos', () => {
 });
 
 test('helpers de sorteo: siembra top 4 en posiciones fijas para cuadro de 8/16/32', () => {
+  // Posiciones estandar ATP: S4 va al inicio de Q3 (no de Q4)
+  // seed34 = [q+1, 2q+1] donde q = bracketSize/4
   const scenarios = [
-    { size: 8, expected: { s1: 1, s2: 8, s3: 3, s4: 6 } },
-    { size: 16, expected: { s1: 1, s2: 16, s3: 5, s4: 12 } },
-    { size: 32, expected: { s1: 1, s2: 32, s3: 9, s4: 24 } },
+    { size: 8,  expected: { s1: 1, s2: 8,  s3: 3, s4: 5  } },
+    { size: 16, expected: { s1: 1, s2: 16, s3: 5, s4: 9  } },
+    { size: 32, expected: { s1: 1, s2: 32, s3: 9, s4: 17 } },
   ];
 
   for (const scenario of scenarios) {
@@ -584,13 +586,15 @@ test('helpers de sorteo: siembra top 4 en posiciones fijas para cuadro de 8/16/3
 test('helpers de sorteo: seed 3 y 4 se sortean entre las dos posiciones definidas', () => {
   const jugadores = Array.from({ length: 8 }, (_, idx) => ({ jugador_id: `j${idx + 1}` }));
 
+  // Con randomFn<0.5: sin swap → seed34[0]=3→j3@idx2, seed34[1]=5→j4@idx4
   const entrantsNoSwap = __private.placeTopSeedsByRanking(jugadores, 8, () => 0.1);
   assert.equal(entrantsNoSwap[2].jugador_id, 'j3');
-  assert.equal(entrantsNoSwap[5].jugador_id, 'j4');
+  assert.equal(entrantsNoSwap[4].jugador_id, 'j4');
 
+  // Con randomFn>=0.5: con swap → seed34[1]=5→j3@idx4, seed34[0]=3→j4@idx2
   const entrantsSwap = __private.placeTopSeedsByRanking(jugadores, 8, () => 0.9);
   assert.equal(entrantsSwap[2].jugador_id, 'j4');
-  assert.equal(entrantsSwap[5].jugador_id, 'j3');
+  assert.equal(entrantsSwap[4].jugador_id, 'j3');
 });
 
 test('generarSorteo agenda cuadro completo y prioriza domingo para la final', async () => {
@@ -731,11 +735,11 @@ test('generarSorteo en dobles interpreta cupos_max como jugadores (8 => 4 pareja
   const insertCall = calls.find((c) => c.table === 'partidos' && c.action === 'insert');
   assert.ok(insertCall, 'Se esperaba insercion de partidos');
 
-  // Con 4 parejas reales, el cuadro debe ser de 4 (2 semis + final), sin ronda extra de BYEs.
-  assert.equal(insertCall.payload.length, 3);
-  assert.equal(insertCall.payload.filter((p) => p.ronda_orden === 4).length, 2);
-  assert.equal(insertCall.payload.filter((p) => p.ronda_orden === 2).length, 1);
-  assert.equal(insertCall.payload.filter((p) => p.ronda_orden === 8).length, 0);
+  // Con 4 parejas en cuadro minimo de 8: 4 BYEs en R1 + 2 SF + 1 Final = 7 partidos
+  assert.equal(insertCall.payload.length, 7);
+  assert.equal(insertCall.payload.filter((p) => p.ronda_orden === 8).length, 4); // R1 (BYEs)
+  assert.equal(insertCall.payload.filter((p) => p.ronda_orden === 4).length, 2); // SFs
+  assert.equal(insertCall.payload.filter((p) => p.ronda_orden === 2).length, 1); // Final
 
   assertQueueEmpty();
 });

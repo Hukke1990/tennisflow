@@ -152,6 +152,30 @@ export default function InscripcionModal({ torneo, onClose, onSuccess }) {
     ? (perfil?.categoria_dobles ?? perfil?.categoria)
     : (perfil?.categoria_singles ?? perfil?.categoria);
   const perfilCompleto = Boolean(categoriaPerfil && perfil?.localidad);
+
+  // Validar si el jugador cumple sexo y categoria del torneo
+  const normalizarSexo = (v) => {
+    const s = String(v || '').trim().toLowerCase();
+    if (s === 'masculino' || s === 'm') return 'Masculino';
+    if (s === 'femenino' || s === 'f') return 'Femenino';
+    return null;
+  };
+  const ramaT = String(torneo?.rama || torneo?.sexo || '').trim();
+  const categoriaT = torneo?.categoria_id != null ? Number(torneo.categoria_id) : null;
+  const sexoPerfil = normalizarSexo(perfil?.sexo);
+  const catPerfilNum = categoriaPerfil != null ? Number(categoriaPerfil) : null;
+  const sexoOk = !ramaT || ramaT === 'Mixto' || sexoPerfil === ramaT;
+  const catOk = categoriaT == null || catPerfilNum == null || catPerfilNum === categoriaT;
+  const cumpleRequisitos = sexoOk && catOk;
+  let mensajeRequisito = null;
+  if (!sexoOk && !catOk) {
+    mensajeRequisito = `Este torneo es para jugadores ${ramaT} de categoría ${categoriaT}. Tu perfil (${sexoPerfil || 'sin sexo'}, Cat ${catPerfilNum ?? '?'}) no cumple estos requisitos.`;
+  } else if (!sexoOk) {
+    mensajeRequisito = `Este torneo es exclusivo para la rama ${ramaT}. Tu perfil está registrado como ${sexoPerfil || 'sin sexo definido'}.`;
+  } else if (!catOk) {
+    mensajeRequisito = `Tu categoría (Cat ${catPerfilNum ?? '?'}) no coincide con la requerida por este torneo (Cat ${categoriaT}).`;
+  }
+
   const estado = (torneo?.estado || '').toLowerCase();
   const bloqueadoPorEstado = ESTADOS_NO_INSCRIPCION.has(estado);
   const mensajeBloqueoEstado = estado === 'borrador'
@@ -364,6 +388,36 @@ export default function InscripcionModal({ torneo, onClose, onSuccess }) {
                 Completar Perfil
                 <IconArrowRight className="h-4 w-4" />
               </a>
+            </div>
+          ) : !cumpleRequisitos ? (
+            // Bloqueo por sexo o categoria incompatible
+            <div className="rounded-2xl bg-rose-50 border border-rose-200 p-5 text-center">
+              <div className="inline-flex items-center justify-center rounded-2xl border border-rose-300 bg-white p-3 mb-3 text-rose-600">
+                <IconXCircle className="h-8 w-8" />
+              </div>
+              <h3 className="font-black text-rose-800 text-lg mb-2">No cumplés los requisitos</h3>
+              <p className="text-rose-700 text-sm mb-4">{mensajeRequisito}</p>
+              <div className="rounded-xl bg-white border border-rose-200 px-4 py-3 text-sm text-left space-y-1 mb-4">
+                <p className="font-semibold text-slate-600 mb-2">Requisitos del torneo:</p>
+                {ramaT && ramaT !== 'Mixto' && (
+                  <p className="flex items-center gap-2 text-slate-700">
+                    {sexoOk ? <IconCheckCircle className="h-4 w-4 text-emerald-500" /> : <IconXCircle className="h-4 w-4 text-rose-500" />}
+                    Rama: <span className="font-bold">{ramaT}</span>
+                    {!sexoOk && <span className="text-rose-500 ml-1">(tu perfil: {sexoPerfil || 'no definido'})</span>}
+                  </p>
+                )}
+                {categoriaT != null && (
+                  <p className="flex items-center gap-2 text-slate-700">
+                    {catOk ? <IconCheckCircle className="h-4 w-4 text-emerald-500" /> : <IconXCircle className="h-4 w-4 text-rose-500" />}
+                    Categoría: <span className="font-bold">Cat {categoriaT}</span>
+                    {!catOk && <span className="text-rose-500 ml-1">(tu perfil: Cat {catPerfilNum ?? '?'})</span>}
+                  </p>
+                )}
+              </div>
+              <button onClick={onClose}
+                className="inline-flex items-center gap-1.5 py-2.5 px-5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl transition-colors text-sm">
+                Cerrar
+              </button>
             </div>
           ) : (
             <>

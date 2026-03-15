@@ -485,6 +485,7 @@ function assignSlotToMatch(match, slot, usedSlotIds, playerDayIntervals) {
 function makeRoundMatch({
   torneoId,
   rondaOrden,
+  ordenEnRonda = null,
   jugador1Id = null,
   jugador2Id = null,
   jugador1ParejaId = null,
@@ -500,6 +501,7 @@ function makeRoundMatch({
     torneo_id: torneoId,
     ronda: getRoundName(rondaOrden),
     ronda_orden: rondaOrden,
+    orden_en_ronda: ordenEnRonda,
     jugador1_id: jugador1Id,
     jugador2_id: jugador2Id,
     jugador1_pareja_id: jugador1ParejaId,
@@ -595,58 +597,127 @@ function mapSlotsByKey(slots) {
   return map;
 }
 
+/**
+ * Devuelve las posiciones estándar de siembra para un cuadro de tenis eliminatorio.
+ *
+ * División en 4 cuartos (Q) de igual tamaño, donde q = bracketSize / 4:
+ *   - Seed 1 : posición 1      (inicio de Q1)
+ *   - Seed 2 : posición N      (final de Q4)  — se cruzan solo en la Final
+ *   - Seeds 3/4 : [q+1, 2q+1] (inicio de Q2 y Q3) — se cruzan con S1/S2 en las Semis
+ *   - Seeds 5-8 : [q, 2q, 3q, 3q+1] (final de Q1/Q2/Q3 e inicio de Q4)
+ *     → 2 BYEs por cuarto cuando hay 8 BYEs en el cuadro
+ */
 function resolveTopSeedPlacement(bracketSize) {
-  if (bracketSize === 8) {
-    return { seed1: 1, seed2: 8, seed34: [3, 6] };
-  }
-
-  if (bracketSize === 16) {
-    return { seed1: 1, seed2: 16, seed34: [5, 12] };
-  }
-
-  if (bracketSize === 32) {
-    return { seed1: 1, seed2: 32, seed34: [9, 24] };
-  }
-
-  return null;
+  const q = Math.floor(bracketSize / 4);
+  return {
+    seed1:  1,
+    seed2:  bracketSize,
+    seed34: [q + 1, 2 * q + 1],
+    seed58: [q, 2 * q, 3 * q, 3 * q + 1],
+  };
 }
 
+/**
+ * Coloca a los jugadores en las posiciones del cuadro siguiendo el estándar ATP/WTA.
+ *
+ * Distribución simétrica de BYEs:
+ *   - Seeds 1-8 reciben BYE (si hay suficientes BYEs en el cuadro).
+ *   - Seeds 1 y 2 van en los extremos opuestos; 3 y 4 en los inicios de los cuartos
+ *     internos (halfes opuestos); 5-8 en los finales de cada cuarto (sorteados).
+ *   - Resultado: exactamente 2 BYEs por cuarto cuando byesNeeded = 8.
+ *
+ * Ejemplo: 24 inscritos en cuadro de 32 → 8 BYEs → S1-S8 avanzan automáticamente,
+ * distribuidos 2 BYEs por cuarto. Los 16 restantes juegan la ronda inicial.
+ */
 function placeTopSeedsByRanking(jugadoresOrdenados, bracketSize, randomFn = Math.random) {
   const players = Array.isArray(jugadoresOrdenados) ? [...jugadoresOrdenados] : [];
   const byesNeeded = Math.max(0, bracketSize - players.length);
-  const byes = Array.from({ length: byesNeeded }, () => ({ isBye: true }));
-  const pool = [...players, ...byes];
   const positions = Array.from({ length: bracketSize }, () => null);
+  const BYE = { isBye: true };
 
-  const placement = resolveTopSeedPlacement(bracketSize);
-  let cursor = 0;
+  // Posición del "partner" (rival en R1) para un índice 0-based:
+  // los pares son (0,1), (2,3), (4,5), ... → par/impar
+  const getPartnerIdx = (idx) => (idx % 2 === 0 ? idx + 1 : idx - 1);
 
-  const assignFromPool = (positionOneBased) => {
-    if (!Number.isInteger(positionOneBased) || positionOneBased < 1 || positionOneBased > bracketSize) return;
-    if (cursor >= pool.length) return;
-    positions[positionOneBased - 1] = pool[cursor];
-    cursor += 1;
+  const usedIdx = new Set();
+  let playerCursor = 0;
+
+  // Asigna players[playerCursor] en pos1based y, si corresponde BYE, marca su partner.
+  const assignAt = (pos1based) => {
+    if (!pos1based || pos1based < 1 || pos1based > bracketSize) return;
+    if (playerCursor >= players.length) return;
+    const idx = pos1based - 1;
+    if (usedIdx.has(idx)) return; // posición ya ocupada, ignorar
+    positions[idx] = players[playerCursor];
+    usedIdx.add(idx);
+    if (playerCursor < byesNeeded) {
+      const partnerIdx = getPartnerIdx(idx);
+      if (partnerIdx >= 0 && partnerIdx < bracketSize && !usedIdx.has(partnerIdx)) {
+        positions[partnerIdx] = BYE;
+        usedIdx.add(partnerIdx);
+      }
+    }
+    playerCursor += 1;
   };
 
+  const placement = resolveTopSeedPlacement(bracketSize);
   if (placement) {
-    assignFromPool(placement.seed1);
-    assignFromPool(placement.seed2);
+    // Seeds 1 y 2: extremos fijos del cuadro
+    assignAt(placement.seed1);
+    assignAt(placement.seed2);
 
-    // Seed 3 y 4 se sortean entre dos posiciones definidas para evitar cruces prematuros.
-    const shouldSwap = Number(randomFn()) >= 0.5;
-    const [firstPos, secondPos] = shouldSwap
+    // Seeds 3 y 4: sorteados entre inicio de Q2 e inicio de Q3 (halfes distintos)
+    const shouldSwap34 = Number(randomFn()) >= 0.5;
+    const [pos3, pos4] = shouldSwap34
       ? [placement.seed34[1], placement.seed34[0]]
       : [placement.seed34[0], placement.seed34[1]];
+    assignAt(pos3);
+    assignAt(pos4);
 
-    assignFromPool(firstPos);
-    assignFromPool(secondPos);
+    // Seeds 5-8: uno por cuarto, sorteados aleatoriamente entre las 4 posiciones de cierre
+    if (placement.seed58 && playerCursor < players.length) {
+      const seed58pos = [...placement.seed58];
+      // Fisher-Yates shuffle para sorteo justo
+      for (let i = seed58pos.length - 1; i > 0; i--) {
+        const j = Math.floor(randomFn() * (i + 1));
+        [seed58pos[i], seed58pos[j]] = [seed58pos[j], seed58pos[i]];
+      }
+      for (const pos of seed58pos) {
+        if (playerCursor < players.length) assignAt(pos);
+      }
+    }
   }
 
-  for (let i = 0; i < positions.length && cursor < pool.length; i += 1) {
-    if (!positions[i]) {
-      positions[i] = pool[cursor];
-      cursor += 1;
+  // Recopilar posiciones libres y mezclarlas para sorteo justo de no-sembrados
+  const freePositions = [];
+  for (let i = 0; i < bracketSize; i += 1) {
+    if (!usedIdx.has(i)) freePositions.push(i);
+  }
+  for (let i = freePositions.length - 1; i > 0; i--) {
+    const j = Math.floor(randomFn() * (i + 1));
+    [freePositions[i], freePositions[j]] = [freePositions[j], freePositions[i]];
+  }
+
+  // Distribuir jugadores restantes en posiciones libres
+  for (const idx of freePositions) {
+    if (playerCursor >= players.length) break;
+    if (usedIdx.has(idx)) continue;
+    positions[idx] = players[playerCursor];
+    usedIdx.add(idx);
+    // Caso borde: si aún quedan BYEs por asignar más allá de los 8 seeds estándar
+    if (playerCursor < byesNeeded) {
+      const partnerIdx = getPartnerIdx(idx);
+      if (partnerIdx >= 0 && partnerIdx < bracketSize && !usedIdx.has(partnerIdx)) {
+        positions[partnerIdx] = BYE;
+        usedIdx.add(partnerIdx);
+      }
     }
+    playerCursor += 1;
+  }
+
+  // Rellenar posiciones restantes con BYE
+  for (let i = 0; i < bracketSize; i += 1) {
+    if (!positions[i]) positions[i] = BYE;
   }
 
   return positions;
@@ -866,19 +937,12 @@ const generarSorteo = async (req, res) => {
         return String(a.jugador_id || '').localeCompare(String(b.jugador_id || ''));
       });
 
-    // 3. Definir tamano de cuadro segun capacidad del torneo (sin perder inscritos actuales).
-    // En Dobles, cupos_max se expresa en jugadores, por lo que se convierte a cupos de pareja.
+    // 3. Definir tamano de cuadro como la minima potencia de 2 >= inscritos (minimo 8).
+    // Las inscripciones son ilimitadas: el tamano se calcula solo a partir de los inscriptos reales.
     const inscritosCount = jugadoresOrdenados.length;
-    const cuposMax = Number.parseInt(String(torneo?.cupos_max ?? ''), 10);
-    const cuposMaxEntrants = Number.isInteger(cuposMax) && cuposMax > 0
-      ? (torneoEsDobles ? Math.ceil(cuposMax / 2) : cuposMax)
-      : null;
-    const targetSlots = Number.isInteger(cuposMaxEntrants) && cuposMaxEntrants > 0
-      ? Math.max(cuposMaxEntrants, inscritosCount)
-      : inscritosCount;
 
-    let bracketSize = 2;
-    while (bracketSize < targetSlots) bracketSize *= 2;
+    let bracketSize = 8; // tamano minimo de cuadro
+    while (bracketSize < inscritosCount) bracketSize *= 2;
 
      const completados = placeTopSeedsByRanking(jugadoresOrdenados, bracketSize, Math.random);
 
@@ -896,16 +960,18 @@ const generarSorteo = async (req, res) => {
       return partnerByCaptain.get(normalizeId(winnerId)) || null;
     };
 
-    for (const pair of paresDeBracketIdces) {
+    for (const [pairIndex, pair] of paresDeBracketIdces.entries()) {
       const j1 = completados[pair[0]];
       const j2 = completados[pair[1]];
       const j1ParejaId = resolveEntryPartner(j1);
       const j2ParejaId = resolveEntryPartner(j2);
+      const ordenEnRonda = pairIndex + 1;
 
       if (j1.isBye && j2.isBye) {
         firstRoundMatches.push(makeRoundMatch({
           torneoId: torneo_id,
           rondaOrden: bracketSize,
+          ordenEnRonda,
           estado: 'finalizado',
           notas: 'Llave vacia por BYE',
           candidatePlayers: [],
@@ -917,6 +983,7 @@ const generarSorteo = async (req, res) => {
         firstRoundMatches.push(makeRoundMatch({
           torneoId: torneo_id,
           rondaOrden: bracketSize,
+          ordenEnRonda,
           jugador1Id: j1.jugador_id,
           jugador1ParejaId: j1ParejaId,
           ganadorId: j1.jugador_id,
@@ -932,6 +999,7 @@ const generarSorteo = async (req, res) => {
         firstRoundMatches.push(makeRoundMatch({
           torneoId: torneo_id,
           rondaOrden: bracketSize,
+          ordenEnRonda,
           jugador2Id: j2.jugador_id,
           jugador2ParejaId: j2ParejaId,
           ganadorId: j2.jugador_id,
@@ -946,6 +1014,7 @@ const generarSorteo = async (req, res) => {
       firstRoundMatches.push(makeRoundMatch({
         torneoId: torneo_id,
         rondaOrden: bracketSize,
+        ordenEnRonda,
         jugador1Id: j1.jugador_id,
         jugador2Id: j2.jugador_id,
         jugador1ParejaId: j1ParejaId,
@@ -995,6 +1064,7 @@ const generarSorteo = async (req, res) => {
         currentRound.push(makeRoundMatch({
           torneoId: torneo_id,
           rondaOrden: currentOrder,
+          ordenEnRonda: Math.floor(i / 2) + 1,
           jugador1Id,
           jugador2Id,
           jugador1ParejaId,
@@ -1050,7 +1120,10 @@ const generarSorteo = async (req, res) => {
         extraCheck: (slot) => {
           const disp1 = disponibilidadPorJugador.get(match.jugador1_id) || [];
           const disp2 = disponibilidadPorJugador.get(match.jugador2_id) || [];
-          return isPlayerAvailableAt(disp1, slot) && isPlayerAvailableAt(disp2, slot);
+          // Sin disponibilidad registrada = disponible siempre
+          const ok1 = disp1.length === 0 || isPlayerAvailableAt(disp1, slot);
+          const ok2 = disp2.length === 0 || isPlayerAvailableAt(disp2, slot);
+          return ok1 && ok2;
         },
       });
 
@@ -1106,6 +1179,7 @@ const generarSorteo = async (req, res) => {
         torneo_id: match.torneo_id,
         ronda: match.ronda,
         ronda_orden: match.ronda_orden,
+        orden_en_ronda: match.orden_en_ronda,
         jugador1_id: match.jugador1_id,
         jugador2_id: match.jugador2_id,
         ...(torneoEsDobles
@@ -1887,7 +1961,10 @@ const recalcularCronograma = async (req, res) => {
         extraCheck: (slot) => {
           const disp1 = disponibilidadPorJugador.get(match.jugador1_id) || [];
           const disp2 = disponibilidadPorJugador.get(match.jugador2_id) || [];
-          return isPlayerAvailableAt(disp1, slot) && isPlayerAvailableAt(disp2, slot);
+          // Sin disponibilidad registrada = disponible siempre
+          const ok1 = disp1.length === 0 || isPlayerAvailableAt(disp1, slot);
+          const ok2 = disp2.length === 0 || isPlayerAvailableAt(disp2, slot);
+          return ok1 && ok2;
         },
       });
 

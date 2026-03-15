@@ -7,6 +7,7 @@ import { io } from 'socket.io-client';
 import CronogramaTorneo from './CronogramaTorneo';
 import { IconAlertTriangle } from './icons/UiIcons';
 import { resolveProfilePhotoUrl } from '../lib/profilePhoto';
+import { useClub } from '../context/ClubContext';
 import trophyHero from '../assets/trophy-hero.svg';
 
 const API_URL = '';
@@ -322,6 +323,9 @@ const formatRankingLabel = (rankingValue) => {
   return `#${safe}`;
 };
 
+const SEED_ORDINALS = ['', '1er', '2do', '3er', '4to'];
+const seedLabel = (seed) => (seed >= 1 && seed <= 4 ? SEED_ORDINALS[seed] : `#${seed}`);
+
 const toRankingNumber = (value) => {
   const safe = String(value || '').trim();
   if (!safe) return Number.POSITIVE_INFINITY;
@@ -543,9 +547,14 @@ const payloadMatchesTournament = (payload, torneoId) => {
 };
 
 export default function TournamentBracket({ torneoId, adminMode = false }) {
+  const { clubId: contextClubId } = useClub();
   const [partidos, setPartidos] = useState([]);
   const [canchas, setCanchas] = useState([]);
   const [torneoEstado, setTorneoEstado] = useState('');
+  const [torneoClubId, setTorneoClubId] = useState(null);
+  const [torneoSexo, setTorneoSexo] = useState(null);
+  const [torneoModalidad, setTorneoModalidad] = useState(null);
+  const [torneoCategoria, setTorneoCategoria] = useState(null);
   const [perfilMetaById, setPerfilMetaById] = useState({});
   const [rankingPosById, setRankingPosById] = useState({});
   const [scoreOverrideByPartido, setScoreOverrideByPartido] = useState({});
@@ -587,6 +596,10 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     if (!torneoId) {
       setPointsConfig(DEFAULT_POINTS_CONFIG);
       setTorneoEstado('');
+      setTorneoClubId(null);
+      setTorneoSexo(null);
+      setTorneoModalidad(null);
+      setTorneoCategoria(null);
       return;
     }
 
@@ -596,7 +609,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
       try {
         const [adminRes, torneosRes] = await Promise.allSettled([
           axios.get(`${API_URL}/api/torneos/admin`),
-          axios.get(`${API_URL}/api/torneos`),
+          axios.get(`${API_URL}/api/torneos`, { params: { club_id: contextClubId } }),
         ]);
 
         const torneos = [
@@ -607,18 +620,38 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
         const torneo = torneos.find((item) => String(item?.id || '') === String(torneoId || ''));
         if (cancelled) return;
 
+        const parseTorneoCategoria = (t) => {
+          const raw = t?.categoria ?? t?.categoria_id ?? t?.categoria_singles;
+          const num = Number.parseInt(String(raw ?? ''), 10);
+          return Number.isFinite(num) && num >= 1 && num <= 5 ? num : null;
+        };
+
         if (!torneo) {
           setPointsConfig(DEFAULT_POINTS_CONFIG);
           setTorneoEstado('');
+          setTorneoClubId(String(contextClubId || '').trim() || null);
+          setTorneoSexo(null);
+          setTorneoModalidad(null);
+          setTorneoCategoria(null);
           return;
         }
 
         setPointsConfig(normalizePointsConfig(torneo));
         setTorneoEstado(String(torneo?.estado || ''));
+        setTorneoClubId(String(torneo?.club_id || contextClubId || '').trim() || null);
+        const rawSexo = String(torneo?.rama || torneo?.sexo || '').trim();
+        setTorneoSexo(['Masculino', 'Femenino'].includes(rawSexo) ? rawSexo : null);
+        const rawMod = String(torneo?.modalidad || '').trim();
+        setTorneoModalidad(['Singles', 'Dobles'].includes(rawMod) ? rawMod : null);
+        setTorneoCategoria(parseTorneoCategoria(torneo));
       } catch (_) {
         if (!cancelled) {
           setPointsConfig(DEFAULT_POINTS_CONFIG);
           setTorneoEstado('');
+          setTorneoClubId(String(contextClubId || '').trim() || null);
+          setTorneoSexo(null);
+          setTorneoModalidad(null);
+          setTorneoCategoria(null);
         }
       }
     })();
@@ -626,7 +659,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     return () => {
       cancelled = true;
     };
-  }, [torneoId]);
+  }, [torneoId, contextClubId]);
 
   const cacheScore = useCallback((partidoOrId, scoreValue) => {
     const partidoId = String(
@@ -675,7 +708,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
   }, [rankingPosById]);
 
   useEffect(() => {
-    if (!torneoId) {
+    if (!torneoId || !torneoClubId) {
       setRankingPosById({});
       return;
     }
@@ -683,23 +716,52 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await axios.get(`${API_URL}/api/rankings`);
-        const rows = Array.isArray(data)
-          ? data
-          : Array.isArray(data?.jugadores)
-            ? data.jugadores
-            : [];
-
         const toElo = (jugador) => Number(
           jugador?.ranking_elo_singles
           ?? jugador?.ranking_elo
           ?? jugador?.elo
+          ?? jugador?.ranking_puntos_singles
+          ?? jugador?.ranking_puntos
           ?? 0
         );
 
+        const baseParams = {
+          club_id: torneoClubId,
+          ...(torneoSexo ? { sexo: torneoSexo } : {}),
+          ...(torneoModalidad ? { modalidad: torneoModalidad } : {}),
+        };
+
+        let rows = [];
+
+        if (torneoCategoria) {
+          // Categoría conocida: una sola llamada
+          const { data } = await axios.get(`${API_URL}/api/rankings`, {
+            params: { ...baseParams, categoria: torneoCategoria },
+          });
+          rows = Array.isArray(data) ? data : Array.isArray(data?.jugadores) ? data.jugadores : [];
+        } else {
+          // Categoría desconocida: pedir todas en paralelo y unir
+          const results = await Promise.allSettled(
+            [1, 2, 3, 4, 5].map((cat) =>
+              axios.get(`${API_URL}/api/rankings`, { params: { ...baseParams, categoria: cat } })
+            )
+          );
+          const seen = new Set();
+          results.forEach((r) => {
+            if (r.status !== 'fulfilled') return;
+            const d = r.value?.data;
+            const list = Array.isArray(d) ? d : Array.isArray(d?.jugadores) ? d.jugadores : [];
+            list.forEach((j) => {
+              const id = getFirstNonEmpty([j?.id, j?.jugador_id]);
+              if (!id || seen.has(id)) return;
+              seen.add(id);
+              rows.push(j);
+            });
+          });
+        }
+
         const sorted = [...rows].sort((a, b) => toElo(b) - toElo(a));
         const map = {};
-
         sorted.forEach((jugador, index) => {
           const id = getFirstNonEmpty([jugador?.id, jugador?.jugador_id]);
           if (!id) return;
@@ -715,7 +777,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     return () => {
       cancelled = true;
     };
-  }, [torneoId]);
+  }, [torneoId, torneoClubId, torneoSexo, torneoModalidad, torneoCategoria]);
 
   useEffect(() => {
     const ids = new Set();
@@ -828,12 +890,14 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
       const directId = getJugadorId(partido, side);
       const directName = getJugadorNombreDirecto(partido, side) || getNombrePerfil(directId);
       const directRanking = getJugadorRankingDirecto(partido, side) || getRankingPerfil(directId);
+      const rankingPos = getRankingPos(String(directId || '').trim());
 
       if (String(directId || '').trim() || String(directName || '').trim()) {
         return {
           id: String(directId || '').trim(),
           name: directName || 'Por definir',
-          ranking: String(directRanking || '').trim(),
+          // Priorizar posición de ranking (#1, #2…) sobre ELO crudo
+          ranking: String(rankingPos || directRanking || '').trim(),
         };
       }
 
@@ -927,18 +991,18 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
         {
           id: resolved.j1Id || getJugadorId(partido, 1),
           name: resolved.j1Name || getJugadorNombre(partido, 1),
-          ranking: resolved.j1Ranking
+          ranking: getRankingPos(resolved.j1Id || getJugadorId(partido, 1))
+            || resolved.j1Ranking
             || getJugadorRankingDirecto(partido, 1)
-            || getRankingPerfil(resolved.j1Id || getJugadorId(partido, 1))
-            || getRankingPos(resolved.j1Id || getJugadorId(partido, 1)),
+            || getRankingPerfil(resolved.j1Id || getJugadorId(partido, 1)),
         },
         {
           id: resolved.j2Id || getJugadorId(partido, 2),
           name: resolved.j2Name || getJugadorNombre(partido, 2),
-          ranking: resolved.j2Ranking
+          ranking: getRankingPos(resolved.j2Id || getJugadorId(partido, 2))
+            || resolved.j2Ranking
             || getJugadorRankingDirecto(partido, 2)
-            || getRankingPerfil(resolved.j2Id || getJugadorId(partido, 2))
-            || getRankingPos(resolved.j2Id || getJugadorId(partido, 2)),
+            || getRankingPerfil(resolved.j2Id || getJugadorId(partido, 2)),
         },
       ];
 
@@ -1928,18 +1992,14 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
                                 <div className={`flex items-center justify-between px-4 py-3 border-b ${hallOfFameMode ? 'border-white/60' : 'border-gray-100'} ${hasGanador && ganadorKey !== j1Key ? 'opacity-60 bg-gray-50/70' : hallOfFameMode ? 'bg-white/55' : ''}`}>
                                   <div className="flex items-center gap-2 min-w-0">
                                     <div className="h-6 w-6 rounded-full border border-white/30 bg-white/20 overflow-hidden shrink-0">
-                                      {j1Photo ? <img src={j1Photo} alt={j1Name} className="h-full w-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-slate-700">{j1Initials}</div>}
+                                      {j1Photo ? <img src={j1Photo} alt={j1Name} className="h-full w-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-blue-700">{formatRankingLabel(j1Ranking) || ''}</div>}
                                     </div>
                                     {j1Seed ? (
-                                      <span className="shrink-0 rounded-md border border-amber-300 bg-gradient-to-r from-amber-200 to-yellow-100 px-1.5 py-0.5 text-[10px] font-black text-amber-900">
-                                        #{j1Seed}
+                                      <span className="shrink-0 inline-flex flex-col items-center rounded-md border border-amber-300 bg-gradient-to-r from-amber-200 to-yellow-100 px-1.5 py-0.5 text-amber-900 leading-tight">
+                                        <span className="text-[11px] font-black">{seedLabel(j1Seed)}</span>
+                                        <span className="text-[8px] font-semibold uppercase tracking-tight">Cab. Serie</span>
                                       </span>
                                     ) : null}
-                                    {formatRankingLabel(j1Ranking) && (
-                                      <span className="shrink-0 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">
-                                        {formatRankingLabel(j1Ranking)}
-                                      </span>
-                                    )}
                                     <span className={`font-bold break-words leading-snug ${hasGanador && ganadorKey === j1Key ? 'text-emerald-600' : hallOfFameMode ? 'text-slate-500' : 'text-gray-800'} ${hasGanador && ganadorKey !== j1Key ? 'line-through text-gray-400' : ''}`}>
                                       {j1Name}
                                     </span>
@@ -1956,18 +2016,14 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
                                 <div className={`flex items-center justify-between px-4 py-3 ${hasGanador && ganadorKey !== j2Key ? 'opacity-60 bg-gray-50/70' : hallOfFameMode ? 'bg-white/55' : ''}`}>
                                   <div className="flex items-center gap-2 min-w-0">
                                     <div className="h-6 w-6 rounded-full border border-white/30 bg-white/20 overflow-hidden shrink-0">
-                                      {j2Photo ? <img src={j2Photo} alt={j2Name} className="h-full w-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-slate-700">{j2Initials}</div>}
+                                      {j2Photo ? <img src={j2Photo} alt={j2Name} className="h-full w-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-blue-700">{formatRankingLabel(j2Ranking) || ''}</div>}
                                     </div>
                                     {j2Seed ? (
-                                      <span className="shrink-0 rounded-md border border-amber-300 bg-gradient-to-r from-amber-200 to-yellow-100 px-1.5 py-0.5 text-[10px] font-black text-amber-900">
-                                        #{j2Seed}
+                                      <span className="shrink-0 inline-flex flex-col items-center rounded-md border border-amber-300 bg-gradient-to-r from-amber-200 to-yellow-100 px-1.5 py-0.5 text-amber-900 leading-tight">
+                                        <span className="text-[11px] font-black">{seedLabel(j2Seed)}</span>
+                                        <span className="text-[8px] font-semibold uppercase tracking-tight">Cab. Serie</span>
                                       </span>
                                     ) : null}
-                                    {formatRankingLabel(j2Ranking) && (
-                                      <span className="shrink-0 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">
-                                        {formatRankingLabel(j2Ranking)}
-                                      </span>
-                                    )}
                                     <span className={`font-bold break-words leading-snug ${hasGanador && ganadorKey === j2Key ? 'text-emerald-600' : hallOfFameMode ? 'text-slate-500' : 'text-gray-800'} ${hasGanador && ganadorKey !== j2Key ? 'line-through text-gray-400' : ''}`}>
                                       {j2Name}
                                     </span>
