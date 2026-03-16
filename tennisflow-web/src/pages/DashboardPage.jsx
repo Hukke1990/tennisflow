@@ -2005,7 +2005,7 @@ export default function DashboardPage() {
       } finally {
         setLiveRefreshing(false);
       }
-    }, 15000);
+    }, 5000);
 
     return () => clearInterval(intervalId);
   }, [data?.live_center?.hasLiveMatches, clubId]);
