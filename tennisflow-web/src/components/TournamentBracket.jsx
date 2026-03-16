@@ -2058,18 +2058,13 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
                                 </div>
 
                                 {score && parsedSets.length > 0 ? (
-                                  <div className={`px-4 py-2 border-b flex items-center justify-center gap-2 ${hallOfFameMode ? 'border-white/50 bg-white/35' : 'border-white/8 bg-white/[0.03]'}`}>
-                                    <div className="flex gap-1">
-                                      {parsedSets.map(([a, b], si) => (
-                                        <span key={si} className={`inline-flex items-center justify-center w-6 h-6 rounded text-[11px] font-black border ${a > b ? 'bg-[#a6ce39] text-[#0d2740] border-[#a6ce39]/70' : 'bg-white/10 text-white/45 border-white/10'}`}>{a}</span>
-                                      ))}
-                                    </div>
-                                    <span className="text-white/20 text-[10px]">vs</span>
-                                    <div className="flex gap-1">
-                                      {parsedSets.map(([a, b], si) => (
-                                        <span key={si} className={`inline-flex items-center justify-center w-6 h-6 rounded text-[11px] font-black border ${b > a ? 'bg-[#a6ce39] text-[#0d2740] border-[#a6ce39]/70' : 'bg-white/10 text-white/45 border-white/10'}`}>{b}</span>
-                                      ))}
-                                    </div>
+                                  <div className={`px-4 py-1.5 border-b flex justify-center gap-1.5 ${hallOfFameMode ? 'border-white/50 bg-white/35' : 'border-white/8 bg-white/[0.03]'}`}>
+                                    {parsedSets.map(([a, b], si) => (
+                                      <div key={si} className="flex flex-col gap-0.5">
+                                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-[11px] font-black border ${a > b ? 'bg-[#a6ce39] text-[#0d2740] border-[#a6ce39]/70' : 'bg-white/10 text-white/45 border-white/10'}`}>{a}</span>
+                                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-[11px] font-black border ${b > a ? 'bg-[#a6ce39] text-[#0d2740] border-[#a6ce39]/70' : 'bg-white/10 text-white/45 border-white/10'}`}>{b}</span>
+                                      </div>
+                                    ))}
                                   </div>
                                 ) : score ? (
                                   <div className={`px-4 py-1.5 border-b text-center ${hallOfFameMode ? 'border-white/50 bg-white/35' : 'border-white/8 bg-white/[0.03]'}`}>
