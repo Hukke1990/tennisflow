@@ -1247,15 +1247,15 @@ const generarSorteo = async (req, res) => {
 const fetchPartidosCuadroCompat = async (torneoId) => {
   const selectOptions = [
     {
-      columns: 'id, torneo_id, ronda, ronda_orden, orden_en_ronda, estado, fecha_hora, cancha_id, marcador_en_vivo, score, resultado, ganador_id, ganador_pareja_id, jugador1_id, jugador2_id, jugador1_pareja_id, jugador2_pareja_id, jugador1_origen_partido_id, jugador2_origen_partido_id, notas',
+      columns: 'id, torneo_id, ronda, ronda_orden, orden_en_ronda, estado, fecha_hora, cancha_id, marcador_en_vivo, score, resultado, ganador_id, ganador_pareja_id, jugador1_id, jugador2_id, jugador1_pareja_id, jugador2_pareja_id, jugador1_origen_partido_id, jugador2_origen_partido_id, notas, inicio_real, ultima_actualizacion',
       withOrderInRound: true,
     },
     {
-      columns: 'id, torneo_id, ronda, ronda_orden, orden_en_ronda, estado, fecha_hora, cancha_id, marcador_en_vivo, ganador_id, jugador1_id, jugador2_id, jugador1_pareja_id, jugador2_pareja_id, notas',
+      columns: 'id, torneo_id, ronda, ronda_orden, orden_en_ronda, estado, fecha_hora, cancha_id, marcador_en_vivo, ganador_id, jugador1_id, jugador2_id, jugador1_pareja_id, jugador2_pareja_id, notas, inicio_real, ultima_actualizacion',
       withOrderInRound: true,
     },
     {
-      columns: 'id, torneo_id, ronda, ronda_orden, estado, fecha_hora, cancha_id, ganador_id, jugador1_id, jugador2_id, notas',
+      columns: 'id, torneo_id, ronda, ronda_orden, estado, fecha_hora, cancha_id, ganador_id, jugador1_id, jugador2_id, notas, inicio_real, ultima_actualizacion',
       withOrderInRound: false,
     },
   ];
