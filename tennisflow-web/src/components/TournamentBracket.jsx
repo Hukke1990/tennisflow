@@ -1823,7 +1823,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
   const handleBracketDragEnd = () => { dragRef.current.active = false; setIsDragging(false); };
 
   // â”€â”€ Match-card renderer (shared mobile + desktop) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const renderMatchCard = (partido, matchIndex, totalInColumn, connectorSide) => {
+  const renderMatchCard = (partido, matchIndex, totalInColumn, connectorSide, fixedSlotH = null) => {
     const partidoKey = String(partido?.id || '').trim();
     const ganadorId = partido?.ganador_id;
     const resolved = jugadoresPorPartido[partidoKey] || {};
@@ -1863,6 +1863,13 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
       ? 'border-[#a6ce39] shadow-[0_0_8px_rgba(166,206,57,0.5)]'
       : hasGanador ? 'border-[#a6ce39]/40' : 'border-white/20 group-hover:border-white/35';
 
+    // Vertical connector height: slotH/2 when column has fixed height (desktop ATP),
+    // otherwise fall back to CSS-only calc based on gap-8 (mobile).
+    const cH = fixedSlotH ? fixedSlotH / 2 : null;
+    const vFallback = cH ? '' : 'h-[calc(50%+2rem)] lg:h-[calc(50%+2.5rem)]';
+    const vStyleDown = cH ? { top: '50%', height: cH } : { top: '50%' };
+    const vStyleUp   = cH ? { bottom: '50%', height: cH } : { bottom: '50%' };
+
     return (
       <div
         key={partido.id}
@@ -1872,16 +1879,16 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
         {connectorSide === 'right' && (
           <>
             <div className={`absolute top-1/2 -right-6 w-6 border-b-2 z-0 transition-colors ${connClass}`} />
-            {showV && matchIndex % 2 === 0 && <div className={`absolute top-1/2 -right-6 w-0 h-[calc(50%+2rem)] lg:h-[calc(50%+2.5rem)] border-r-2 z-0 transition-colors ${connClass}`} />}
-            {showV && matchIndex % 2 !== 0 && <div className={`absolute bottom-1/2 -right-6 w-0 h-[calc(50%+2rem)] lg:h-[calc(50%+2.5rem)] border-r-2 z-0 transition-colors ${connClass}`} />}
+            {showV && matchIndex % 2 === 0 && <div className={`absolute -right-6 w-0 border-r-2 z-0 transition-colors ${connClass} ${vFallback}`} style={vStyleDown} />}
+            {showV && matchIndex % 2 !== 0 && <div className={`absolute -right-6 w-0 border-r-2 z-0 transition-colors ${connClass} ${vFallback}`} style={vStyleUp} />}
             <div className={`absolute top-1/2 -right-12 w-6 border-b-2 z-0 transition-colors ${connClass}`} />
           </>
         )}
         {connectorSide === 'left' && (
           <>
             <div className={`absolute top-1/2 -left-6 w-6 border-b-2 z-0 transition-colors ${connClass}`} />
-            {showV && matchIndex % 2 === 0 && <div className={`absolute top-1/2 -left-6 w-0 h-[calc(50%+2rem)] lg:h-[calc(50%+2.5rem)] border-r-2 z-0 transition-colors ${connClass}`} />}
-            {showV && matchIndex % 2 !== 0 && <div className={`absolute bottom-1/2 -left-6 w-0 h-[calc(50%+2rem)] lg:h-[calc(50%+2.5rem)] border-r-2 z-0 transition-colors ${connClass}`} />}
+            {showV && matchIndex % 2 === 0 && <div className={`absolute -left-6 w-0 border-r-2 z-0 transition-colors ${connClass} ${vFallback}`} style={vStyleDown} />}
+            {showV && matchIndex % 2 !== 0 && <div className={`absolute -left-6 w-0 border-r-2 z-0 transition-colors ${connClass} ${vFallback}`} style={vStyleUp} />}
             <div className={`absolute top-1/2 -left-12 w-6 border-b-2 z-0 transition-colors ${connClass}`} />
           </>
         )}
@@ -2015,7 +2022,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
             +{roundBadgePoints} pts ELO
           </span>
         </div>
-        {colMatches.map((partido, matchIndex) => renderMatchCard(partido, matchIndex, colMatches.length, connectorSide))}
+        {colMatches.map((partido, matchIndex) => renderMatchCard(partido, matchIndex, colMatches.length, connectorSide, desktopHeight ? desktopHeight / colMatches.length : null))}
       </div>
     );
   };
