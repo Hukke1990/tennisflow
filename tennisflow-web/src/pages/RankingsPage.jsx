@@ -387,6 +387,10 @@ export default function RankingsPage() {
   }, [modalidad, sexo, categoria, rankingRefreshNonce, clubId]);
 
   useEffect(() => {
+    const isLocalhost = typeof window !== 'undefined'
+      && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    if (!isLocalhost) return undefined;
+
     const requestRefresh = () => {
       setRankingRefreshNonce((prev) => prev + 1);
     };

@@ -197,8 +197,11 @@ export default function AdminDashboard() {
   );
 
   useEffect(() => {
-    // 1. Inicializar Socket.io
-    const newSocket = io();
+    const isLocalhost = typeof window !== 'undefined'
+      && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    // 1. Inicializar Socket.io (solo en entorno local; Vercel es serverless sin Socket.IO)
+    const newSocket = isLocalhost ? io() : null;
     setSocket(newSocket);
 
     // 2. Cargar canchas y torneos
@@ -208,17 +211,19 @@ export default function AdminDashboard() {
     fetchWhatsappTemplateConfig();
 
     // 3. Escuchar eventos de cambios de cancha en tiempo real
-    newSocket.on('estado_cancha_cambiado', (canchaActualizada) => {
-      setCanchas(prevCanchas => 
-        prevCanchas.map(c => c.id === canchaActualizada.id ? canchaActualizada : c)
-      );
-    });
+    if (newSocket) {
+      newSocket.on('estado_cancha_cambiado', (canchaActualizada) => {
+        setCanchas(prevCanchas => 
+          prevCanchas.map(c => c.id === canchaActualizada.id ? canchaActualizada : c)
+        );
+      });
 
-    // 4. Refrescar solicitudes pendientes en tiempo real para badge/admin panel
-    newSocket.on('inscripciones_pendientes_actualizadas', () => {
-      fetchInscripcionesPendientes();
-      fetchTorneosAdmin();
-    });
+      // 4. Refrescar solicitudes pendientes en tiempo real para badge/admin panel
+      newSocket.on('inscripciones_pendientes_actualizadas', () => {
+        fetchInscripcionesPendientes();
+        fetchTorneosAdmin();
+      });
+    }
 
     // Fallback por si se pierde algun evento de socket.
     const intervalId = setInterval(() => {
@@ -227,7 +232,7 @@ export default function AdminDashboard() {
 
     return () => {
       clearInterval(intervalId);
-      newSocket.disconnect();
+      if (newSocket) newSocket.disconnect();
     };
   }, []);
 

@@ -1153,23 +1153,31 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
       fetchCanchasTorneo();
     };
 
-    const socket = io(API_URL);
-    const eventHandlers = REALTIME_EVENTS.map((eventName) => {
-      const handler = (payload) => {
-        if (!payloadMatchesTournament(payload, torneoId)) return;
-        refreshSilent();
-      };
+    const isLocalhost = typeof window !== 'undefined'
+      && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-      socket.on(eventName, handler);
-      return { eventName, handler };
-    });
+    let socket = null;
+    let eventHandlers = [];
+    if (isLocalhost) {
+      socket = io(API_URL);
+      eventHandlers = REALTIME_EVENTS.map((eventName) => {
+        const handler = (payload) => {
+          if (!payloadMatchesTournament(payload, torneoId)) return;
+          refreshSilent();
+        };
+        socket.on(eventName, handler);
+        return { eventName, handler };
+      });
+    }
 
     const intervalId = setInterval(refreshSilent, 8000);
 
     return () => {
       clearInterval(intervalId);
-      eventHandlers.forEach(({ eventName, handler }) => socket.off(eventName, handler));
-      socket.disconnect();
+      if (socket) {
+        eventHandlers.forEach(({ eventName, handler }) => socket.off(eventName, handler));
+        socket.disconnect();
+      }
     };
   }, [torneoId, fetchCuadro, fetchCanchasTorneo]);
 

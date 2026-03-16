@@ -1000,6 +1000,10 @@ function RankingSection({ sexo, titulo, jugadorId, clubId }) {
   }, [modalidad, sexo, categoria, jugadorId, rankingRefreshNonce, clubId]);
 
   useEffect(() => {
+    const isLocalhost = typeof window !== 'undefined'
+      && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    if (!isLocalhost) return undefined;
+
     const requestRefresh = () => {
       setRankingRefreshNonce((prev) => prev + 1);
     };
@@ -1794,15 +1798,23 @@ export default function DashboardPage() {
       requestSeasonRefresh();
     };
 
-    const socket = io(API_URL, { transports: ['websocket', 'polling'] });
-    socket.on('ranking_actualizado', requestSeasonRefresh);
+    const isLocalhost = typeof window !== 'undefined'
+      && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    let socket = null;
+    if (isLocalhost) {
+      socket = io(API_URL, { transports: ['websocket', 'polling'] });
+      socket.on('ranking_actualizado', requestSeasonRefresh);
+    }
 
     window.addEventListener(LIVE_UPDATE_EVENT, requestSeasonRefresh);
     window.addEventListener('storage', onStorageEvent);
 
     return () => {
-      socket.off('ranking_actualizado', requestSeasonRefresh);
-      socket.disconnect();
+      if (socket) {
+        socket.off('ranking_actualizado', requestSeasonRefresh);
+        socket.disconnect();
+      }
       window.removeEventListener(LIVE_UPDATE_EVENT, requestSeasonRefresh);
       window.removeEventListener('storage', onStorageEvent);
     };
