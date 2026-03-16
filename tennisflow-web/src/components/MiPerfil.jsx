@@ -262,7 +262,7 @@ function MiActividad({ userId }) {
   return (
     <div className="space-y-5">
       {/* Stats rápidas */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 sm:grid-cols-3 gap-3">
         {[
           { icon: IconTennisBall, label: 'Partidos', value: stats.total_partidos, color: 'from-blue-500 to-indigo-600' },
           { icon: IconTrophy, label: 'Victorias', value: stats.victorias, color: 'from-emerald-500 to-teal-600' },
@@ -705,7 +705,7 @@ export default function MiPerfil() {
                 </div>
               </div>
 
-              <div className="px-3 sm:px-4 py-3 bg-gradient-to-r from-[#0e3157] via-[#1a5689] to-[#2f8ec6] text-white md:border-l md:border-white/25">
+              <div className="px-3 sm:px-4 py-3 bg-gradient-to-r from-[#0e3157] via-[#1a5689] to-[#2f8ec6] text-white border-t border-white/20 md:border-t-0 md:border-l md:border-white/25">
                 <div className="flex items-start gap-3">
                   <div className="h-10 w-10 rounded-xl bg-white/20 border border-white/25 flex items-center justify-center shadow">
                     <IconTrophy className="h-5 w-5 text-amber-200" />
@@ -873,14 +873,14 @@ export default function MiPerfil() {
                 Datos Tecnicos
               </h2>
 
-              <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 mb-4">
                 <PhysicalStatCard icon={<IconRuler className="h-5 w-5" />} label="Altura" value={form.altura ? `${form.altura} cm` : 'Sin dato'} />
                 <PhysicalStatCard icon={<IconScale className="h-5 w-5" />} label="Peso" value={form.peso ? `${form.peso} kg` : 'Sin dato'} />
                 <PhysicalStatCard icon={<IconHand className="h-5 w-5" />} label="Mano" value={form.mano_dominante || 'Sin dato'} />
                 <PhysicalStatCard icon={<IconRacket className="h-5 w-5" />} label="Reves" value={form.estilo_reves || 'Sin dato'} />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <SelectField label="Mano Dominante" id="mano_dominante" value={form.mano_dominante} onChange={handleChange('mano_dominante')}
                   options={[{ value: 'Diestro', label: 'Diestro' }, { value: 'Zurdo', label: 'Zurdo' }]} />
                 <SelectField label="Estilo de Reves" id="estilo_reves" value={form.estilo_reves} onChange={handleChange('estilo_reves')}
@@ -906,7 +906,7 @@ export default function MiPerfil() {
                     { value: '5', label: 'Nivel 5 - Principiante' },
                   ]} />
                 {!canEditCategorias && (
-                  <div className="sm:col-span-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 inline-flex items-center gap-1.5">
+                  <div className="col-span-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 inline-flex items-center gap-1.5">
                     <IconLock className="h-3.5 w-3.5" />
                     Solo admin o super_admin pueden editar categorias de Singles y Dobles.
                   </div>

@@ -1650,7 +1650,14 @@ export default function AdminLiveControl({ torneos = [] }) {
               return (
                 <article key={cancha.key} className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4 sm:p-5 space-y-4">
                   <header className="space-y-1">
-                    <h3 className="text-base sm:text-lg font-black text-gray-900">{canchaHeader}</h3>
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="text-base sm:text-lg font-black text-gray-900">{canchaHeader}</h3>
+                      {selectedTorneoId && torneosHoy.find((t) => String(t.id) === selectedTorneoId)?.titulo ? (
+                        <span className="shrink-0 inline-flex items-center rounded-full bg-indigo-100 text-indigo-700 px-2 py-0.5 text-[10px] font-bold leading-none">
+                          {torneosHoy.find((t) => String(t.id) === selectedTorneoId).titulo}
+                        </span>
+                      ) : null}
+                    </div>
                     <p className={`text-xs font-bold ${
                       state === 'en_juego'
                         ? 'text-emerald-600'

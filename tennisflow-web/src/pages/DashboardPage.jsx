@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { io } from 'socket.io-client';
@@ -648,6 +648,34 @@ const loadLiveCenterData = async (torneo, clubId) => {
   };
 };
 
+// Combina partidos de TODOS los torneos con partidos en vivo, taggeando cada partido con su torneo
+const mergeAllLiveCenters = (liveCentersRaw) => {
+  const centers = (Array.isArray(liveCentersRaw) ? liveCentersRaw : []).filter(Boolean);
+  if (centers.length === 0) return null;
+
+  const primary = centers.find((lc) => lc.hasLiveMatches) || centers[0];
+
+  // Inyecta __torneo_nombre en cada partido para badge en la UI
+  const allPartidos = centers.flatMap((lc) =>
+    (Array.isArray(lc.partidos) ? lc.partidos : []).map((p) => ({
+      ...p,
+      __torneo_id: String(lc.torneo?.id || ''),
+      __torneo_nombre: String(lc.torneo?.titulo || ''),
+    }))
+  );
+
+  const allCanchasRaw = centers.flatMap((lc) => (Array.isArray(lc.canchas) ? lc.canchas : []));
+
+  return {
+    torneo: primary.torneo,
+    torneos: centers.map((lc) => lc.torneo).filter(Boolean),
+    partidos: allPartidos,
+    canchas: buildCanchaCatalog({ canchas: allCanchasRaw, partidos: allPartidos }),
+    hasLiveMatches: allPartidos.some(isPartidoEnJuego),
+    updatedAt: new Date().toISOString(),
+  };
+};
+
 const isTorneoInscribible = (torneo) => {
   const estado = (torneo?.estado || '').toLowerCase();
   if (ESTADOS_NO_INSCRIPCION.has(estado)) return false;
@@ -742,7 +770,7 @@ function Skeleton({ className }) {
 function DashboardSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-3 gap-4"><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4"><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div>
       <Skeleton className="h-52" />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><Skeleton className="h-64 lg:col-span-2" /><Skeleton className="h-64" /></div>
     </div>
@@ -1197,7 +1225,7 @@ function LiveCenterStrip({ liveCenter }) {
   );
 }
 
-function LiveBroadcastCard({ match, cardLabel, nowMs, defaultSurface, extraCount = 0 }) {
+function LiveBroadcastCard({ match, cardLabel, nowMs, defaultSurface, compact = false }) {
   const marcador = getMarcadorLegible(match);
   const [setsA, setsB] = splitScorePair(marcador.sets);
   const [gamesA, gamesB] = splitScorePair(marcador.games);
@@ -1222,7 +1250,7 @@ function LiveBroadcastCard({ match, cardLabel, nowMs, defaultSurface, extraCount
 
     return (
       <div className={`flex flex-col ${alignRight ? 'items-end text-right' : 'items-start text-left'} gap-2 min-w-0`}>
-        <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-full border-2 border-white/30 bg-gradient-to-br from-[#c8d8eb] to-[#6d89a8] overflow-hidden shadow-md">
+        <div className={`rounded-full border-2 border-white/30 bg-gradient-to-br from-[#c8d8eb] to-[#6d89a8] overflow-hidden shadow-md ${compact ? 'h-9 w-9' : 'h-14 w-14 sm:h-16 sm:w-16'}`}>
           {player.avatarUrl ? (
             <img src={player.avatarUrl} alt={player.nombre} className="h-full w-full object-cover" />
           ) : (
@@ -1253,33 +1281,40 @@ function LiveBroadcastCard({ match, cardLabel, nowMs, defaultSurface, extraCount
   };
 
   return (
-    <article className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md p-4 sm:p-5 h-full">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-white/75">{cardLabel}</p>
-        <span className="inline-flex items-center gap-1 rounded-full border border-red-200/40 bg-red-500/20 px-2.5 py-1 text-[11px] font-black text-red-100 shadow-[0_0_14px_rgba(248,113,113,0.5)] animate-[pulse_1.8s_ease-in-out_infinite]">
-          <span className="w-2 h-2 rounded-full bg-red-300" />
-          EN VIVO
-        </span>
+    <article className={`rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md h-full ${compact ? 'p-3' : 'p-4 sm:p-5'}`}>
+      <div className={`flex items-center justify-between gap-2 flex-wrap ${compact ? 'mb-2' : 'mb-4'}`}>
+        <p className={`font-black uppercase tracking-[0.16em] text-white/75 ${compact ? 'text-[10px]' : 'text-xs'}`}>{cardLabel}</p>
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+          {cancha?.nombre ? (
+            <span className="inline-flex items-center rounded-full bg-[#a6ce39]/20 border border-[#a6ce39]/50 px-2 py-0.5 text-[10px] font-black text-[#d4f07a] tracking-wide whitespace-nowrap">
+              {cancha.nombre}
+            </span>
+          ) : null}
+          <span className="inline-flex items-center gap-1 rounded-full border border-red-200/40 bg-red-500/20 px-2.5 py-1 text-[11px] font-black text-red-100 shadow-[0_0_14px_rgba(248,113,113,0.5)] animate-[pulse_1.8s_ease-in-out_infinite]">
+            <span className="w-2 h-2 rounded-full bg-red-300" />
+            EN VIVO
+          </span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3 md:items-center">
         {renderPlayer(playerA, 1)}
 
-        <div className="rounded-xl border border-white/20 bg-[#061529]/80 px-3 py-3 min-w-[220px]">
+        <div className={`rounded-xl border border-white/20 bg-[#061529]/80 px-3 py-3 ${compact ? 'min-w-[120px]' : 'min-w-[220px]'}`}>
           <div className="grid grid-cols-3 gap-2 items-stretch">
             <div className="rounded-lg border border-white/20 bg-white/10 p-2 text-center">
               <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/70">Sets</p>
-              <p className="mt-1 text-lg font-black font-mono text-white">{setsA}-{setsB}</p>
+              <p className={`mt-1 font-black font-mono text-white ${compact ? 'text-sm' : 'text-lg'}`}>{setsA}-{setsB}</p>
             </div>
 
             <div className="rounded-lg border border-[#fef08a] bg-[#eaff4d] p-2 text-center shadow-[0_0_20px_rgba(234,255,77,0.38)]">
               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#2f2a00]">Game</p>
-              <p className="mt-1 text-xl font-black font-mono text-[#1b1b1b] leading-none">{marcador.main}</p>
+              <p className={`mt-1 font-black font-mono text-[#1b1b1b] leading-none ${compact ? 'text-base' : 'text-xl'}`}>{marcador.main}</p>
             </div>
 
             <div className="rounded-lg border border-white/20 bg-white/10 p-2 text-center">
               <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/70">Games</p>
-              <p className="mt-1 text-lg font-black font-mono text-white">{gamesA}-{gamesB}</p>
+              <p className={`mt-1 font-black font-mono text-white ${compact ? 'text-sm' : 'text-lg'}`}>{gamesA}-{gamesB}</p>
             </div>
           </div>
 
@@ -1296,53 +1331,56 @@ function LiveBroadcastCard({ match, cardLabel, nowMs, defaultSurface, extraCount
         {renderPlayer(playerB, 2)}
       </div>
 
-      <p className="mt-3 text-[11px] text-white/60">
-        {cancha?.nombre || 'Cancha por definir'} - Superficie: {surfaceLabel}
-      </p>
-      {extraCount > 0 ? <p className="mt-1 text-[11px] text-white/55">+{extraCount} partido(s) en vivo adicional(es)</p> : null}
+      {!compact && (
+        <p className="mt-3 text-[11px] text-white/60">
+          Superficie: {surfaceLabel}
+        </p>
+      )}
     </article>
   );
 }
 
-function LiveHeroHub({ liveCenter, nextTorneo, nowMs }) {
+function LiveHeroHub({ liveCenter, nextTorneo, nowMs, isRefreshing = false }) {
   const { club } = useClub();
   const partidos = Array.isArray(liveCenter?.partidos) ? liveCenter.partidos : [];
   const liveMatches = partidos
     .filter(isPartidoEnJuego)
     .sort((a, b) => getDateMs(b?.ultima_actualizacion, getDateMs(b?.inicio_real, 0)) - getDateMs(a?.ultima_actualizacion, getDateMs(a?.inicio_real, 0)));
 
-  const featured = liveMatches[0] || null;
-  const others = liveMatches.slice(1, 4);
-  const secondary = others[0] || null;
-  const secondaryExtraCount = Math.max(0, others.length - 1);
+  const matchCount = liveMatches.length;
+  const isCompact = matchCount >= 3;
 
-  if (featured) {
+  if (matchCount > 0) {
     const defaultSurface = liveCenter?.torneo?.superficie || '';
 
     return (
       <section className="rounded-3xl border border-[#dbe8f4]/70 bg-gradient-to-br from-[#0d2740] via-[#16476d] to-[#123a5c] p-4 sm:p-6 shadow-[0_24px_60px_rgba(15,23,42,0.18)] overflow-hidden relative">
         <div className="absolute inset-0 opacity-25 bg-[radial-gradient(circle_at_15%_20%,rgba(255,255,255,0.25),transparent_45%),radial-gradient(circle_at_90%_15%,rgba(166,206,57,0.16),transparent_34%)]" />
+        {isRefreshing && (
+          <div className="absolute top-3 right-3 z-10 pointer-events-none">
+            <div className="h-3 w-3 rounded-full border-2 border-[#a6ce39]/35 border-t-[#a6ce39] animate-spin" />
+          </div>
+        )}
         <div className="relative space-y-4">
           <ClubNameGlassCard clubName={club?.nombre} />
 
-          <div className="grid gap-4 lg:grid-cols-2 items-stretch">
-          <LiveBroadcastCard
-            match={featured}
-            cardLabel="Live Match Slider"
-            nowMs={nowMs}
-            defaultSurface={defaultSurface}
-          />
-
-            <div className="h-full">
-              {secondary ? (
+          <div
+            className={isCompact
+              ? 'min-h-[200px] max-h-[520px] overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#a6ce39] [&::-webkit-scrollbar-track]:bg-white/10 [&::-webkit-scrollbar-track]:rounded-full'
+              : 'min-h-[200px]'}
+          >
+            <div className={`grid gap-3 ${isCompact ? 'grid-cols-1 lg:grid-cols-2' : 'lg:grid-cols-2 items-stretch'}`}>
+              {liveMatches.map((match, idx) => (
                 <LiveBroadcastCard
-                  match={secondary}
-                  cardLabel="Partido en curso"
+                  key={match.id ?? idx}
+                  match={match}
+                  cardLabel={match.__torneo_nombre || (idx === 0 ? 'En Vivo' : 'Partido en curso')}
                   nowMs={nowMs}
                   defaultSurface={defaultSurface}
-                  extraCount={secondaryExtraCount}
+                  compact={isCompact}
                 />
-              ) : (
+              ))}
+              {!isCompact && matchCount === 1 && (
                 <article className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md p-4 sm:p-5 h-full">
                   <p className="text-xs uppercase font-bold tracking-[0.14em] text-white/65">Partido destacado</p>
                   <p className="text-sm text-white/90 mt-1">No hay otros partidos activos en este momento.</p>
@@ -1360,6 +1398,11 @@ function LiveHeroHub({ liveCenter, nextTorneo, nowMs }) {
   return (
     <section className="rounded-3xl border border-[#dbe8f4]/70 bg-gradient-to-br from-[#0d2740] via-[#16476d] to-[#123a5c] p-4 sm:p-6 shadow-[0_24px_60px_rgba(15,23,42,0.18)] overflow-hidden relative">
       <div className="absolute inset-0 opacity-25 bg-[radial-gradient(circle_at_20%_20%,rgba(166,206,57,0.16),transparent_38%),radial-gradient(circle_at_78%_80%,rgba(255,255,255,0.18),transparent_35%)]" />
+      {isRefreshing && (
+        <div className="absolute top-3 right-3 z-10 pointer-events-none">
+          <div className="h-3 w-3 rounded-full border-2 border-[#a6ce39]/35 border-t-[#a6ce39] animate-spin" />
+        </div>
+      )}
       <div className="relative space-y-4">
         <ClubNameGlassCard clubName={club?.nombre} />
 
@@ -1556,6 +1599,10 @@ export default function DashboardPage() {
   const [seasonData, setSeasonData] = useState(null);
   const [seasonLoading, setSeasonLoading] = useState(false);
   const [seasonRefreshNonce, setSeasonRefreshNonce] = useState(0);
+  const [liveRefreshing, setLiveRefreshing] = useState(false);
+  // SWR: refs para stale-while-revalidate
+  const stableLiveCenterRef = useRef(null);
+  const latestDataRef = useRef(null);
 
   useEffect(() => {
     const intervalId = setInterval(() => setNowMs(Date.now()), 60000);
@@ -1564,6 +1611,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const refreshLiveCenterOnly = async (preferredTorneoId) => {
+      setLiveRefreshing(true);
       const previousData = data;
       let torneosPool = [];
 
@@ -1588,6 +1636,7 @@ export default function DashboardPage() {
           const { data: torneosRaw } = await query;
           torneosPool = Array.isArray(torneosRaw) ? torneosRaw : [];
         } catch (_) {
+          setLiveRefreshing(false);
           return;
         }
       }
@@ -1602,31 +1651,32 @@ export default function DashboardPage() {
         ]
         : candidates;
 
-      let liveCenter = null;
-      let fallback = null;
+      const allRefreshResults = await Promise.allSettled(
+        reorderedCandidates.map((torneo) => loadLiveCenterData(torneo, clubId))
+      );
+      const liveCenter = mergeAllLiveCenters(
+        allRefreshResults.filter((r) => r.status === 'fulfilled').map((r) => r.value)
+      );
 
-      for (const torneo of reorderedCandidates) {
-        const liveData = await loadLiveCenterData(torneo, clubId);
-        if (!fallback && liveData) fallback = liveData;
-        if (liveData?.hasLiveMatches) {
-          liveCenter = liveData;
-          break;
-        }
+      if (!liveCenter) {
+        setLiveRefreshing(false);
+        return;
       }
-
-      if (!liveCenter && fallback) {
-        liveCenter = fallback;
-      }
-
-      if (!liveCenter) return;
 
       setData((prev) => {
         if (!prev) return prev;
+        // Blindaje: si la nueva respuesta no tiene partidos en vivo pero la anterior sí,
+        // ignoramos esta actualización — puede ser una respuesta transitoria vacía por
+        // timing o error de red. El cargarDashboard completo limpiará cuando sea definitivo.
+        if (!liveCenter.hasLiveMatches && prev.live_center?.hasLiveMatches) {
+          return prev;
+        }
         return {
           ...prev,
           live_center: liveCenter,
         };
       });
+      setLiveRefreshing(false);
     };
 
     const onLiveUpdateEvent = (event) => {
@@ -1670,23 +1720,13 @@ export default function DashboardPage() {
       const torneos_finalizados = [...torneosOrdenados]
         .filter((t) => ESTADOS_FINALIZADOS.has((t?.estado || '').toLowerCase()))
         .sort((a, b) => new Date(b.fecha_inicio) - new Date(a.fecha_inicio));
-      let live_center = null;
-      let live_center_fallback = null;
       const candidatosLive = getLiveCenterCandidates(torneosOrdenados);
-      for (const torneo of candidatosLive) {
-        const liveData = await loadLiveCenterData(torneo, clubId);
-        if (!live_center_fallback && liveData) {
-          live_center_fallback = liveData;
-        }
-        if (liveData?.hasLiveMatches) {
-          live_center = liveData;
-          break;
-        }
-      }
-
-      if (!live_center && live_center_fallback) {
-        live_center = live_center_fallback;
-      }
+      const allLiveResults = await Promise.allSettled(
+        candidatosLive.map((torneo) => loadLiveCenterData(torneo, clubId))
+      );
+      const live_center = mergeAllLiveCenters(
+        allLiveResults.filter((r) => r.status === 'fulfilled').map((r) => r.value)
+      );
 
       if (!active) return;
 
@@ -1878,37 +1918,62 @@ export default function DashboardPage() {
   }, [user?.id, perfil?.sexo, perfil?.categoria_singles, perfil?.categoria, seasonSourceSignature, clubId]);
 
   useEffect(() => {
-    const torneoLiveId = data?.live_center?.torneo?.id;
-    if (!torneoLiveId) return undefined;
+    if (!data?.live_center?.hasLiveMatches) return undefined;
 
     const intervalId = setInterval(async () => {
       try {
-        const refreshed = await loadLiveCenterData(data.live_center.torneo, clubId);
-        if (!refreshed) return;
+        setLiveRefreshing(true);
+        const currentData = latestDataRef.current;
+        const torneosPool = [
+          ...(currentData?.proximos_torneos || []),
+          ...(currentData?.torneos_finalizados || []),
+        ].filter((t, i, arr) => arr.findIndex((x) => String(x.id) === String(t.id)) === i);
+
+        const candidates = getLiveCenterCandidates(torneosPool);
+        if (candidates.length === 0) return;
+
+        const results = await Promise.allSettled(
+          candidates.map((torneo) => loadLiveCenterData(torneo, clubId))
+        );
+        const merged = mergeAllLiveCenters(
+          results.filter((r) => r.status === 'fulfilled').map((r) => r.value)
+        );
 
         setData((prev) => {
-          if (!prev?.live_center?.torneo?.id || String(prev.live_center.torneo.id) !== String(torneoLiveId)) {
+          if (!prev) return prev;
+          // Guarda SWR: nunca reemplazar partidos vivos con respuesta vacía
+          if (!merged || (!merged.hasLiveMatches && prev.live_center?.hasLiveMatches)) {
             return prev;
           }
-
-          return {
-            ...prev,
-            live_center: refreshed,
-          };
+          return { ...prev, live_center: merged };
         });
       } catch (_) {
-        // Silent polling to keep dashboard stable if backend is temporarily unavailable.
+        // Error silencioso — mantener estado existente
+      } finally {
+        setLiveRefreshing(false);
       }
     }, 15000);
 
     return () => clearInterval(intervalId);
-  }, [data?.live_center?.torneo?.id, clubId]);
+  }, [data?.live_center?.hasLiveMatches, clubId]);
+
+  // SWR: mantener referencia al dato más reciente para closures de interval
+  latestDataRef.current = data;
 
   const {
     proximos_torneos = [],
     torneos_finalizados = [],
-    live_center = null,
+    live_center: rawLiveCenter = null,
   } = data || {};
+
+  // Stale-while-revalidate: guardar último estado con partidos en vivo
+  if (rawLiveCenter?.hasLiveMatches) {
+    stableLiveCenterRef.current = rawLiveCenter;
+  }
+  // Mostrar datos stale mientras se revalida; datos frescos una vez completado
+  const live_center = (liveRefreshing && stableLiveCenterRef.current)
+    ? stableLiveCenterRef.current
+    : rawLiveCenter;
 
   const torneoHero = proximos_torneos.find(isTorneoInscribible) || null;
   const nextTorneo = proximos_torneos[0] || null;
@@ -2055,7 +2120,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6 rounded-3xl bg-gradient-to-b from-[#f7fbff] via-[#f8fafc] to-[#f6f1df] p-2 sm:p-3">
 
-      <LiveHeroHub liveCenter={live_center} nextTorneo={nextTorneo} nowMs={nowMs} />
+      <LiveHeroHub liveCenter={live_center} nextTorneo={nextTorneo} nowMs={nowMs} isRefreshing={liveRefreshing} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {globalStats.map((stat) => (
