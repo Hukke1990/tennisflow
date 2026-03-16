@@ -47,6 +47,7 @@ export default function Navbar() {
   };
 
   return (
+    <>
     <header className="sticky top-0 z-50 bg-[#0a0f1e]/95 border-b border-white/10 shadow-lg backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
@@ -115,7 +116,21 @@ export default function Navbar() {
                   </Link>
                 )}
                 <div className="flex items-center gap-2 group relative">
-                  <Link to={toClubPath('/perfil')} className="flex items-center gap-2">
+                  {/* Mobile: toca el avatar para abrir el drawer */}
+                  <button
+                    type="button"
+                    className="md:hidden w-9 h-9 rounded-full flex items-center justify-center ring-2 ring-white/10 active:ring-emerald-400/60 transition-all shadow overflow-hidden bg-gradient-to-br from-blue-500 to-indigo-600"
+                    onClick={() => setMobileOpen(prev => !prev)}
+                    aria-label="Menú de usuario"
+                  >
+                    {fotoPerfil && !avatarError ? (
+                      <img src={fotoPerfil} alt={perfil?.nombre_completo || 'Avatar'} onError={() => setAvatarError(true)} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-white text-xs font-bold">{iniciales}</span>
+                    )}
+                  </button>
+                  {/* Desktop: link al perfil */}
+                  <Link to={toClubPath('/perfil')} className="hidden md:flex items-center gap-2">
                     <div className="w-9 h-9 rounded-full flex items-center justify-center ring-2 ring-white/10 group-hover:ring-emerald-400/50 transition-all shadow overflow-hidden bg-gradient-to-br from-blue-500 to-indigo-600">
                       {fotoPerfil && !avatarError ? (
                         <img
@@ -151,87 +166,74 @@ export default function Navbar() {
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={() => setMobileOpen((prev) => !prev)}
-              className="md:hidden inline-flex items-center justify-center w-9 h-9 rounded-lg border border-white/15 text-white hover:bg-white/10 transition-colors"
-              aria-label={mobileOpen ? 'Cerrar menu' : 'Abrir menu'}
-              aria-expanded={mobileOpen}
-            >
-              <span className="relative w-4 h-4 block">
-                <span className={`absolute left-0 top-0 h-0.5 w-4 bg-current rounded transition-transform ${mobileOpen ? 'translate-y-[7px] rotate-45' : ''}`} />
-                <span className={`absolute left-0 top-[7px] h-0.5 w-4 bg-current rounded transition-opacity ${mobileOpen ? 'opacity-0' : 'opacity-100'}`} />
-                <span className={`absolute left-0 top-[14px] h-0.5 w-4 bg-current rounded transition-transform ${mobileOpen ? '-translate-y-[7px] -rotate-45' : ''}`} />
-              </span>
-            </button>
           </div>
 
         </div>
-
-        {mobileOpen && (
-          <div className="md:hidden pb-4">
-            <div className="rounded-2xl border border-white/10 bg-[#11182d] p-3 shadow-lg space-y-2">
-              {navLinks.map(({ to, label }) => {
-                const resolvedPath = toClubPath(to);
-                const isActive = isActiveLink(to);
-
-                return (
-                  <button
-                    key={to}
-                    type="button"
-                    onClick={() => navigate(resolvedPath)}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={`w-full text-left block rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                      isActive
-                        ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/25'
-                        : 'text-gray-300 hover:bg-white/5 hover:text-white border border-transparent'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-
-              {user ? (
-                <>
-                  {isAdmin && (
-                    <Link
-                      to={toClubPath('/admin')}
-                      className="block rounded-lg px-3 py-2 text-sm font-semibold text-emerald-300 border border-emerald-400/40 bg-transparent hover:bg-emerald-500/14 hover:text-emerald-100 transition-all duration-200"
-                    >
-                      Admin
-                    </Link>
-                  )}
-                  {rolReal === 'super_admin' && (
-                    <Link
-                      to="/super-admin"
-                      className="block rounded-lg px-3 py-2 text-sm font-semibold text-sky-300 border border-sky-400/40 bg-transparent hover:bg-sky-500/14 hover:text-sky-100 transition-all duration-200"
-                    >
-                      Super Admin
-                    </Link>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleSignOut}
-                    className="w-full rounded-lg px-3 py-2 text-sm font-semibold text-red-300 border border-red-500/30 bg-red-500/10 text-left"
-                  >
-                    Salir
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Link to={toClubPath('/login')} className="block rounded-lg px-3 py-2 text-sm font-semibold text-gray-300 border border-white/10">
-                    Ingresar
-                  </Link>
-                  <Link to={toClubPath('/registro')} className="block rounded-lg px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-emerald-500 to-teal-500">
-                    Registrarse
-                  </Link>
-                </>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </header>
+
+    {/* Mobile user sheet – fuera del header para evitar conflicto con backdrop-filter */}
+    {mobileOpen && user && (
+      <div
+        className="md:hidden fixed inset-0 z-[60]"
+        onClick={() => setMobileOpen(false)}
+      >
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+        <div
+          className="absolute bottom-0 left-0 right-0 bg-[#0d1426] border-t border-white/10 rounded-t-2xl p-5 space-y-1.5"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.25rem)' }}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Info del usuario */}
+          <div className="flex items-center gap-3 pb-4 mb-1 border-b border-white/10">
+            <div className="w-11 h-11 rounded-full flex items-center justify-center ring-2 ring-white/15 shadow overflow-hidden bg-gradient-to-br from-blue-500 to-indigo-600 shrink-0">
+              {fotoPerfil && !avatarError ? (
+                <img src={fotoPerfil} alt={perfil?.nombre_completo || 'Avatar'} onError={() => setAvatarError(true)} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-white text-sm font-bold">{iniciales}</span>
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="text-white font-semibold text-sm truncate">{perfil?.nombre_completo || user.email}</p>
+              <p className="text-gray-400 text-xs truncate">{user.email}</p>
+            </div>
+          </div>
+          {/* Links */}
+          <Link
+            to={toClubPath('/perfil')}
+            onClick={() => setMobileOpen(false)}
+            className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-gray-200 hover:bg-white/5 transition-colors"
+          >
+            Mi Perfil
+          </Link>
+          {isAdmin && (
+            <Link
+              to={toClubPath('/admin')}
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-emerald-300 border border-emerald-400/25 hover:bg-emerald-500/10 transition-colors"
+            >
+              Panel Admin
+            </Link>
+          )}
+          {rolReal === 'super_admin' && (
+            <Link
+              to="/super-admin"
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-sky-300 border border-sky-400/25 hover:bg-sky-500/10 transition-colors"
+            >
+              Super Admin
+            </Link>
+          )}
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="w-full text-left flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-red-400 border border-red-500/20 bg-red-500/5 hover:bg-red-500/15 transition-colors mt-1"
+          >
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

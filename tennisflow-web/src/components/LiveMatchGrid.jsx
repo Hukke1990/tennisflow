@@ -179,13 +179,15 @@ export default function LiveMatchGrid({ liveCenter, nowMs }) {
   const partidos = Array.isArray(liveCenter?.partidos) ? liveCenter.partidos : [];
   const hasLiveMatches = Boolean(liveCenter?.hasLiveMatches);
 
-  if (!torneo || !hasLiveMatches) return null;
+  if (!hasLiveMatches) return null;
 
   return (
     <section className="rounded-2xl border border-red-100 bg-gradient-to-br from-red-50 via-white to-orange-50 shadow-sm overflow-hidden">
       <div className="px-5 py-4 border-b border-red-100/80 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-black text-red-700 text-lg">Torneo en curso: {torneo.titulo}</h2>
+          <h2 className="font-black text-red-700 text-lg">
+          {torneo ? `Torneo en curso: ${torneo.titulo}` : 'Canchas en Vivo'}
+        </h2>
           <p className="text-xs text-red-500">Estado de canchas en vivo</p>
         </div>
         <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-white px-3 py-1 text-[11px] font-bold text-red-600">
@@ -208,16 +210,23 @@ export default function LiveMatchGrid({ liveCenter, nowMs }) {
               <article key={cancha.key} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <p className="font-black text-gray-800">{cancha.nombre}</p>
-                  {partidoEnJuego ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-red-100 text-red-600 px-2.5 py-1 text-[11px] font-bold">
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                      EN VIVO
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-500 px-2.5 py-1 text-[11px] font-bold">
-                      SIN PARTIDO EN VIVO
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                    {partidoEnJuego?.__torneo_nombre ? (
+                      <span className="inline-flex items-center rounded-full bg-indigo-100 text-indigo-700 px-2 py-0.5 text-[10px] font-bold">
+                        {partidoEnJuego.__torneo_nombre}
+                      </span>
+                    ) : null}
+                    {partidoEnJuego ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 text-red-600 px-2.5 py-1 text-[11px] font-bold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                        EN VIVO
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-500 px-2.5 py-1 text-[11px] font-bold">
+                        SIN PARTIDO EN VIVO
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {partidoEnJuego ? (

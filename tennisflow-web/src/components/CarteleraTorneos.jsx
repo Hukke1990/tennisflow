@@ -804,7 +804,7 @@ export default function CarteleraTorneos() {
                       disabled={!torneo.puedeInscribirse && !torneo.puedeVerCuadro}
                       title={!torneo.cumpleRequisitos && !torneo.puedeVerCuadro ? (torneo.mensajeRequisito || 'No cumplís los requisitos del torneo') : undefined}
                       className={`
-                        mt-4 w-full py-3 px-4 rounded-xl font-bold text-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2
+                        mt-4 w-full py-4 sm:py-3 px-4 rounded-xl font-bold text-base sm:text-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2
                         ${!torneo.puedeInscribirse && !torneo.puedeVerCuadro ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed' : ''}
                         ${torneo.isTerminado ? 'bg-slate-900 text-white hover:bg-slate-800 focus:ring-slate-500' : ''}
                         ${torneo.isEnProgreso ? 'bg-[#0f4c81] text-white hover:bg-[#0b1a2e] focus:ring-[#0f4c81]' : ''}

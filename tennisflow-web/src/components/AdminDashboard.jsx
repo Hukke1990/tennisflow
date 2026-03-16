@@ -662,45 +662,30 @@ export default function AdminDashboard() {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {canchas.map(cancha => (
-                  <div 
+                  <button
                     key={cancha.id}
+                    type="button"
                     onClick={() => toggleCanchaEstado(cancha)}
                     className={`
-                      relative overflow-hidden rounded-xl shadow-sm border-2 cursor-pointer
-                      transition-all duration-200 transform hover:-translate-y-1 hover:shadow-md
-                      ${cancha.esta_disponible 
-                        ? 'bg-emerald-50 border-emerald-200 hover:border-emerald-300' 
+                      flex items-center gap-2.5 rounded-xl border-2 cursor-pointer px-3 py-3 sm:px-4 sm:py-4
+                      transition-all duration-200 hover:shadow-md active:scale-95 text-left w-full
+                      ${cancha.esta_disponible
+                        ? 'bg-emerald-50 border-emerald-200 hover:border-emerald-300'
                         : 'bg-red-50 border-red-200 hover:border-red-300'}
                     `}
                   >
-                    <div className="p-6">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className={`text-lg font-bold mb-1 ${cancha.esta_disponible ? 'text-emerald-900' : 'text-red-900'}`}>
-                            {cancha.nombre}
-                          </h3>
-                          <p className={`text-sm font-medium ${cancha.esta_disponible ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {cancha.esta_disponible ? 'Activa y lista' : 'Fuera de servicio'}
-                          </p>
-                        </div>
-                        
-                        <div className={`
-                          h-4 w-4 rounded-full mt-1 shadow-inner
-                          ${cancha.esta_disponible ? 'bg-emerald-500' : 'bg-red-500'}
-                        `} />
-                      </div>
+                    <span className={`shrink-0 h-3 w-3 rounded-full shadow-inner ${cancha.esta_disponible ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                    <div className="min-w-0">
+                      <p className={`text-sm font-bold truncate ${cancha.esta_disponible ? 'text-emerald-900' : 'text-red-900'}`}>
+                        {cancha.nombre}
+                      </p>
+                      <p className={`hidden sm:block text-xs font-medium mt-0.5 ${cancha.esta_disponible ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {cancha.esta_disponible ? 'Activa y lista' : 'Fuera de servicio'}
+                      </p>
                     </div>
-                    
-                    {/* Decorative background element */}
-                    <div className="absolute -bottom-4 -right-4 opacity-10">
-                      <svg width="100" height="100" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" />
-                        <path d="M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z" />
-                      </svg>
-                    </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}

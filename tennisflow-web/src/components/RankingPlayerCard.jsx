@@ -163,7 +163,7 @@ function PhysicalStatCard({ icon, label, value }) {
     <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
       <div className="text-slate-500 mb-1">{icon}</div>
       <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500">{label}</p>
-      <p className="text-[30px] sm:text-xl font-black text-slate-900 leading-tight mt-1">{value}</p>
+      <p className="text-lg sm:text-xl font-black text-slate-900 leading-tight mt-1">{value}</p>
     </div>
   );
 }
@@ -442,17 +442,17 @@ export default function RankingPlayerCard({
     ? Math.round((stats.victorias / stats.total_partidos) * 100)
     : 0;
   const cardPadding = compact ? 'p-3 sm:p-3.5' : 'p-3.5 sm:p-4';
-  const headerBottomPadding = compact ? 'pb-14 sm:pb-20' : 'pb-16 sm:pb-24';
+  const headerBottomPadding = compact ? 'pb-4 sm:pb-20' : 'pb-4 sm:pb-24';
   const headerTextOffset = compact ? 'ml-24 sm:ml-48' : 'ml-24 sm:ml-56';
   const avatarSizeClass = compact ? 'h-28 w-28 sm:h-36 sm:w-36' : 'h-28 w-28 sm:h-44 sm:w-44';
   const avatarBottomClass = compact ? '-bottom-12 sm:-bottom-20' : '-bottom-12 sm:-bottom-24';
   const rankingAsideOffset = compact ? 'sm:ml-44' : 'sm:ml-56';
-  const contentTopPadding = compact ? 'pt-16 sm:pt-8' : 'pt-16 sm:pt-10';
-  const rankingLiftClass = compact ? '-mt-5 sm:-mt-16' : '-mt-5 sm:-mt-20';
+  const contentTopPadding = compact ? 'pt-3 sm:pt-8' : 'pt-3 sm:pt-10';
+  const rankingLiftClass = compact ? 'sm:-mt-16' : 'sm:-mt-20';
 
   return (
     <div
-      className={`overflow-hidden rounded-3xl border border-slate-200 bg-white ${floating ? 'shadow-2xl ring-1 ring-slate-200 max-h-[84vh] overflow-y-auto' : 'shadow-sm'}`}
+      className={`w-full max-w-full box-border rounded-3xl border border-slate-200 bg-white ${floating ? 'shadow-2xl ring-1 ring-slate-200 max-h-[84vh] overflow-y-auto overflow-x-hidden' : 'overflow-hidden shadow-sm'}`}
       style={{ fontFamily: 'Inter, Roboto, system-ui, sans-serif' }}
     >
       <div className={`relative px-4 sm:px-5 pt-3.5 sm:pt-4.5 ${headerBottomPadding} bg-gradient-to-r from-slate-950 via-blue-900 to-sky-800 text-white`}>
@@ -473,7 +473,40 @@ export default function RankingPlayerCard({
           </button>
         ) : null}
 
-        <div className={`relative z-10 ${headerTextOffset} pr-8 sm:pr-10`}>
+        {/* Mobile: avatar inline con nombre en fila (oculto en sm+) */}
+        <div className="relative z-10 flex items-center gap-3 sm:hidden pr-10 py-2">
+          <div className="h-14 w-14 shrink-0 rounded-full p-[2px] bg-gradient-to-br from-[#f7e9aa] via-[#d4af37] to-[#8f6a16] shadow-lg">
+            <div className="h-full w-full rounded-full p-[3px] bg-gradient-to-br from-[#f4e8bf] to-[#d1ac43]">
+              <div className="h-full w-full rounded-full overflow-hidden ring-2 ring-[#f9f0d0] bg-slate-100">
+                {data.avatarUrl ? (
+                  <img src={data.avatarUrl} alt={data.nombreCompleto} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="h-full w-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-black text-lg flex items-center justify-center">
+                    {getInitials(data.nombreCompleto)}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-sky-100/80">Ficha del jugador</p>
+            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+              <h3 className="text-xl font-black leading-tight truncate">{data.nombreCompleto}</h3>
+              {(rankingSingles.posicion === 1 || rankingDobles.posicion === 1) && (
+                <span className="inline-flex items-center rounded-full bg-amber-400/25 border border-amber-300/60 px-1.5 py-0.5 text-[10px] font-black text-amber-200 leading-none">
+                  ★ #1
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-sky-100 flex items-center gap-1 truncate mt-0.5">
+              <IconPin className="h-3 w-3 text-amber-200 shrink-0" />
+              <span className="truncate">{data.localidad}</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Desktop: texto con offset para el avatar desbordado (oculto en mobile) */}
+        <div className={`relative z-10 hidden sm:block ${headerTextOffset} pr-8 sm:pr-10`}>
           <p className="text-[11px] font-black uppercase tracking-[0.18em] text-sky-100/80">Ficha del jugador</p>
           <h3 className="mt-1 text-2xl sm:text-4xl font-black leading-[1.02] truncate">{data.nombreCompleto}</h3>
           <p className="mt-1 sm:mt-1.5 text-sm sm:text-lg text-sky-100 flex items-center gap-1.5 truncate">
@@ -482,7 +515,8 @@ export default function RankingPlayerCard({
           </p>
         </div>
 
-        <div className={`absolute left-4 sm:left-5 ${avatarBottomClass} z-20`}>
+        {/* Desktop: avatar desbordado (oculto en mobile) */}
+        <div className={`hidden sm:block absolute left-4 sm:left-5 ${avatarBottomClass} z-20`}>
           <div className={`${avatarSizeClass} rounded-full p-[3px] bg-gradient-to-br from-[#f7e9aa] via-[#d4af37] to-[#8f6a16] shadow-[0_14px_24px_rgba(15,23,42,0.32)]`}>
             <div className="h-full w-full rounded-full p-[4px] bg-gradient-to-br from-[#f4e8bf] to-[#d1ac43]">
               <div className="h-full w-full rounded-full overflow-hidden ring-2 ring-[#f9f0d0] bg-slate-100">
@@ -507,7 +541,7 @@ export default function RankingPlayerCard({
         <div className="absolute left-3 top-20 h-8 w-8 border border-amber-200/70 rounded-sm pointer-events-none opacity-70" />
         <div className="absolute right-4 top-28 h-8 w-8 border border-sky-200/80 rounded-sm pointer-events-none opacity-70" />
 
-        <div className={`${rankingAsideOffset} ${rankingLiftClass} relative z-20 rounded-2xl border border-slate-200 overflow-hidden shadow-md`}>
+        <div className={`w-full ${rankingAsideOffset} ${rankingLiftClass} relative z-20 rounded-2xl border border-slate-200 overflow-hidden shadow-md`}>
           <div className="relative grid grid-cols-1 md:grid-cols-2">
             <div className="px-3 sm:px-4 py-2.5 bg-gradient-to-r from-[#9b7422] via-[#d9b857] to-[#f2df9c] text-slate-950">
               <div className="flex items-start gap-3">
@@ -532,7 +566,7 @@ export default function RankingPlayerCard({
               </div>
             </div>
 
-            <div className="px-3 sm:px-4 py-2.5 bg-gradient-to-r from-[#0e3157] via-[#1a5689] to-[#2f8ec6] text-white md:border-l md:border-white/25">
+            <div className="px-3 sm:px-4 py-2.5 bg-gradient-to-r from-[#0e3157] via-[#1a5689] to-[#2f8ec6] text-white border-t border-white/20 md:border-t-0 md:border-l md:border-white/25">
               <div className="flex items-start gap-3">
                 <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#f8fafc] to-[#cbd5e1] flex items-center justify-center shadow">
                   <ShieldBadgeIcon />
@@ -567,26 +601,30 @@ export default function RankingPlayerCard({
 
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3">
           <p className="text-sm font-black uppercase tracking-[0.14em] text-slate-700 mb-2.5">Estadisticas rapidas</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="rounded-xl bg-white border border-slate-200 px-3 py-2.5">
-              <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500 font-black">Partidos jugados</p>
-              <p className="text-2xl font-black text-slate-900 mt-1">{stats.total_partidos}</p>
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
+            <div className="rounded-xl bg-white border border-slate-200 px-2 py-2 sm:px-3 sm:py-2.5">
+              <p className="text-[9px] sm:text-[11px] uppercase tracking-[0.06em] sm:tracking-[0.12em] text-slate-500 font-black leading-tight">Partidos</p>
+              <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1">{stats.total_partidos}</p>
             </div>
 
-            <div className="rounded-xl bg-white border border-slate-200 px-3 py-2.5 flex items-center justify-between gap-2">
+            <div className="rounded-xl bg-white border border-slate-200 px-2 py-2 sm:px-3 sm:py-2.5 flex items-center justify-between gap-1 sm:gap-2">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500 font-black">Victorias</p>
-                <p className="text-2xl font-black text-slate-900 mt-1">{stats.victorias}</p>
+                <p className="text-[9px] sm:text-[11px] uppercase tracking-[0.06em] sm:tracking-[0.12em] text-slate-500 font-black leading-tight">Victorias</p>
+                <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1">{stats.victorias}</p>
               </div>
-              <StatRing percent={victoriasPercent} label={`${victoriasPercent}%`} />
+              <div className="hidden sm:block shrink-0">
+                <StatRing percent={victoriasPercent} label={`${victoriasPercent}%`} />
+              </div>
             </div>
 
-            <div className="rounded-xl bg-white border border-slate-200 px-3 py-2.5 flex items-center justify-between gap-2">
+            <div className="rounded-xl bg-white border border-slate-200 px-2 py-2 sm:px-3 sm:py-2.5 flex items-center justify-between gap-1 sm:gap-2">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500 font-black">Efectividad</p>
-                <p className="text-2xl font-black text-slate-900 mt-1">{eficacia}%</p>
+                <p className="text-[9px] sm:text-[11px] uppercase tracking-[0.06em] sm:tracking-[0.12em] text-slate-500 font-black leading-tight">Eficacia</p>
+                <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1">{eficacia}%</p>
               </div>
-              <StatRing percent={eficacia} label="Win" />
+              <div className="hidden sm:block shrink-0">
+                <StatRing percent={eficacia} label="Win" />
+              </div>
             </div>
           </div>
           <p className="mt-2 text-xs text-slate-500">Nacimiento: {data.fechaNacimiento}</p>

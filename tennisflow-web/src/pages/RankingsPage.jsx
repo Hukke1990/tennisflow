@@ -463,16 +463,19 @@ export default function RankingsPage() {
   const currentUserId = String(user?.id || '');
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 rounded-3xl bg-gradient-to-b from-[#f7fbff] via-[#f8fafc] to-[#f6f1df] p-2 sm:p-3 overflow-visible">
+    <div className="max-w-6xl mx-auto space-y-6 rounded-3xl bg-gradient-to-b from-[#f7fbff] via-[#f8fafc] to-[#f6f1df] p-2 sm:p-3">
       <div className="mb-8">
         <h1 className="text-3xl sm:text-4xl font-black text-[#0f4c81] tracking-tight">Rankings</h1>
         <p className="text-slate-600 mt-1">Leaderboard de elite por puntos ELO</p>
       </div>
 
       <div ref={filtersRef} className="relative z-40 overflow-visible rounded-2xl border border-white/35 bg-gradient-to-br from-[#0c2b49] via-[#16456b] to-[#113153] p-3 sm:p-4 mb-4 shadow-xl">
-        <div className="absolute inset-0 opacity-35 pointer-events-none bg-[radial-gradient(circle_at_15%_15%,rgba(255,255,255,0.26),transparent_35%),radial-gradient(circle_at_85%_20%,rgba(212,175,55,0.32),transparent_28%),radial-gradient(circle_at_30%_90%,rgba(107,165,219,0.28),transparent_34%)]" />
-        <div className="absolute -top-16 -right-14 h-40 w-40 rounded-full bg-[#d4af37]/35 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-20 -left-12 h-48 w-48 rounded-full bg-sky-300/25 blur-3xl pointer-events-none" />
+        {/* Decorativas clipeadas para no desbordar el viewport */}
+        <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none">
+          <div className="absolute inset-0 opacity-35 bg-[radial-gradient(circle_at_15%_15%,rgba(255,255,255,0.26),transparent_35%),radial-gradient(circle_at_85%_20%,rgba(212,175,55,0.32),transparent_28%),radial-gradient(circle_at_30%_90%,rgba(107,165,219,0.28),transparent_34%)]" />
+          <div className="absolute -top-16 -right-14 h-40 w-40 rounded-full bg-[#d4af37]/35 blur-3xl" />
+          <div className="absolute -bottom-20 -left-12 h-48 w-48 rounded-full bg-sky-300/25 blur-3xl" />
+        </div>
 
         <div className="relative space-y-3 text-white">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -724,13 +727,13 @@ export default function RankingsPage() {
                     }}
                     className={`group rounded-xl border px-3 sm:px-4 py-3 transition-all cursor-pointer backdrop-blur-sm ${index % 2 === 0 ? 'bg-white/90' : 'bg-slate-50/85'} ${j.pos <= 3 ? 'border-[#e2c57a]' : 'border-slate-200'} hover:bg-white hover:shadow-md hover:border-[#0f4c81]/35 ${isCurrentUser ? 'ring-2 ring-[#60a5fa]/65 shadow-[0_0_0_3px_rgba(96,165,250,0.22)] bg-[#eff6ff]/95' : ''}`}
                   >
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
-                      <div className="sm:col-span-2 inline-flex items-center gap-2">
-                        <span className="text-2xl font-black text-slate-900 min-w-[48px]">#{j.pos}</span>
+                    <div className="flex items-center gap-2 sm:grid sm:grid-cols-12 sm:gap-3">
+                      <div className="shrink-0 sm:col-span-2 inline-flex items-center gap-1.5">
+                        <span className="text-xl sm:text-2xl font-black text-slate-900 min-w-[36px] sm:min-w-[48px]">#{j.pos}</span>
                         <TrendIndicator direction={j.trendDirection} />
                       </div>
 
-                      <div className={`${modalidad === 'Dobles' ? 'sm:col-span-5' : 'sm:col-span-5'} flex items-center gap-3 min-w-0`}>
+                      <div className={`flex-1 min-w-0 ${modalidad === 'Dobles' ? 'sm:col-span-5' : 'sm:col-span-5'} flex items-center gap-3`}>
                         {j.foto_url && !avatarErrors[j.id] ? (
                           <div className="relative">
                             <img
@@ -765,18 +768,18 @@ export default function RankingsPage() {
                         </div>
                       </div>
 
-                      <div className="sm:col-span-2">
+                      <div className="hidden sm:flex sm:col-span-2">
                         <span className={`inline-flex items-center rounded-full border px-3 py-1 text-sm font-bold ${categoriaTone.badge}`}>
                           Cat {j.categoriaJugador}
                         </span>
                       </div>
 
-                      <div className="sm:col-span-2 sm:text-center">
-                        <p className="text-lg font-black text-[#0f4c81]">{j.puntos}</p>
+                      <div className="shrink-0 sm:col-span-2 sm:text-center">
+                        <p className="text-base sm:text-lg font-black text-[#0f4c81]">{j.puntos}</p>
                         <p className="text-[11px] uppercase tracking-wider text-slate-500">ELO</p>
                       </div>
 
-                      <div className="sm:col-span-1 sm:text-right">
+                      <div className="hidden sm:flex sm:col-span-1 sm:justify-end">
                         <button
                           type="button"
                           onClick={(event) => {
@@ -799,11 +802,11 @@ export default function RankingsPage() {
 
       {selectedPlayer ? (
         <div
-          className="fixed inset-0 z-30 bg-white/0 backdrop-blur-[2px] flex items-center justify-center p-3 sm:p-5"
+          className="fixed inset-0 z-50 bg-white/0 backdrop-blur-[2px] flex items-center justify-center p-4 sm:p-5"
           onClick={() => setSelectedPlayerId('')}
         >
           <div
-            className="w-full max-w-[700px]"
+            className="w-full max-w-[700px] overflow-x-hidden"
             onClick={(event) => event.stopPropagation()}
           >
             <RankingPlayerCard
@@ -812,6 +815,7 @@ export default function RankingsPage() {
               modalidad={modalidad}
               categoria={categoria}
               apiUrl={API_URL}
+              compact
               floating
               onClose={() => setSelectedPlayerId('')}
             />
