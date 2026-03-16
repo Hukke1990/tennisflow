@@ -542,7 +542,7 @@ export default function RankingPlayerCard({
         <div className="absolute right-4 top-28 h-8 w-8 border border-sky-200/80 rounded-sm pointer-events-none opacity-70" />
 
         <div className={`w-full ${rankingAsideOffset} ${rankingLiftClass} relative z-20 rounded-2xl border border-slate-200 overflow-hidden shadow-md`}>
-          <div className="relative grid grid-cols-1 md:grid-cols-2">
+          <div className="relative grid grid-cols-2">
             <div className="px-3 sm:px-4 py-2.5 bg-gradient-to-r from-[#9b7422] via-[#d9b857] to-[#f2df9c] text-slate-950">
               <div className="flex items-start gap-3">
                 <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#0b3f73] to-[#012849] text-2xl flex items-center justify-center shadow text-amber-300">
@@ -566,7 +566,7 @@ export default function RankingPlayerCard({
               </div>
             </div>
 
-            <div className="px-3 sm:px-4 py-2.5 bg-gradient-to-r from-[#0e3157] via-[#1a5689] to-[#2f8ec6] text-white border-t border-white/20 md:border-t-0 md:border-l md:border-white/25">
+            <div className="px-3 sm:px-4 py-2.5 bg-gradient-to-r from-[#0e3157] via-[#1a5689] to-[#2f8ec6] text-white border-l border-white/25">
               <div className="flex items-start gap-3">
                 <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#f8fafc] to-[#cbd5e1] flex items-center justify-center shadow">
                   <ShieldBadgeIcon />
