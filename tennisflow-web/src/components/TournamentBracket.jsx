@@ -1,4 +1,4 @@
-/* eslint-disable react/prop-types */
+﻿/* eslint-disable react/prop-types */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
@@ -97,8 +97,8 @@ const normalizeSurfaceLabel = (value) => {
   const raw = normalize(value);
   if (!raw) return 'A confirmar';
   if (raw.includes('ladrillo')) return 'Polvo de ladrillo';
-  if (raw.includes('cesped') || raw.includes('césped')) return 'Cesped';
-  if (raw.includes('rapida') || raw.includes('rápida') || raw.includes('dura') || raw.includes('hard')) return 'Cancha rapida';
+  if (raw.includes('cesped') || raw.includes('cÃ©sped')) return 'Cesped';
+  if (raw.includes('rapida') || raw.includes('rÃ¡pida') || raw.includes('dura') || raw.includes('hard')) return 'Cancha rapida';
   return String(value || 'A confirmar');
 };
 
@@ -564,6 +564,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
   const [mutationBusy, setMutationBusy] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [hoveredPlayerId, setHoveredPlayerId] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const [cachedScoreByPartido, setCachedScoreByPartido] = useState({});
   const [pointsConfig, setPointsConfig] = useState(DEFAULT_POINTS_CONFIG);
@@ -574,6 +575,8 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     score: '',
   });
   const cachedScoreRef = useRef({});
+  const bracketContainerRef = useRef(null);
+  const dragRef = useRef({ active: false, startX: 0, startY: 0, scrollX: 0, scrollY: 0 });
 
   useEffect(() => {
     cachedScoreRef.current = cachedScoreByPartido;
@@ -735,13 +738,13 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
         let rows = [];
 
         if (torneoCategoria) {
-          // Categoría conocida: una sola llamada
+          // CategorÃ­a conocida: una sola llamada
           const { data } = await axios.get(`${API_URL}/api/rankings`, {
             params: { ...baseParams, categoria: torneoCategoria },
           });
           rows = Array.isArray(data) ? data : Array.isArray(data?.jugadores) ? data.jugadores : [];
         } else {
-          // Categoría desconocida: pedir todas en paralelo y unir
+          // CategorÃ­a desconocida: pedir todas en paralelo y unir
           const results = await Promise.allSettled(
             [1, 2, 3, 4, 5].map((cat) =>
               axios.get(`${API_URL}/api/rankings`, { params: { ...baseParams, categoria: cat } })
@@ -897,7 +900,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
         return {
           id: String(directId || '').trim(),
           name: directName || 'Por definir',
-          // Priorizar posición de ranking (#1, #2…) sobre ELO crudo
+          // Priorizar posiciÃ³n de ranking (#1, #2â€¦) sobre ELO crudo
           ranking: String(rankingPos || directRanking || '').trim(),
         };
       }
@@ -1195,6 +1198,17 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     () => Object.keys(rondas).sort((a, b) => Number(b) - Number(a)),
     [rondas]
   );
+
+  const nonFinalRounds = useMemo(() => bracketOrder.slice(0, -1), [bracketOrder]);
+  const finalRoundKey = useMemo(() => bracketOrder[bracketOrder.length - 1] ?? null, [bracketOrder]);
+
+  const BRACKET_CELL_H = 240;
+  const firstRoundTopCount = useMemo(() => {
+    if (nonFinalRounds.length === 0) return 1;
+    const matches = sortPartidosByOrder(rondas[nonFinalRounds[0]] || []);
+    return Math.max(1, Math.ceil(matches.length / 2));
+  }, [nonFinalRounds, rondas]);
+  const symColHeight = firstRoundTopCount * BRACKET_CELL_H;
 
   const finalPartido = useMemo(() => {
     if (!Array.isArray(partidos) || partidos.length === 0) return null;
@@ -1791,6 +1805,221 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     }));
   }, [resultModal.open, resultModal.ganadorId, activeModalWinnerOptions]);
 
+  // â”€â”€ Drag-to-pan â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const handleBracketMouseDown = (e) => {
+    if (e.button !== 0) return;
+    const el = bracketContainerRef.current;
+    if (!el) return;
+    dragRef.current = { active: true, startX: e.clientX, startY: e.clientY, scrollX: el.scrollLeft, scrollY: el.scrollTop };
+    setIsDragging(true);
+  };
+  const handleBracketMouseMove = (e) => {
+    if (!dragRef.current.active) return;
+    const el = bracketContainerRef.current;
+    if (!el) return;
+    el.scrollLeft = dragRef.current.scrollX - (e.clientX - dragRef.current.startX);
+    el.scrollTop = dragRef.current.scrollY - (e.clientY - dragRef.current.startY);
+  };
+  const handleBracketDragEnd = () => { dragRef.current.active = false; setIsDragging(false); };
+
+  // â”€â”€ Match-card renderer (shared mobile + desktop) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const renderMatchCard = (partido, matchIndex, totalInColumn, connectorSide) => {
+    const partidoKey = String(partido?.id || '').trim();
+    const ganadorId = partido?.ganador_id;
+    const resolved = jugadoresPorPartido[partidoKey] || {};
+    const j1Id = resolved.j1Id || getJugadorId(partido, 1);
+    const j2Id = resolved.j2Id || getJugadorId(partido, 2);
+    const j1Name = resolved.j1Name || getJugadorNombre(partido, 1);
+    const j2Name = resolved.j2Name || getJugadorNombre(partido, 2);
+    const j1Ranking = resolved.j1Ranking || getJugadorRankingDirecto(partido, 1) || getRankingPerfil(j1Id) || getRankingPos(j1Id);
+    const j2Ranking = resolved.j2Ranking || getJugadorRankingDirecto(partido, 2) || getRankingPerfil(j2Id) || getRankingPos(j2Id);
+    const j1Photo = getFotoPerfil(j1Id);
+    const j2Photo = getFotoPerfil(j2Id);
+    const j1Seed = seedByJugadorId[String(j1Id || '').trim()] || null;
+    const j2Seed = seedByJugadorId[String(j2Id || '').trim()] || null;
+    const hasGanador = Boolean(ganadorId);
+    const estado = getEstadoPartido(partido);
+    const hasConflict = isConflictAvailability(partido);
+    const slot = formatSlot(partido);
+    const score = getScoreDisplay(partido);
+    const ganadorKey = String(ganadorId || '').trim();
+    const j1Key = String(j1Id || '').trim();
+    const j2Key = String(j2Id || '').trim();
+    const isChampionRoute = hallOfFameMode && championRouteMatchIds.has(partidoKey);
+    const isPlayed = hasGanador || estado.key === 'finalizado';
+    const isLive = estado.key === 'en_juego';
+    const canchaId = partido?.cancha?.id || partido?.cancha_id;
+    const canchaMeta = canchas.find((c) => String(c?.id || '') === String(canchaId || ''));
+    const superficie = normalizeSurfaceLabel(partido?.cancha?.superficie || partido?.superficie || canchaMeta?.superficie);
+    const isPlayerHovered = Boolean(hoveredPlayerId) && ((j1Key && j1Key === hoveredPlayerId) || (j2Key && j2Key === hoveredPlayerId));
+    const isOtherPlayerHovered = Boolean(hoveredPlayerId) && !isPlayerHovered;
+    const showV = totalInColumn > 1;
+    const parsedSets = score
+      ? score.trim().replace(/\s*\/\s*/g, ' ').split(/\s+/).filter((s) => /^\d+-\d+/.test(s))
+          .map((s) => { const m = s.match(/^(\d+)-(\d+)/); return m ? [parseInt(m[1], 10), parseInt(m[2], 10)] : null; })
+          .filter(Boolean)
+      : [];
+    const connClass = isChampionRoute || isPlayerHovered
+      ? 'border-[#a6ce39] shadow-[0_0_8px_rgba(166,206,57,0.5)]'
+      : hasGanador ? 'border-[#a6ce39]/40' : 'border-white/20 group-hover:border-white/35';
+
+    return (
+      <div
+        key={partido.id}
+        className={`relative group transition-opacity ${isOtherPlayerHovered ? 'opacity-30' : 'opacity-100'}`}
+        onMouseLeave={() => setHoveredPlayerId(null)}
+      >
+        {connectorSide === 'right' && (
+          <>
+            <div className={`absolute top-1/2 -right-6 w-6 border-b-2 z-0 transition-colors ${connClass}`} />
+            {showV && matchIndex % 2 === 0 && <div className={`absolute top-1/2 -right-6 w-0 h-[calc(50%+2rem)] lg:h-[calc(50%+2.5rem)] border-r-2 z-0 transition-colors ${connClass}`} />}
+            {showV && matchIndex % 2 !== 0 && <div className={`absolute bottom-1/2 -right-6 w-0 h-[calc(50%+2rem)] lg:h-[calc(50%+2.5rem)] border-r-2 z-0 transition-colors ${connClass}`} />}
+            <div className={`absolute top-1/2 -right-12 w-6 border-b-2 z-0 transition-colors ${connClass}`} />
+          </>
+        )}
+        {connectorSide === 'left' && (
+          <>
+            <div className={`absolute top-1/2 -left-6 w-6 border-b-2 z-0 transition-colors ${connClass}`} />
+            {showV && matchIndex % 2 === 0 && <div className={`absolute top-1/2 -left-6 w-0 h-[calc(50%+2rem)] lg:h-[calc(50%+2.5rem)] border-r-2 z-0 transition-colors ${connClass}`} />}
+            {showV && matchIndex % 2 !== 0 && <div className={`absolute bottom-1/2 -left-6 w-0 h-[calc(50%+2rem)] lg:h-[calc(50%+2.5rem)] border-r-2 z-0 transition-colors ${connClass}`} />}
+            <div className={`absolute top-1/2 -left-12 w-6 border-b-2 z-0 transition-colors ${connClass}`} />
+          </>
+        )}
+
+        <div className={`relative z-10 rounded-xl border overflow-hidden transition-all ${
+          hasConflict
+            ? 'border-red-400/60 bg-red-500/10 backdrop-blur-sm shadow-sm'
+            : isLive
+              ? 'border-[#a6ce39]/50 bg-white/[0.06] backdrop-blur-md shadow-[0_0_24px_rgba(166,206,57,0.2)]'
+              : hallOfFameMode
+                ? 'border-white/45 bg-white/74 backdrop-blur-md shadow-[0_12px_28px_rgba(15,23,42,0.34)]'
+                : 'border-white/10 bg-white/5 backdrop-blur-md shadow-lg hover:border-white/[0.18] hover:bg-white/[0.08]'
+        } ${isChampionRoute || isPlayerHovered ? 'ring-1 ring-[#a6ce39]/60 shadow-[0_0_16px_rgba(166,206,57,0.3)]' : ''}`}>
+          {isLive && <div className="absolute inset-0 rounded-xl ring-1 ring-[#a6ce39]/60 animate-pulse pointer-events-none z-20" />}
+
+          <div className={`px-3 py-2 text-xs border-b ${hasConflict ? 'bg-red-500/15 border-red-400/20 text-red-300' : isLive ? 'bg-[#a6ce39]/[0.08] border-[#a6ce39]/20 text-[#a6ce39]/90' : hallOfFameMode ? 'bg-white/62 border-white/80 text-slate-600' : 'bg-white/5 border-white/8 text-white/45'}`}>
+            <p className="font-semibold">Hora: {slot.timeLabel}</p>
+            <p className="font-semibold flex items-center gap-1.5">
+              {isLive && <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#a6ce39] animate-pulse" />}
+              Cancha: {slot.canchaLabel}
+            </p>
+          </div>
+
+          {hasConflict && (
+            <div className="px-3 py-1.5 text-xs font-bold text-red-300 bg-red-500/10 border-b border-red-400/20 inline-flex items-center gap-1.5">
+              <IconAlertTriangle className="h-3.5 w-3.5" />
+              Conflicto de disponibilidad
+            </div>
+          )}
+
+          <button type="button" onClick={() => openResultadoModal(partido)} disabled={!adminMode || !partido?.fecha_hora} className="w-full text-left">
+            <div
+              className={`flex items-center justify-between px-4 py-3 border-b transition-opacity ${hallOfFameMode ? 'border-white/40 bg-white/55' : 'border-white/8'} ${hasGanador && ganadorKey !== j1Key ? 'opacity-35' : ''}`}
+              onMouseEnter={() => j1Key && setHoveredPlayerId(j1Key)}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="h-6 w-6 rounded-full border border-white/30 bg-white/20 overflow-hidden shrink-0">
+                  {j1Photo ? <img src={j1Photo} alt={j1Name} className="h-full w-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-blue-700">{formatRankingLabel(j1Ranking) || ''}</div>}
+                </div>
+                {j1Seed ? (
+                  <span className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-b from-[#f5c842] to-[#c98b0a] text-[#1a0a00] text-[10px] font-black shadow ring-1 ring-amber-300/50" title={`${seedLabel(j1Seed)} sembrado`}>{j1Seed}</span>
+                ) : null}
+                <span className={`font-bold break-words leading-snug transition-colors ${
+                  hasGanador && ganadorKey === j1Key ? 'text-[#a6ce39] font-black'
+                    : hasGanador && ganadorKey !== j1Key ? 'line-through text-white/25'
+                      : hoveredPlayerId === j1Key ? 'text-[#a6ce39]'
+                        : hallOfFameMode ? 'text-slate-700' : 'text-white/90'
+                }`}>{j1Name}</span>
+              </div>
+              {hasGanador && ganadorKey === j1Key ? <span className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#a6ce39] text-[#0d2740] text-[11px] font-black shadow">âœ“</span> : null}
+            </div>
+
+            {score && parsedSets.length > 0 ? (
+              <div className={`px-4 py-1.5 border-b flex justify-center gap-1.5 ${hallOfFameMode ? 'border-white/50 bg-white/35' : 'border-white/8 bg-white/[0.03]'}`}>
+                {parsedSets.map(([a, b], si) => (
+                  <div key={si} className="flex flex-col gap-0.5">
+                    <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-[11px] font-black border ${a > b ? 'bg-[#a6ce39] text-[#0d2740] border-[#a6ce39]/70' : 'bg-white/10 text-white/45 border-white/10'}`}>{a}</span>
+                    <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-[11px] font-black border ${b > a ? 'bg-[#a6ce39] text-[#0d2740] border-[#a6ce39]/70' : 'bg-white/10 text-white/45 border-white/10'}`}>{b}</span>
+                  </div>
+                ))}
+              </div>
+            ) : score ? (
+              <div className={`px-4 py-1.5 border-b text-center ${hallOfFameMode ? 'border-white/50 bg-white/35' : 'border-white/8 bg-white/[0.03]'}`}>
+                <span className={`font-mono text-sm tracking-wide ${hallOfFameMode ? 'font-black text-lg text-slate-800' : 'text-white/60'}`}>{score}</span>
+              </div>
+            ) : null}
+
+            <div
+              className={`flex items-center justify-between px-4 py-3 transition-opacity ${hallOfFameMode ? 'bg-white/55' : ''} ${hasGanador && ganadorKey !== j2Key ? 'opacity-35' : ''}`}
+              onMouseEnter={() => j2Key && setHoveredPlayerId(j2Key)}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="h-6 w-6 rounded-full border border-white/30 bg-white/20 overflow-hidden shrink-0">
+                  {j2Photo ? <img src={j2Photo} alt={j2Name} className="h-full w-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-blue-700">{formatRankingLabel(j2Ranking) || ''}</div>}
+                </div>
+                {j2Seed ? (
+                  <span className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-b from-[#f5c842] to-[#c98b0a] text-[#1a0a00] text-[10px] font-black shadow ring-1 ring-amber-300/50" title={`${seedLabel(j2Seed)} sembrado`}>{j2Seed}</span>
+                ) : null}
+                <span className={`font-bold break-words leading-snug transition-colors ${
+                  hasGanador && ganadorKey === j2Key ? 'text-[#a6ce39] font-black'
+                    : hasGanador && ganadorKey !== j2Key ? 'line-through text-white/25'
+                      : hoveredPlayerId === j2Key ? 'text-[#a6ce39]'
+                        : hallOfFameMode ? 'text-slate-700' : 'text-white/90'
+                }`}>{j2Name}</span>
+              </div>
+              {hasGanador && ganadorKey === j2Key ? <span className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#a6ce39] text-[#0d2740] text-[11px] font-black shadow">âœ“</span> : null}
+            </div>
+          </button>
+
+          <div className={`px-3 py-2 border-t flex flex-col gap-1 text-xs ${hallOfFameMode ? 'border-white/20 text-slate-200' : 'border-white/8 text-white/50'}`}>
+            <div className="flex items-center justify-between gap-2">
+              <span className={`font-semibold ${hallOfFameMode ? 'text-slate-200/85' : 'text-white/35'}`}>{getCategoriaRama(partido)}</span>
+              <span className={`px-2 py-0.5 rounded border font-bold ${estado.badge}`}>{estado.label}</span>
+            </div>
+            {isPlayed && <span className={`text-[11px] ${hallOfFameMode ? 'text-slate-200/80' : 'text-white/30'}`}>Superficie: {superficie}</span>}
+            {adminMode && partido?.fecha_hora && (
+              <button type="button" onClick={() => openResultadoModal(partido)} className="mt-1 text-xs font-bold text-[#a6ce39] bg-[#a6ce39]/10 hover:bg-[#a6ce39]/20 border border-[#a6ce39]/30 rounded px-2 py-1 transition-colors">
+                Gestionar resultado
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // â”€â”€ Bracket column renderer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const renderBracketCol = (rondaOrden, colMatches, keyPrefix, connectorSide, { blurMode = false, desktopHeight = undefined } = {}) => {
+    if (!colMatches || colMatches.length === 0) return null;
+    const roundOrder = Number.parseInt(String(rondaOrden || ''), 10);
+    const pointsHint = resolveRoundPointsHint(roundOrder, pointsConfig);
+    const roundBadgePoints = roundOrder === 2
+      ? toSafeNonNegativeInt(pointsConfig.puntos_campeon, 0)
+      : toSafeNonNegativeInt(pointsHint?.badges?.[1]?.value ?? pointsHint?.badges?.[0]?.value, 0);
+    const roundBadgeClass = roundOrder === 2
+      ? 'from-emerald-300/90 via-emerald-200/90 to-emerald-100/90 text-emerald-950 border-emerald-200/80'
+      : 'from-sky-300/90 via-cyan-200/90 to-blue-100/90 text-sky-950 border-sky-200/80';
+    const nombreRonda = colMatches[0]?.ronda || `Ronda ${rondaOrden}`;
+    const shouldBlur = blurMode && hallOfFameMode;
+    return (
+      <div
+        key={`${keyPrefix}-${rondaOrden}`}
+        className={`flex flex-col justify-around w-72 relative pt-14 gap-8 transition-all ${shouldBlur ? 'opacity-45 blur-[1.2px] saturate-[0.6]' : 'opacity-100'}`}
+        style={desktopHeight ? { height: `${desktopHeight}px`, gap: 0 } : undefined}
+      >
+        <div className="absolute top-0 left-0 right-0 text-center">
+          <h4 className={`text-xl font-black leading-none mb-1 ${hallOfFameMode ? 'text-white/88 [font-family:Georgia,Times,serif]' : 'text-white/80'}`}>
+            {nombreRonda}
+          </h4>
+          <span className={`inline-flex items-center rounded-full border bg-gradient-to-r px-3 py-1 text-[11px] font-black tracking-wide ${hallOfFameMode ? roundBadgeClass : 'from-[#a6ce39]/20 to-[#a6ce39]/10 text-[#a6ce39] border-[#a6ce39]/30'}`}>
+            +{roundBadgePoints} pts ELO
+          </span>
+        </div>
+        {colMatches.map((partido, matchIndex) => renderMatchCard(partido, matchIndex, colMatches.length, connectorSide))}
+      </div>
+    );
+  };
+
   if (!torneoId) return <div className="text-gray-500">Selecciona un torneo para ver el cuadro.</div>;
   if (loading) return <div className="animate-spin h-8 w-8 border-b-2 border-blue-600 mx-auto mt-10"></div>;
   if (error) return <div className="text-red-500 font-medium">{error}</div>;
@@ -1892,250 +2121,69 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
               </>
             )}
 
-            <div className="w-full overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300">
-              <div className="flex space-x-12 min-w-max mx-auto pb-10 pt-8 px-8">
-                {bracketOrder.map((rondaOrden, colIndex) => {
-                  const partidosDeLaRonda = sortPartidosByOrder(rondas[rondaOrden]);
-                  const nombreRonda = partidosDeLaRonda[0]?.ronda || `Ronda ${rondaOrden}`;
-                  const isFinal = bracketOrder.length - 1 === colIndex;
-                  const roundOrder = Number.parseInt(String(rondaOrden || ''), 10);
-                  const pointsHint = resolveRoundPointsHint(roundOrder, pointsConfig);
-                  const shouldBlurRound = hallOfFameMode && !isFinal;
-                  const roundBadgePoints = roundOrder === 2
-                    ? toSafeNonNegativeInt(pointsConfig.puntos_campeon, 0)
-                    : toSafeNonNegativeInt(pointsHint?.badges?.[1]?.value ?? pointsHint?.badges?.[0]?.value, 0);
-                  const roundBadgeClass = roundOrder === 2
-                    ? 'from-emerald-300/90 via-emerald-200/90 to-emerald-100/90 text-emerald-950 border-emerald-200/80'
-                    : 'from-sky-300/90 via-cyan-200/90 to-blue-100/90 text-sky-950 border-sky-200/80';
+            <div className="w-full">
+              {/* â”€â”€ MOBILE: horizontal left-to-right â”€â”€ */}
+              <div className="lg:hidden overflow-x-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+                <div className="flex space-x-12 min-w-max mx-auto pb-10 pt-8 px-8">
+                  {bracketOrder.map((rondaOrden, colIndex) => {
+                    const isFinal = bracketOrder.length - 1 === colIndex;
+                    const matches = sortPartidosByOrder(rondas[rondaOrden]);
+                    return renderBracketCol(rondaOrden, matches, 'mob', isFinal ? 'none' : 'right', { blurMode: !isFinal });
+                  })}
+                </div>
+              </div>
 
-                  return (
-                    <div
-                      key={rondaOrden}
-                      className={`flex flex-col justify-around w-80 space-y-8 relative pt-16 transition-all ${
-                        shouldBlurRound ? 'opacity-45 blur-[1.2px] saturate-[0.6]' : 'opacity-100'
-                      }`}
-                    >
-                      <div className="absolute top-0 left-0 right-0 text-center">
-                        <h4 className={`text-[30px] font-black leading-none mb-1 ${hallOfFameMode ? 'text-white/88 [font-family:Georgia,Times,serif]' : 'text-white/80'}`}>
-                          {nombreRonda}
-                        </h4>
-                        <span className={`inline-flex items-center rounded-full border bg-gradient-to-r px-4 py-1.5 text-[11px] font-black tracking-wide ${hallOfFameMode ? roundBadgeClass : 'from-[#a6ce39]/20 to-[#a6ce39]/10 text-[#a6ce39] border-[#a6ce39]/30'}`}>
-                          +{roundBadgePoints} pts ELO
-                        </span>
-                      </div>
+              {/* â”€â”€ DESKTOP: ATP symmetric â€” drag-to-pan â”€â”€ */}
+              <div
+                ref={bracketContainerRef}
+                className={`hidden lg:block w-full overflow-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                style={{ maxHeight: '85vh' }}
+                onMouseDown={handleBracketMouseDown}
+                onMouseMove={handleBracketMouseMove}
+                onMouseUp={handleBracketDragEnd}
+                onMouseLeave={handleBracketDragEnd}
+              >
+                <div className="flex items-stretch justify-center min-w-max mx-auto pb-12 pt-4 px-8">
 
-                      {partidosDeLaRonda.map((partido, matchIndex) => {
-                        const partidoKey = String(partido?.id || '').trim();
-                        const ganadorId = partido?.ganador_id;
-                        const resolved = jugadoresPorPartido[partidoKey] || {};
-                        const j1Id = resolved.j1Id || getJugadorId(partido, 1);
-                        const j2Id = resolved.j2Id || getJugadorId(partido, 2);
-                        const j1Name = resolved.j1Name || getJugadorNombre(partido, 1);
-                        const j2Name = resolved.j2Name || getJugadorNombre(partido, 2);
-                        const j1Ranking = resolved.j1Ranking || getJugadorRankingDirecto(partido, 1) || getRankingPerfil(j1Id) || getRankingPos(j1Id);
-                        const j2Ranking = resolved.j2Ranking || getJugadorRankingDirecto(partido, 2) || getRankingPerfil(j2Id) || getRankingPos(j2Id);
-                        const j1Photo = getFotoPerfil(j1Id);
-                        const j2Photo = getFotoPerfil(j2Id);
-                        const j1Seed = seedByJugadorId[String(j1Id || '').trim()] || null;
-                        const j2Seed = seedByJugadorId[String(j2Id || '').trim()] || null;
-                        const j1Initials = String(j1Name || '').split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'J1';
-                        const j2Initials = String(j2Name || '').split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'J2';
-                        const hasGanador = Boolean(ganadorId);
-                        const estado = getEstadoPartido(partido);
-                        const hasConflict = isConflictAvailability(partido);
-                        const slot = formatSlot(partido);
-                        const score = getScoreDisplay(partido);
-                        const ganadorKey = String(ganadorId || '').trim();
-                        const j1Key = String(j1Id || '').trim();
-                        const j2Key = String(j2Id || '').trim();
-                        const isChampionRoute = hallOfFameMode && championRouteMatchIds.has(partidoKey);
-                        const isPlayed = hasGanador || estado.key === 'finalizado';
-                        const isLive = estado.key === 'en_juego';
-                        const canchaId = partido?.cancha?.id || partido?.cancha_id;
-                        const canchaMeta = canchas.find((cancha) => String(cancha?.id || '') === String(canchaId || ''));
-                        const superficie = normalizeSurfaceLabel(partido?.cancha?.superficie || partido?.superficie || canchaMeta?.superficie);
-                        const isPlayerHovered = Boolean(hoveredPlayerId) && (
-                          (j1Key && j1Key === hoveredPlayerId) || (j2Key && j2Key === hoveredPlayerId)
-                        );
-                        const isOtherPlayerHovered = Boolean(hoveredPlayerId) && !isPlayerHovered;
-                        const parsedSets = score
-                          ? score.trim().replace(/\s*\/\s*/g, ' ').split(/\s+/).filter((s) => /^\d+-\d+/.test(s)).map((s) => {
-                              const m = s.match(/^(\d+)-(\d+)/);
-                              return m ? [parseInt(m[1], 10), parseInt(m[2], 10)] : null;
-                            }).filter(Boolean)
-                          : [];
-                        const connectorClass = isChampionRoute || isPlayerHovered
-                          ? 'border-[#a6ce39] shadow-[0_0_8px_rgba(166,206,57,0.5)]'
-                          : hasGanador
-                            ? 'border-[#a6ce39]/40'
-                            : 'border-white/20 group-hover:border-white/35';
+                  {/* LEFT HALF: outer â†’ inner, connectors â†’ right */}
+                  <div className="flex items-stretch gap-12">
+                    {nonFinalRounds.map((rondaOrden) => {
+                      const allMatches = sortPartidosByOrder(rondas[rondaOrden]);
+                      const topMatches = allMatches.slice(0, Math.ceil(allMatches.length / 2));
+                      return renderBracketCol(rondaOrden, topMatches, 'left', 'right', { blurMode: true, desktopHeight: symColHeight });
+                    })}
+                  </div>
 
-                        return (
-                          <div
-                            key={partido.id}
-                            className={`relative group transition-opacity ${isOtherPlayerHovered ? 'opacity-30' : 'opacity-100'}`}
-                            onMouseLeave={() => setHoveredPlayerId(null)}
-                          >
-                            {!isFinal && (
-                              <>
-                                <div className={`absolute top-1/2 -right-6 w-6 border-b-2 z-0 transition-colors ${connectorClass}`}></div>
-                                {matchIndex % 2 === 0 && (
-                                  <div className={`absolute top-1/2 -right-6 w-0 h-[calc(50%+2rem)] lg:h-[calc(50%+2.5rem)] border-r-2 z-0 transition-colors ${connectorClass}`}></div>
-                                )}
-                                {matchIndex % 2 !== 0 && (
-                                  <div className={`absolute bottom-1/2 -right-6 w-0 h-[calc(50%+2rem)] lg:h-[calc(50%+2.5rem)] border-r-2 z-0 transition-colors ${connectorClass}`}></div>
-                                )}
-                                <div className={`absolute top-1/2 -right-12 w-6 border-b-2 z-0 transition-colors ${connectorClass}`}></div>
-                              </>
-                            )}
-
-                            <div
-                              className={`relative z-10 rounded-xl border overflow-hidden transition-all ${
-                                hasConflict
-                                  ? 'border-red-400/60 bg-red-500/10 backdrop-blur-sm shadow-sm'
-                                  : isLive
-                                    ? 'border-[#a6ce39]/50 bg-white/[0.06] backdrop-blur-md shadow-[0_0_24px_rgba(166,206,57,0.2)]'
-                                    : hallOfFameMode
-                                      ? 'border-white/45 bg-white/74 backdrop-blur-md shadow-[0_12px_28px_rgba(15,23,42,0.34)]'
-                                      : 'border-white/10 bg-white/5 backdrop-blur-md shadow-lg hover:border-white/[0.18] hover:bg-white/[0.08]'
-                              } ${isChampionRoute || isPlayerHovered ? 'ring-1 ring-[#a6ce39]/60 shadow-[0_0_16px_rgba(166,206,57,0.3)]' : ''}`}
-                            >
-                              {isLive && (
-                                <div className="absolute inset-0 rounded-xl ring-1 ring-[#a6ce39]/60 animate-pulse pointer-events-none z-20" />
-                              )}
-                              <div className={`px-3 py-2 text-xs border-b ${hasConflict ? 'bg-red-500/15 border-red-400/20 text-red-300' : isLive ? 'bg-[#a6ce39]/[0.08] border-[#a6ce39]/20 text-[#a6ce39]/90' : hallOfFameMode ? 'bg-white/62 border-white/80 text-slate-600' : 'bg-white/5 border-white/8 text-white/45'}`}>
-                                <p className="font-semibold">Hora: {slot.timeLabel}</p>
-                                <p className="font-semibold flex items-center gap-1.5">
-                                  {isLive && <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#a6ce39] animate-pulse" />}
-                                  Cancha: {slot.canchaLabel}
-                                </p>
-                              </div>
-
-                              {hasConflict && (
-                                <div className="px-3 py-1.5 text-xs font-bold text-red-300 bg-red-500/10 border-b border-red-400/20 inline-flex items-center gap-1.5">
-                                  <IconAlertTriangle className="h-3.5 w-3.5" />
-                                  Conflicto de disponibilidad
-                                </div>
-                              )}
-
-                              <button
-                                type="button"
-                                onClick={() => openResultadoModal(partido)}
-                                disabled={!adminMode || !partido?.fecha_hora}
-                                className="w-full text-left"
-                              >
-                                <div
-                                  className={`flex items-center justify-between px-4 py-3 border-b transition-opacity ${hallOfFameMode ? 'border-white/40 bg-white/55' : 'border-white/8'} ${hasGanador && ganadorKey !== j1Key ? 'opacity-35' : ''}`}
-                                  onMouseEnter={() => j1Key && setHoveredPlayerId(j1Key)}
-                                >
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <div className="h-6 w-6 rounded-full border border-white/30 bg-white/20 overflow-hidden shrink-0">
-                                      {j1Photo ? <img src={j1Photo} alt={j1Name} className="h-full w-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-blue-700">{formatRankingLabel(j1Ranking) || ''}</div>}
-                                    </div>
-                                    {j1Seed ? (
-                                      <span
-                                        className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-b from-[#f5c842] to-[#c98b0a] text-[#1a0a00] text-[10px] font-black shadow ring-1 ring-amber-300/50"
-                                        title={`${seedLabel(j1Seed)} sembrado`}
-                                      >
-                                        {j1Seed}
-                                      </span>
-                                    ) : null}
-                                    <span className={`font-bold break-words leading-snug transition-colors ${
-                                      hasGanador && ganadorKey === j1Key
-                                        ? 'text-[#a6ce39] font-black'
-                                        : hasGanador && ganadorKey !== j1Key
-                                          ? 'line-through text-white/25'
-                                          : hoveredPlayerId === j1Key
-                                            ? 'text-[#a6ce39]'
-                                            : hallOfFameMode ? 'text-slate-700' : 'text-white/90'
-                                    }`}>
-                                      {j1Name}
-                                    </span>
-                                  </div>
-                                  {hasGanador && ganadorKey === j1Key ? (
-                                    <span className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#a6ce39] text-[#0d2740] text-[11px] font-black shadow">✓</span>
-                                  ) : null}
-                                </div>
-
-                                {score && parsedSets.length > 0 ? (
-                                  <div className={`px-4 py-1.5 border-b flex justify-center gap-1.5 ${hallOfFameMode ? 'border-white/50 bg-white/35' : 'border-white/8 bg-white/[0.03]'}`}>
-                                    {parsedSets.map(([a, b], si) => (
-                                      <div key={si} className="flex flex-col gap-0.5">
-                                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-[11px] font-black border ${a > b ? 'bg-[#a6ce39] text-[#0d2740] border-[#a6ce39]/70' : 'bg-white/10 text-white/45 border-white/10'}`}>{a}</span>
-                                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-[11px] font-black border ${b > a ? 'bg-[#a6ce39] text-[#0d2740] border-[#a6ce39]/70' : 'bg-white/10 text-white/45 border-white/10'}`}>{b}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : score ? (
-                                  <div className={`px-4 py-1.5 border-b text-center ${hallOfFameMode ? 'border-white/50 bg-white/35' : 'border-white/8 bg-white/[0.03]'}`}>
-                                    <span className={`font-mono text-sm tracking-wide ${hallOfFameMode ? 'font-black text-lg text-slate-800' : 'text-white/60'}`}>{score}</span>
-                                  </div>
-                                ) : null}
-
-                                <div
-                                  className={`flex items-center justify-between px-4 py-3 transition-opacity ${hallOfFameMode ? 'bg-white/55' : ''} ${hasGanador && ganadorKey !== j2Key ? 'opacity-35' : ''}`}
-                                  onMouseEnter={() => j2Key && setHoveredPlayerId(j2Key)}
-                                >
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <div className="h-6 w-6 rounded-full border border-white/30 bg-white/20 overflow-hidden shrink-0">
-                                      {j2Photo ? <img src={j2Photo} alt={j2Name} className="h-full w-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-blue-700">{formatRankingLabel(j2Ranking) || ''}</div>}
-                                    </div>
-                                    {j2Seed ? (
-                                      <span
-                                        className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-b from-[#f5c842] to-[#c98b0a] text-[#1a0a00] text-[10px] font-black shadow ring-1 ring-amber-300/50"
-                                        title={`${seedLabel(j2Seed)} sembrado`}
-                                      >
-                                        {j2Seed}
-                                      </span>
-                                    ) : null}
-                                    <span className={`font-bold break-words leading-snug transition-colors ${
-                                      hasGanador && ganadorKey === j2Key
-                                        ? 'text-[#a6ce39] font-black'
-                                        : hasGanador && ganadorKey !== j2Key
-                                          ? 'line-through text-white/25'
-                                          : hoveredPlayerId === j2Key
-                                            ? 'text-[#a6ce39]'
-                                            : hallOfFameMode ? 'text-slate-700' : 'text-white/90'
-                                    }`}>
-                                      {j2Name}
-                                    </span>
-                                  </div>
-                                  {hasGanador && ganadorKey === j2Key ? (
-                                    <span className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#a6ce39] text-[#0d2740] text-[11px] font-black shadow">✓</span>
-                                  ) : null}
-                                </div>
-                              </button>
-
-                              <div className={`px-3 py-2 border-t flex flex-col gap-1 text-xs ${hallOfFameMode ? 'border-white/20 text-slate-200' : 'border-white/8 text-white/50'}`}>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className={`font-semibold ${hallOfFameMode ? 'text-slate-200/85' : 'text-white/35'}`}>{getCategoriaRama(partido)}</span>
-                                  <span className={`px-2 py-0.5 rounded border font-bold ${estado.badge}`}>{estado.label}</span>
-                                </div>
-
-                                {isPlayed && (
-                                  <span className={`text-[11px] ${hallOfFameMode ? 'text-slate-200/80' : 'text-white/30'}`}>Superficie: {superficie}</span>
-                                )}
-
-                                {adminMode && partido?.fecha_hora && (
-                                  <button
-                                    type="button"
-                                    onClick={() => openResultadoModal(partido)}
-                                    className="mt-1 text-xs font-bold text-[#a6ce39] bg-[#a6ce39]/10 hover:bg-[#a6ce39]/20 border border-[#a6ce39]/30 rounded px-2 py-1 transition-colors"
-                                  >
-                                    Gestionar resultado
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                  {/* CENTER: GRAN FINAL */}
+                  <div className="flex flex-col items-center justify-center self-center px-10 shrink-0">
+                    <div className="text-center mb-6">
+                      <div className={`text-[11px] font-black tracking-[0.28em] uppercase mb-1 ${hallOfFameMode ? 'text-amber-400' : 'text-[#a6ce39]/70'}`}>Punto de convergencia</div>
+                      <h4 className={`text-3xl font-black tracking-[0.12em] uppercase ${hallOfFameMode ? 'text-amber-200 [font-family:Georgia,Times,serif]' : 'text-white'}`}>
+                        Gran Final
+                      </h4>
+                      <span className={`mt-2 inline-flex items-center rounded-full border bg-gradient-to-r px-4 py-1.5 text-[11px] font-black tracking-wide ${hallOfFameMode ? 'from-emerald-300/90 via-emerald-200/90 to-emerald-100/90 text-emerald-950 border-emerald-200/80' : 'from-[#a6ce39]/25 to-[#a6ce39]/10 text-[#a6ce39] border-[#a6ce39]/35'}`}>
+                        +{toSafeNonNegativeInt(pointsConfig.puntos_campeon, 0)} pts ELO â€” CampeÃ³n
+                      </span>
                     </div>
-                  );
-                })}
+                    <div className="w-80">
+                      {finalRoundKey && sortPartidosByOrder(rondas[finalRoundKey] || []).map((partido, idx) =>
+                        renderMatchCard(partido, idx, 1, 'none')
+                      )}
+                    </div>
+                  </div>
+
+                  {/* RIGHT HALF: inner â†’ outer, connectors â†’ left */}
+                  <div className="flex items-stretch gap-12">
+                    {[...nonFinalRounds].reverse().map((rondaOrden) => {
+                      const allMatches = sortPartidosByOrder(rondas[rondaOrden]);
+                      const bottomMatches = allMatches.slice(Math.ceil(allMatches.length / 2));
+                      return renderBracketCol(rondaOrden, bottomMatches, 'right', 'left', { blurMode: true, desktopHeight: symColHeight });
+                    })}
+                  </div>
+
+                </div>
               </div>
             </div>
-
             {torneoFinalizado && finalWinnerDisplayName && (
               <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center px-4">
                 <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_center,rgba(255,255,255,0)_0%,rgba(2,6,23,0.16)_72%,rgba(2,6,23,0.32)_100%)]"></div>
