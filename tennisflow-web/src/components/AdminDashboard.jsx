@@ -1166,14 +1166,6 @@ export default function AdminDashboard() {
                 >
                   Restablecer mensaje base
                 </button>
-                <button
-                  type="button"
-                  onClick={fetchWhatsappTemplateConfig}
-                  disabled={whatsappTemplateLoading || whatsappTemplateSaving}
-                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-100 text-gray-700 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  Recargar desde BD
-                </button>
               </div>
 
               {whatsappTemplateStatus.message && (
@@ -1201,9 +1193,14 @@ export default function AdminDashboard() {
                   const phoneMeta = getWhatsappPhoneMeta(telefono);
 
                   return (
-                  <article key={inscripcion.id} className="rounded-xl border border-gray-200 bg-gray-50 p-4 sm:p-5">
+                  <article key={inscripcion.id} className={`rounded-xl border p-4 sm:p-5 ${inscripcion.estado_inscripcion === 'pendiente_baja' ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-gray-50'}`}>
                     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                       <div className="space-y-1">
+                        {inscripcion.estado_inscripcion === 'pendiente_baja' && (
+                          <span className="inline-block text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-200 text-amber-800 mb-1">
+                            Solicitud de Baja
+                          </span>
+                        )}
                         <p className="text-sm font-bold text-gray-900">{inscripcion.torneo?.titulo || 'Torneo sin titulo'}</p>
                         <p className="text-sm text-gray-700">Jugador: <span className="font-semibold">{inscripcion.jugador?.nombre_completo || inscripcion.jugador_id}</span></p>
                         <p className="text-xs text-gray-500">Telefono: {telefono || 'No disponible'}</p>
@@ -1212,42 +1209,66 @@ export default function AdminDashboard() {
                         )}
                         <p className="text-xs text-gray-500">Modalidad: {inscripcion.torneo?.modalidad || '-'} | Rama: {inscripcion.torneo?.rama || '-'} | Categoria: {inscripcion.torneo?.categoria_id || '-'}</p>
                         <p className="text-xs text-gray-500">Solicitada: {inscripcion.fecha_inscripcion ? new Date(inscripcion.fecha_inscripcion).toLocaleString() : 'Sin fecha'}</p>
+                        {inscripcion.estado_inscripcion === 'pendiente_baja' && inscripcion.motivo_rechazo && (
+                          <p className="text-xs text-amber-800 font-semibold mt-1">Motivo: {inscripcion.motivo_rechazo}</p>
+                        )}
                       </div>
 
                       <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                        {whatsappUrl ? (
-                          <a
-                            href={whatsappUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-5 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold transition-colors text-center"
-                          >
-                            WhatsApp
-                          </a>
+                        {inscripcion.estado_inscripcion === 'pendiente_baja' ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleResolverInscripcion(inscripcion.id, 'rechazada')}
+                              className="px-5 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold transition-colors"
+                            >
+                              Aprobar Baja
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleResolverInscripcion(inscripcion.id, 'aprobada')}
+                              className="px-5 py-2.5 rounded-lg bg-gray-500 hover:bg-gray-600 text-white text-sm font-bold transition-colors"
+                            >
+                              Rechazar Baja
+                            </button>
+                          </>
                         ) : (
-                          <button
-                            type="button"
-                            disabled
-                            className="px-5 py-2.5 rounded-lg bg-gray-200 text-gray-500 text-sm font-bold cursor-not-allowed"
-                            title={`${phoneMeta.reason} ${phoneMeta.hint}`.trim()}
-                          >
-                            WhatsApp
-                          </button>
+                          <>
+                            {whatsappUrl ? (
+                              <a
+                                href={whatsappUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-5 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold transition-colors text-center"
+                              >
+                                WhatsApp
+                              </a>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled
+                                className="px-5 py-2.5 rounded-lg bg-gray-200 text-gray-500 text-sm font-bold cursor-not-allowed"
+                                title={`${phoneMeta.reason} ${phoneMeta.hint}`.trim()}
+                              >
+                                WhatsApp
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleResolverInscripcion(inscripcion.id, 'aprobada')}
+                              className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold transition-colors"
+                            >
+                              Validar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleResolverInscripcion(inscripcion.id, 'rechazada')}
+                              className="px-5 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold transition-colors"
+                            >
+                              Rechazar
+                            </button>
+                          </>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => handleResolverInscripcion(inscripcion.id, 'aprobada')}
-                          className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold transition-colors"
-                        >
-                          Validar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleResolverInscripcion(inscripcion.id, 'rechazada')}
-                          className="px-5 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold transition-colors"
-                        >
-                          Rechazar
-                        </button>
                       </div>
                     </div>
                   </article>
