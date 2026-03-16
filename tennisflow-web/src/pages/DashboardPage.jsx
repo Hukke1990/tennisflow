@@ -475,22 +475,11 @@ const buildCanchaCatalog = ({ canchas = [], partidos = [] }) => {
   return Array.from(canchaMap.values()).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)));
 };
 
+// El estado en BD es la fuente de verdad — si el partido dice 'en_juego' (o equivalentes),
+// se muestra como vivo en todos los dispositivos sin depender de campos secundarios.
 const isPartidoEnJuego = (partido) => {
   const estado = normalizeText(partido?.estado);
-  const isLiveState = estado.includes('juego')
-    || estado.includes('curso')
-    || estado.includes('live');
-
-  if (!isLiveState) return false;
-
-  const rawScore = String(partido?.marcador_en_vivo || partido?.score || partido?.resultado || partido?.marcador || '').trim().toUpperCase();
-  const defaultScores = new Set(['', '0-0', '-/-', 'S0-0 G0-0 P0-0', 'S0-0 G0-0 TB0-0']);
-
-  if (String(partido?.inicio_real || '').trim()) return true;
-  if (String(partido?.ultima_actualizacion || '').trim()) return true;
-  if (!defaultScores.has(rawScore)) return true;
-
-  return false;
+  return estado.includes('juego') || estado.includes('curso') || estado.includes('live');
 };
 
 const getPartidoIdCandidates = (partidoOrId) => {
@@ -622,6 +611,13 @@ const loadLiveCenterData = async (torneo, clubId) => {
     axios.get(`${API_URL}/api/torneos/${torneo.id}/cuadro`, { params: { club_id: clubId } }),
     axios.get(`${API_URL}/api/torneos/${torneo.id}/canchas`, { params: { club_id: clubId } }),
   ]);
+
+  if (cuadroRes.status === 'rejected') {
+    console.error(`[LiveCenter] Error cargando cuadro torneo ${torneo.id}:`, cuadroRes.reason?.message || cuadroRes.reason);
+  }
+  if (canchasTorneoRes.status === 'rejected') {
+    console.warn(`[LiveCenter] Error cargando canchas torneo ${torneo.id}:`, canchasTorneoRes.reason?.message || canchasTorneoRes.reason);
+  }
 
   const partidosRaw = cuadroRes.status === 'fulfilled' ? extractPartidos(cuadroRes.value?.data) : [];
   const partidos = applyPendingLiveOverrides(partidosRaw, torneo.id);
@@ -1607,6 +1603,8 @@ export default function DashboardPage() {
   // SWR: refs para stale-while-revalidate
   const stableLiveCenterRef = useRef(null);
   const latestDataRef = useRef(null);
+  // Ref estable para el callback de refresh, usado por la suscripción Realtime sin recrearla
+  const refreshLiveCenterRef = useRef(null);
 
   useEffect(() => {
     const intervalId = setInterval(() => setNowMs(Date.now()), 60000);
@@ -1683,6 +1681,10 @@ export default function DashboardPage() {
       setLiveRefreshing(false);
     };
 
+    // Mantener ref actualizada para que la suscripción Realtime siempre llame
+    // la versión más reciente sin necesitar recrearse con cada cambio de `data`
+    refreshLiveCenterRef.current = refreshLiveCenterOnly;
+
     const onLiveUpdateEvent = (event) => {
       const payload = parseLiveUpdatePayload(event?.detail);
       refreshLiveCenterOnly(payload?.torneoId);
@@ -1702,6 +1704,38 @@ export default function DashboardPage() {
       window.removeEventListener('storage', onStorageEvent);
     };
   }, [data, clubId]);
+
+  // ── Supabase Realtime: escucha cambios en partidos para TODOS los dispositivos ──
+  // Independiente del localStorage del admin — cualquier navegador conectado recibe
+  // el evento y refresca el live center cuando un partido cambia de estado.
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-partidos-live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'partidos' },
+        (payload) => {
+          const eventType = payload.eventType;
+          const torneoId = payload.new?.torneo_id || payload.old?.torneo_id || null;
+          console.info('[Realtime] partido change:', eventType, 'torneo:', torneoId);
+          // Llamamos via ref para no reiniciar la suscripción en cada cambio de data
+          if (refreshLiveCenterRef.current) {
+            refreshLiveCenterRef.current(torneoId);
+          }
+        },
+      )
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          console.info('[Realtime] partidos channel conectado');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[Realtime] partidos channel error:', err);
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
