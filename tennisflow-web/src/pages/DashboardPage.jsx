@@ -1612,9 +1612,13 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    const refreshLiveCenterOnly = async (preferredTorneoId) => {
+    // skipSWRGuard: true → Realtime es fuente de verdad y actualiza sin importar si
+    // hasLiveMatches es false (ej: partido finalizado debe desaparecer inmediatamente).
+    // skipSWRGuard: false → polling, se conserva el guard anti-flicker.
+    const refreshLiveCenterOnly = async (preferredTorneoId, { skipSWRGuard = false } = {}) => {
       setLiveRefreshing(true);
-      const previousData = data;
+      // Usar ref en lugar de la clausura de `data` para evitar datos stale
+      const previousData = latestDataRef.current;
       let torneosPool = [];
 
       if (previousData?.proximos_torneos || previousData?.torneos_finalizados) {
@@ -1662,21 +1666,22 @@ export default function DashboardPage() {
 
       if (!liveCenter) {
         setLiveRefreshing(false);
+        // Realtime nos avisó que algo cambió pero no hay torneos candidatos → limpiar
+        if (skipSWRGuard) {
+          setData((prev) => prev ? { ...prev, live_center: null } : prev);
+        }
         return;
       }
 
       setData((prev) => {
         if (!prev) return prev;
-        // Blindaje: si la nueva respuesta no tiene partidos en vivo pero la anterior sí,
-        // ignoramos esta actualización — puede ser una respuesta transitoria vacía por
-        // timing o error de red. El cargarDashboard completo limpiará cuando sea definitivo.
-        if (!liveCenter.hasLiveMatches && prev.live_center?.hasLiveMatches) {
+        // Guard anti-flicker SOLO para polling.
+        // Realtime (skipSWRGuard=true) siempre aplica: si el partido finalizó
+        // hasLiveMatches será false y el estado se limpia inmediatamente.
+        if (!skipSWRGuard && !liveCenter.hasLiveMatches && prev.live_center?.hasLiveMatches) {
           return prev;
         }
-        return {
-          ...prev,
-          live_center: liveCenter,
-        };
+        return { ...prev, live_center: liveCenter };
       });
       setLiveRefreshing(false);
     };
@@ -1720,7 +1725,9 @@ export default function DashboardPage() {
           console.info('[Realtime] partido change:', eventType, 'torneo:', torneoId);
           // Llamamos via ref para no reiniciar la suscripción en cada cambio de data
           if (refreshLiveCenterRef.current) {
-            refreshLiveCenterRef.current(torneoId);
+            // skipSWRGuard: true → Realtime es la fuente de verdad.
+            // Los partidos finalizados desaparecen inmediatamente en todos los dispositivos.
+            refreshLiveCenterRef.current(torneoId, { skipSWRGuard: true });
           }
         },
       )
