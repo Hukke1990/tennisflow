@@ -26,6 +26,7 @@ const DEFAULT_CHAMPION_POINTS = 100;
 const INSCRIPTION_STATUS_PENDING = 'pendiente';
 const INSCRIPTION_STATUS_APPROVED = 'aprobada';
 const INSCRIPTION_STATUS_REJECTED = 'rechazada';
+const INSCRIPTION_STATUS_WITHDRAWAL_PENDING = 'pendiente_baja';
 const ADMIN_CONFIG_WHATSAPP_TEMPLATE_KEY = 'inscripciones_whatsapp_template';
 const DEFAULT_WHATSAPP_TEMPLATE = 'Hola {jugador}, te contacto por tu solicitud de inscripcion al {torneo}.';
 const MAX_WHATSAPP_TEMPLATE_LENGTH = 1000;
@@ -40,6 +41,7 @@ const normalizeInscriptionStatus = (value) => {
   if (normalized === INSCRIPTION_STATUS_PENDING) return INSCRIPTION_STATUS_PENDING;
   if (normalized === INSCRIPTION_STATUS_APPROVED) return INSCRIPTION_STATUS_APPROVED;
   if (normalized === INSCRIPTION_STATUS_REJECTED) return INSCRIPTION_STATUS_REJECTED;
+  if (normalized === INSCRIPTION_STATUS_WITHDRAWAL_PENDING) return INSCRIPTION_STATUS_WITHDRAWAL_PENDING;
   return '';
 };
 
@@ -1888,7 +1890,7 @@ const obtenerInscripcionesPendientesAdmin = async (req, res) => {
       const usesNewStatusColumn = columns.includes('estado_inscripcion');
       let filteredQuery;
       if (usesNewStatusColumn) {
-        filteredQuery = query.eq('estado_inscripcion', INSCRIPTION_STATUS_PENDING);
+        filteredQuery = query.in('estado_inscripcion', [INSCRIPTION_STATUS_PENDING, INSCRIPTION_STATUS_WITHDRAWAL_PENDING]);
       } else {
         filteredQuery = query.in('estado', ['pendiente', 'pendiente_revision', 'lista_espera']);
       }
@@ -1933,7 +1935,7 @@ const obtenerInscripcionesPendientesAdmin = async (req, res) => {
           pareja: pareja || null,
         };
       })
-      .filter((item) => item.estado_inscripcion === INSCRIPTION_STATUS_PENDING);
+      .filter((item) => [INSCRIPTION_STATUS_PENDING, INSCRIPTION_STATUS_WITHDRAWAL_PENDING].includes(item.estado_inscripcion));
 
     return res.status(200).json(pendientes);
   } catch (err) {
@@ -2010,9 +2012,9 @@ const validarInscripcionAdmin = async (req, res) => {
       });
     }
 
-    if (estadoActual !== INSCRIPTION_STATUS_PENDING) {
+    if (estadoActual !== INSCRIPTION_STATUS_PENDING && estadoActual !== INSCRIPTION_STATUS_WITHDRAWAL_PENDING) {
       return res.status(409).json({
-        error: 'Solo se pueden validar o rechazar solicitudes pendientes.',
+        error: 'Solo se pueden resolver solicitudes en estado pendiente o pendiente de baja.',
       });
     }
 
@@ -2397,6 +2399,135 @@ const obtenerEstadoCanchas = async (req, res) => {
   }
 };
 
+const solicitarBajaInscripcion = async (req, res) => {
+  try {
+    const { clubId, error: clubError } = resolveClubIdFromRequest(req);
+    if (clubError) {
+      return res.status(400).json({ error: clubError });
+    }
+
+    const inscripcionId = String(req.params?.inscripcionId || '').trim();
+    const motivoRaw = typeof req.body?.motivo_baja === 'string' ? req.body.motivo_baja.trim() : '';
+    const requestingUserId = req.authUser?.id;
+
+    if (!UUID_REGEX.test(inscripcionId)) {
+      return res.status(400).json({ error: 'El id de inscripción es inválido.' });
+    }
+
+    if (!requestingUserId) {
+      return res.status(401).json({ error: 'No se pudo identificar al usuario.' });
+    }
+
+    // Obtener la inscripción actual
+    const selectOptions = [
+      'id, torneo_id, jugador_id, pareja_id, estado, estado_inscripcion, torneos(id, estado)',
+      'id, torneo_id, jugador_id, estado, estado_inscripcion, torneos(id, estado)',
+      'id, torneo_id, jugador_id, estado, torneos(id, estado)',
+    ];
+
+    let fetchError = null;
+    let inscripcion = null;
+
+    for (const columns of selectOptions) {
+      const { data, error } = await supabase
+        .from('inscripciones')
+        .select(columns)
+        .eq('id', inscripcionId)
+        .eq('club_id', clubId)
+        .single();
+
+      if (!error) {
+        inscripcion = data;
+        fetchError = null;
+        break;
+      }
+
+      fetchError = error;
+      if (error?.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Inscripción no encontrada.' });
+      }
+      if (!isMissingColumnError(error)) {
+        break;
+      }
+    }
+
+    if (fetchError) {
+      console.error('Error al obtener inscripción para baja:', fetchError);
+      return res.status(500).json({ error: 'No se pudo procesar la solicitud de baja.' });
+    }
+
+    // Validar que la inscripción pertenece al usuario que hace la petición
+    if (String(inscripcion.jugador_id || '') !== String(requestingUserId)) {
+      return res.status(403).json({ error: 'No tenés permiso para solicitar baja en esta inscripción.' });
+    }
+
+    const estadoActual = resolveInscriptionStatusCompat(inscripcion);
+    if (estadoActual !== INSCRIPTION_STATUS_APPROVED) {
+      return res.status(409).json({ error: 'Solo se puede solicitar baja de inscripciones aprobadas.' });
+    }
+
+    const torneo = Array.isArray(inscripcion?.torneos) ? inscripcion.torneos[0] : inscripcion?.torneos;
+    const estadoTorneo = String(torneo?.estado || '').trim().toLowerCase();
+    const ESTADOS_BAJA_PERMITIDOS = new Set(['abierto', 'publicado', 'inscripcion', 'activo']);
+    if (!ESTADOS_BAJA_PERMITIDOS.has(estadoTorneo)) {
+      return res.status(409).json({ error: 'No se puede solicitar baja cuando el torneo ya está en progreso o finalizado.' });
+    }
+
+    // Guardar el motivo en motivo_rechazo (columna ya existente)
+    const payload = {
+      estado_inscripcion: INSCRIPTION_STATUS_WITHDRAWAL_PENDING,
+      estado: 'pendiente',
+      motivo_rechazo: motivoRaw || null,
+    };
+
+    let updateError = null;
+    let updatedData = null;
+
+    for (const p of [payload]) {
+      const { data, error } = await supabase
+        .from('inscripciones')
+        .update(p)
+        .eq('id', inscripcionId)
+        .select()
+        .single();
+
+      if (!error) {
+        updatedData = data;
+        updateError = null;
+        break;
+      }
+
+      updateError = error;
+      if (!isMissingColumnError(error)) {
+        break;
+      }
+    }
+
+    if (updateError) {
+      console.error('Error al actualizar estado para baja:', updateError);
+      return res.status(500).json({ error: 'No se pudo registrar la solicitud de baja.' });
+    }
+
+    emitPendingInscriptionsUpdated({
+      tipo: 'solicitud_baja',
+      torneo_id: inscripcion.torneo_id,
+      jugador_id: inscripcion.jugador_id,
+      estado_inscripcion: INSCRIPTION_STATUS_WITHDRAWAL_PENDING,
+    });
+
+    return res.status(200).json({
+      message: 'Solicitud de baja registrada correctamente. El administrador la revisará a la brevedad.',
+      inscripcion: {
+        ...updatedData,
+        estado_inscripcion: INSCRIPTION_STATUS_WITHDRAWAL_PENDING,
+      },
+    });
+  } catch (err) {
+    console.error('Error inesperado al solicitar baja:', err);
+    return res.status(500).json({ error: 'Error interno del servidor.' });
+  }
+};
+
 
 module.exports = {
   crearTorneo,
@@ -2410,6 +2541,7 @@ module.exports = {
   inscribirJugador,
   obtenerInscripcionesPendientesAdmin,
   validarInscripcionAdmin,
+  solicitarBajaInscripcion,
   obtenerInscripcionesPorJugador,
   obtenerCanchasDelTorneo,
   obtenerEstadoCanchas,

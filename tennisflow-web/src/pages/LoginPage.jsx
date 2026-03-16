@@ -15,7 +15,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (authLoading || !user) return;
-    navigate(toClubPath('/torneos'), { replace: true });
+    navigate(toClubPath('/inicio'), { replace: true });
   }, [authLoading, navigate, toClubPath, user]);
 
   const handleSubmit = async (e) => {
@@ -41,7 +41,7 @@ export default function LoginPage() {
       return;
     }
 
-    navigate(toClubPath('/torneos'), { replace: true });
+    navigate(toClubPath('/inicio'), { replace: true });
   };
 
   return (

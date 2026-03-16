@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import InscripcionModal from './InscripcionModal';
+import BajaModal from './BajaModal';
 import { getInscripcionWindowState } from '../lib/inscripcionWindow';
 import { useAuth } from '../context/AuthContext';
 import { useClub, useClubPath } from '../context/ClubContext';
@@ -24,6 +25,7 @@ const ESTADOS_ACTIVOS = new Set(['abierto', 'publicado', 'activo', 'en_progreso'
 const INSCRIPTION_STATUS_PENDING = 'pendiente';
 const INSCRIPTION_STATUS_APPROVED = 'aprobada';
 const INSCRIPTION_STATUS_REJECTED = 'rechazada';
+const INSCRIPTION_STATUS_BAJA = 'pendiente_baja';
 const SURFACE_BANNERS = {
   clay: {
     label: 'Polvo de Ladrillo',
@@ -97,6 +99,7 @@ const normalizarEstadoInscripcion = (estado) => {
   if (normalizado === INSCRIPTION_STATUS_PENDING) return INSCRIPTION_STATUS_PENDING;
   if (normalizado === INSCRIPTION_STATUS_APPROVED) return INSCRIPTION_STATUS_APPROVED;
   if (normalizado === INSCRIPTION_STATUS_REJECTED) return INSCRIPTION_STATUS_REJECTED;
+  if (normalizado === INSCRIPTION_STATUS_BAJA) return INSCRIPTION_STATUS_BAJA;
   return normalizado;
 };
 
@@ -272,6 +275,8 @@ export default function CarteleraTorneos() {
   const [estadoFiltro, setEstadoFiltro] = useState('todos');
   const [orden, setOrden] = useState('fecha_desc');
   const [misInscripcionesByTorneo, setMisInscripcionesByTorneo] = useState({});
+  const [misInscripcionIdByTorneo, setMisInscripcionIdByTorneo] = useState({});
+  const [bajaTorneoSeleccionado, setBajaTorneoSeleccionado] = useState(null); // { id, titulo, inscripcionId }
   
   // Estado para manejar el feedback visual al inscribirse
   const [inscripcionStatus, setInscripcionStatus] = useState({ id: null, loading: false, message: null, type: null });
@@ -366,14 +371,17 @@ export default function CarteleraTorneos() {
     try {
       const { data } = await axios.get(`${API_URL}/api/torneos/inscripciones/mis/${user.id}`, { params: { club_id: clubId } });
       const map = {};
+      const idMap = {};
 
       for (const row of (Array.isArray(data) ? data : [])) {
         const torneoId = row?.torneo_id;
         if (!torneoId) continue;
         map[torneoId] = normalizarEstadoInscripcion(row?.estado_inscripcion);
+        if (row?.id) idMap[torneoId] = row.id;
       }
 
       setMisInscripcionesByTorneo(map);
+      setMisInscripcionIdByTorneo(idMap);
     } catch (err) {
       console.error('Error al obtener mis inscripciones:', err);
       setMisInscripcionesByTorneo({});
@@ -441,8 +449,14 @@ export default function CarteleraTorneos() {
         INSCRIPTION_STATUS_PENDING,
         INSCRIPTION_STATUS_APPROVED,
         INSCRIPTION_STATUS_REJECTED,
+        INSCRIPTION_STATUS_BAJA,
       ].includes(miEstadoInscripcion);
       const puedeInscribirse = !ESTADOS_NO_INSCRIPCION.has(estado) && !bloqueadoPorVentana && !tieneInscripcionRegistrada;
+      const puedesolicitarBaja = miEstadoInscripcion === INSCRIPTION_STATUS_APPROVED
+        && !isEnProgreso
+        && !isTerminado
+        && !ESTADOS_NO_INSCRIPCION.has(estado);
+      const miInscripcionId = misInscripcionIdByTorneo[torneo.id] ?? null;
 
       // Validar si el jugador logueado cumple sexo/categoria del torneo
       let cumpleRequisitos = true;
@@ -468,7 +482,7 @@ export default function CarteleraTorneos() {
       const surfaceInfo = resolveSurfaceInfo(torneo);
       const modalidad = torneo.modalidad || 'Singles';
       const sexo = torneo.rama || torneo.sexo || 'Mixto';
-      const categoria = torneo.categoria ? `Cat ${torneo.categoria}` : 'Cat a confirmar';
+      const categoria = torneo.categoria_id != null ? `Cat ${torneo.categoria_id}` : 'Cat a confirmar';
 
       return {
         ...torneo,
@@ -487,6 +501,8 @@ export default function CarteleraTorneos() {
         mensajeRequisito,
         miEstadoInscripcion,
         tieneInscripcionRegistrada,
+        puedesolicitarBaja,
+        miInscripcionId,
         estadoTexto: etiquetaEstado(estado),
         modalidad,
         sexo,
@@ -739,6 +755,9 @@ export default function CarteleraTorneos() {
                       {torneo.miEstadoInscripcion === INSCRIPTION_STATUS_REJECTED && (
                         <p className="text-xs text-rose-400 font-semibold mt-2">Tu solicitud fue rechazada. Contacta a la administración para más detalles.</p>
                       )}
+                      {torneo.miEstadoInscripcion === INSCRIPTION_STATUS_BAJA && (
+                        <p className="text-xs text-amber-400 font-semibold mt-2">Tu solicitud de baja está pendiente de revisión por el administrador.</p>
+                      )}
                       {!torneo.isTerminado && torneo.bloqueadoPorVentana && torneo.ventanaInscripcion.message && (
                         <p className="text-xs text-[#8f6a16] font-semibold mt-2">{torneo.ventanaInscripcion.message}</p>
                       )}
@@ -792,6 +811,7 @@ export default function CarteleraTorneos() {
                         ${torneo.miEstadoInscripcion === INSCRIPTION_STATUS_PENDING ? 'bg-[#f3e7bf] text-[#8f6a16] border border-[#e1c774]' : ''}
                         ${torneo.miEstadoInscripcion === INSCRIPTION_STATUS_APPROVED ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : ''}
                         ${torneo.miEstadoInscripcion === INSCRIPTION_STATUS_REJECTED ? 'bg-rose-100 text-rose-700 border border-rose-200' : ''}
+                        ${torneo.miEstadoInscripcion === INSCRIPTION_STATUS_BAJA ? 'bg-amber-50 text-amber-700 border border-amber-200' : ''}
                         ${!torneo.isTerminado && torneo.puedeInscribirse && torneo.isFull ? 'bg-[#f3e7bf] text-[#8f6a16] hover:bg-[#ebd99c] focus:ring-[#d4af37] border border-[#e1c774]' : ''}
                         ${!torneo.puedeVerCuadro && torneo.puedeInscribirse && !torneo.isFull ? 'bg-emerald-500 text-white hover:bg-emerald-600 focus:ring-emerald-400 shadow-sm' : ''}
                       `}
@@ -808,6 +828,8 @@ export default function CarteleraTorneos() {
                         ? 'Inscripción aprobada'
                         : torneo.miEstadoInscripcion === INSCRIPTION_STATUS_REJECTED
                         ? 'Solicitud rechazada'
+                        : torneo.miEstadoInscripcion === INSCRIPTION_STATUS_BAJA
+                        ? 'Baja pendiente de revisión'
                         : !torneo.cumpleRequisitos
                         ? 'No cumplís los requisitos'
                         : !torneo.puedeInscribirse
@@ -816,6 +838,20 @@ export default function CarteleraTorneos() {
                           ? 'Solicitar inscripción'
                           : 'Inscribirme'}
                     </button>
+
+                    {torneo.puedesolicitarBaja && (
+                      <button
+                        type="button"
+                        onClick={() => setBajaTorneoSeleccionado({
+                          id: torneo.id,
+                          titulo: torneo.titulo,
+                          inscripcionId: torneo.miInscripcionId,
+                        })}
+                        className="mt-2 w-full py-2.5 px-4 rounded-xl border border-rose-400/40 text-rose-300 font-bold text-sm hover:bg-rose-900/20 transition-colors focus:outline-none focus:ring-2 focus:ring-rose-400/40"
+                      >
+                        Solicitar Baja
+                      </button>
+                    )}
                   </aside>
                 </div>
               </article>
@@ -831,6 +867,31 @@ export default function CarteleraTorneos() {
           onSuccess={(data) => {
             manejarInscripcionExitosa(torneoSeleccionado.id, data);
             setTorneoSeleccionado(null);
+          }}
+        />
+      )}
+
+      {bajaTorneoSeleccionado && (
+        <BajaModal
+          inscripcionId={bajaTorneoSeleccionado.inscripcionId}
+          torneoTitulo={bajaTorneoSeleccionado.titulo}
+          onClose={() => setBajaTorneoSeleccionado(null)}
+          onSuccess={(data) => {
+            const estadoInscripcion = data?.inscripcion?.estado_inscripcion || 'pendiente_baja';
+            setMisInscripcionesByTorneo((prev) => ({
+              ...prev,
+              [bajaTorneoSeleccionado.id]: estadoInscripcion,
+            }));
+            setInscripcionStatus({
+              id: bajaTorneoSeleccionado.id,
+              loading: false,
+              message: data?.message || 'Solicitud de baja enviada correctamente.',
+              type: 'warning',
+            });
+            setBajaTorneoSeleccionado(null);
+            setTimeout(() => {
+              setInscripcionStatus({ id: null, loading: false, message: null, type: null });
+            }, 5000);
           }}
         />
       )}

@@ -526,7 +526,7 @@ export default function InscripcionModal({ torneo, onClose, onSuccess }) {
                       <div className="flex-1">
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Día</label>
                         <select value={f.fecha} onChange={e => cambiar(i, 'fecha', e.target.value)}
-                          className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/50">
+                          className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400/50">
                           {diasTorneo.map((d) => (
                             <option key={d.fecha} value={d.fecha} disabled={d.es_fin_de_semana}>
                               {d.label}{d.es_fin_de_semana ? ' (Obligatorio Full Time)' : ''}
@@ -537,12 +537,12 @@ export default function InscripcionModal({ torneo, onClose, onSuccess }) {
                       <div>
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Desde</label>
                         <input type="time" value={f.hora_inicio} onChange={e => cambiar(i, 'hora_inicio', e.target.value)}
-                          className="border border-gray-200 rounded-lg px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/50" />
+                          className="border border-gray-200 rounded-lg px-2 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400/50" />
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Hasta</label>
                         <input type="time" value={f.hora_fin} onChange={e => cambiar(i, 'hora_fin', e.target.value)}
-                          className="border border-gray-200 rounded-lg px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/50" />
+                          className="border border-gray-200 rounded-lg px-2 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400/50" />
                       </div>
                       {franjas.length > 1 && (
                         <button type="button" onClick={() => quitarFranja(i)}

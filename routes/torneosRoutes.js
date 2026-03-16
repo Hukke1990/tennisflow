@@ -37,6 +37,9 @@ router.patch('/inscripciones/whatsapp-template', requireAuth, requireAdmin, torn
 // PATCH /api/torneos/inscripciones/:inscripcionId/estado
 router.patch('/inscripciones/:inscripcionId/estado', requireAuth, requireAdmin, torneosController.validarInscripcionAdmin);
 
+// PATCH /api/torneos/inscripciones/:inscripcionId/baja
+router.patch('/inscripciones/:inscripcionId/baja', requireAuth, torneosController.solicitarBajaInscripcion);
+
 // GET /api/torneos/inscripciones/mis/:id
 router.get('/inscripciones/mis/:id', requireAuth, requireSelfOrRole({ paramName: 'id' }), torneosController.obtenerInscripcionesPorJugador);
 
