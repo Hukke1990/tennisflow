@@ -1,5 +1,6 @@
 ﻿/* eslint-disable react/prop-types */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import axios from 'axios';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -564,7 +565,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
   const [mutationBusy, setMutationBusy] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [hoveredPlayerId, setHoveredPlayerId] = useState(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const [cachedScoreByPartido, setCachedScoreByPartido] = useState({});
   const [pointsConfig, setPointsConfig] = useState(DEFAULT_POINTS_CONFIG);
@@ -576,7 +577,6 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
   });
   const cachedScoreRef = useRef({});
   const bracketContainerRef = useRef(null);
-  const dragRef = useRef({ active: false, startX: 0, startY: 0, scrollX: 0, scrollY: 0 });
 
   useEffect(() => {
     cachedScoreRef.current = cachedScoreByPartido;
@@ -1806,21 +1806,71 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
   }, [resultModal.open, resultModal.ganadorId, activeModalWinnerOptions]);
 
   // â”€â”€ Drag-to-pan â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const handleBracketMouseDown = (e) => {
-    if (e.button !== 0) return;
+  // ── Fullscreen toggle ────────────────────────────────────────────────────
+  const toggleFullscreen = useCallback(() => {
     const el = bracketContainerRef.current;
     if (!el) return;
-    dragRef.current = { active: true, startX: e.clientX, startY: e.clientY, scrollX: el.scrollLeft, scrollY: el.scrollTop };
-    setIsDragging(true);
-  };
-  const handleBracketMouseMove = (e) => {
-    if (!dragRef.current.active) return;
-    const el = bracketContainerRef.current;
-    if (!el) return;
-    el.scrollLeft = dragRef.current.scrollX - (e.clientX - dragRef.current.startX);
-    el.scrollTop = dragRef.current.scrollY - (e.clientY - dragRef.current.startY);
-  };
-  const handleBracketDragEnd = () => { dragRef.current.active = false; setIsDragging(false); };
+    if (!document.fullscreenElement) {
+      el.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handler);
+    return () => document.removeEventListener('fullscreenchange', handler);
+  }, []);
+
+  // ── Zoom controls (glassmorphism floating panel) ──────────────────────────
+  const renderZoomControls = (onZoomIn, onZoomOut, onReset) => (
+    <div className="absolute bottom-4 right-4 z-40 flex flex-col gap-1.5 p-1.5 rounded-2xl border border-white/15 bg-white/[0.07] backdrop-blur-xl shadow-2xl">
+      <button
+        type="button"
+        onClick={() => onZoomIn(0.3)}
+        title="Acercar"
+        className="h-9 w-9 rounded-xl border border-white/10 bg-white/5 hover:bg-[#a6ce39]/20 hover:border-[#a6ce39]/40 text-white/80 hover:text-[#a6ce39] font-black text-xl leading-none transition-all flex items-center justify-center select-none"
+      >
+        +
+      </button>
+      <button
+        type="button"
+        onClick={() => onZoomOut(0.3)}
+        title="Alejar"
+        className="h-9 w-9 rounded-xl border border-white/10 bg-white/5 hover:bg-[#a6ce39]/20 hover:border-[#a6ce39]/40 text-white/80 hover:text-[#a6ce39] font-black text-xl leading-none transition-all flex items-center justify-center select-none"
+      >
+        −
+      </button>
+      <div className="h-px bg-white/10 mx-1 my-0.5" />
+      <button
+        type="button"
+        onClick={() => onReset()}
+        title="Restablecer vista"
+        className="h-9 w-9 rounded-xl border border-white/10 bg-white/5 hover:bg-[#a6ce39]/20 hover:border-[#a6ce39]/40 text-white/80 hover:text-[#a6ce39] font-bold text-base leading-none transition-all flex items-center justify-center select-none"
+      >
+        ↺
+      </button>
+      <button
+        type="button"
+        onClick={toggleFullscreen}
+        title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+        className="h-9 w-9 rounded-xl border border-white/10 bg-white/5 hover:bg-[#a6ce39]/20 hover:border-[#a6ce39]/40 text-white/80 hover:text-[#a6ce39] leading-none transition-all flex items-center justify-center select-none"
+      >
+        {isFullscreen ? (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+            <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
+            <line x1="10" y1="14" x2="3" y2="21" /><line x1="21" y1="3" x2="14" y2="10" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+            <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+            <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+          </svg>
+        )}
+      </button>
+    </div>
+  );
 
   // â”€â”€ Match-card renderer (shared mobile + desktop) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const renderMatchCard = (partido, matchIndex, totalInColumn, connectorSide, fixedSlotH = null) => {
@@ -2116,7 +2166,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
           actionBusy={mutationBusy}
         />
       ) : (
-        <div className="relative">
+        <div ref={bracketContainerRef} className={`relative${isFullscreen ? ' bg-[#0d2740] p-4' : ''}`}>
           <div className={`relative rounded-2xl ${hallOfFameMode ? 'border border-white/20 bg-white/10 backdrop-blur-md pt-4' : ''}`}>
             {hallOfFameMode && (
               <>
@@ -2130,27 +2180,54 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
 
             <div className="w-full">
               {/* â”€â”€ MOBILE: horizontal left-to-right â”€â”€ */}
-              <div className="lg:hidden overflow-x-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
-                <div className="flex space-x-12 min-w-max mx-auto pb-10 pt-8 px-8">
-                  {bracketOrder.map((rondaOrden, colIndex) => {
-                    const isFinal = bracketOrder.length - 1 === colIndex;
-                    const matches = sortPartidosByOrder(rondas[rondaOrden]);
-                    return renderBracketCol(rondaOrden, matches, 'mob', isFinal ? 'none' : 'right', { blurMode: !isFinal });
-                  })}
-                </div>
+              <div className="lg:hidden relative">
+                <TransformWrapper
+                  initialScale={0.85}
+                  minScale={0.2}
+                  maxScale={2.5}
+                  centerOnInit
+                  limitToBounds={false}
+                  wheel={{ step: 0.08 }}
+                  doubleClick={{ mode: 'zoomIn' }}
+                >
+                  {({ zoomIn, zoomOut, resetTransform }) => (
+                    <>
+                      <TransformComponent
+                        wrapperClass="!w-full cursor-grab active:cursor-grabbing"
+                        wrapperStyle={{ height: isFullscreen ? 'calc(100vh - 3rem)' : '70vh' }}
+                      >
+                        <div className="flex space-x-12 min-w-max mx-auto pb-10 pt-8 px-8">
+                          {bracketOrder.map((rondaOrden, colIndex) => {
+                            const isFinal = bracketOrder.length - 1 === colIndex;
+                            const matches = sortPartidosByOrder(rondas[rondaOrden]);
+                            return renderBracketCol(rondaOrden, matches, 'mob', isFinal ? 'none' : 'right', { blurMode: !isFinal });
+                          })}
+                        </div>
+                      </TransformComponent>
+                      {renderZoomControls(zoomIn, zoomOut, resetTransform)}
+                    </>
+                  )}
+                </TransformWrapper>
               </div>
 
               {/* â”€â”€ DESKTOP: ATP symmetric â€” drag-to-pan â”€â”€ */}
-              <div
-                ref={bracketContainerRef}
-                className={`hidden lg:block w-full overflow-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-                style={{ maxHeight: '85vh' }}
-                onMouseDown={handleBracketMouseDown}
-                onMouseMove={handleBracketMouseMove}
-                onMouseUp={handleBracketDragEnd}
-                onMouseLeave={handleBracketDragEnd}
-              >
-                <div className="flex items-stretch justify-center min-w-max mx-auto pb-12 pt-4 px-8">
+              <div className="hidden lg:block w-full relative">
+                <TransformWrapper
+                  initialScale={1}
+                  minScale={0.2}
+                  maxScale={2.5}
+                  centerOnInit
+                  limitToBounds={false}
+                  wheel={{ step: 0.08 }}
+                  doubleClick={{ mode: 'zoomIn' }}
+                >
+                  {({ zoomIn, zoomOut, resetTransform }) => (
+                    <>
+                      <TransformComponent
+                        wrapperClass="!w-full cursor-grab active:cursor-grabbing"
+                        wrapperStyle={{ height: isFullscreen ? 'calc(100vh - 3rem)' : '82vh' }}
+                      >
+                        <div className="flex items-stretch justify-center min-w-max mx-auto pb-12 pt-4 px-8">
 
                   {/* LEFT HALF: outer â†’ inner, connectors â†’ right */}
                   <div className="flex items-stretch gap-12">
@@ -2188,7 +2265,12 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
                     })}
                   </div>
 
-                </div>
+                        </div>
+                      </TransformComponent>
+                      {renderZoomControls(zoomIn, zoomOut, resetTransform)}
+                    </>
+                  )}
+                </TransformWrapper>
               </div>
             </div>
             {torneoFinalizado && finalWinnerDisplayName && (
