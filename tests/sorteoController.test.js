@@ -550,12 +550,13 @@ test('helpers de cronograma: descanso minimo de 60 minutos', () => {
 });
 
 test('helpers de sorteo: siembra top 4 en posiciones fijas para cuadro de 8/16/32', () => {
-  // Posiciones estandar ATP: S4 va al inicio de Q3 (no de Q4)
-  // seed34 = [q+1, 2q+1] donde q = bracketSize/4
+  // Posiciones ATP visual: S3 al inicio de Q3 (top-right) y S4 al final de Q2 (bottom-left)
+  // seed34 = [2q+1, 2q] donde q = bracketSize/4  → por defecto (sin swap): s3=2q+1, s4=2q
+  // → Seed 1 arriba-izquierda, Seed 2 abajo-derecha, Seed 3 arriba-derecha, Seed 4 abajo-izquierda
   const scenarios = [
-    { size: 8,  expected: { s1: 1, s2: 8,  s3: 3, s4: 5  } },
-    { size: 16, expected: { s1: 1, s2: 16, s3: 5, s4: 9  } },
-    { size: 32, expected: { s1: 1, s2: 32, s3: 9, s4: 17 } },
+    { size: 8,  expected: { s1: 1, s2: 8,  s3: 5, s4: 4  } },
+    { size: 16, expected: { s1: 1, s2: 16, s3: 9, s4: 8  } },
+    { size: 32, expected: { s1: 1, s2: 32, s3: 17, s4: 16 } },
   ];
 
   for (const scenario of scenarios) {
@@ -586,15 +587,16 @@ test('helpers de sorteo: siembra top 4 en posiciones fijas para cuadro de 8/16/3
 test('helpers de sorteo: seed 3 y 4 se sortean entre las dos posiciones definidas', () => {
   const jugadores = Array.from({ length: 8 }, (_, idx) => ({ jugador_id: `j${idx + 1}` }));
 
-  // Con randomFn<0.5: sin swap → seed34[0]=3→j3@idx2, seed34[1]=5→j4@idx4
+  // Cuadro de 8 → q=2 → seed34=[2q+1, 2q]=[5,4] → default: s3 top-right, s4 bottom-left
+  // Con randomFn<0.5: sin swap → seed34[0]=5→j3@idx4, seed34[1]=4→j4@idx3
   const entrantsNoSwap = __private.placeTopSeedsByRanking(jugadores, 8, () => 0.1);
-  assert.equal(entrantsNoSwap[2].jugador_id, 'j3');
-  assert.equal(entrantsNoSwap[4].jugador_id, 'j4');
+  assert.equal(entrantsNoSwap[4].jugador_id, 'j3'); // idx 4 = pos 5 = top-right
+  assert.equal(entrantsNoSwap[3].jugador_id, 'j4'); // idx 3 = pos 4 = bottom-left
 
-  // Con randomFn>=0.5: con swap → seed34[1]=5→j3@idx4, seed34[0]=3→j4@idx2
+  // Con randomFn>=0.5: con swap → seed34[1]=4→j3@idx3, seed34[0]=5→j4@idx4
   const entrantsSwap = __private.placeTopSeedsByRanking(jugadores, 8, () => 0.9);
-  assert.equal(entrantsSwap[2].jugador_id, 'j4');
-  assert.equal(entrantsSwap[4].jugador_id, 'j3');
+  assert.equal(entrantsSwap[3].jugador_id, 'j3'); // idx 3 = pos 4 = bottom-left
+  assert.equal(entrantsSwap[4].jugador_id, 'j4'); // idx 4 = pos 5 = top-right
 });
 
 test('generarSorteo agenda cuadro completo y prioriza domingo para la final', async () => {

@@ -601,19 +601,22 @@ function mapSlotsByKey(slots) {
  * Devuelve las posiciones estándar de siembra para un cuadro de tenis eliminatorio.
  *
  * División en 4 cuartos (Q) de igual tamaño, donde q = bracketSize / 4:
- *   - Seed 1 : posición 1      (inicio de Q1)
- *   - Seed 2 : posición N      (final de Q4)  — se cruzan solo en la Final
- *   - Seeds 3/4 : [q+1, 2q+1] (inicio de Q2 y Q3) — se cruzan con S1/S2 en las Semis
- *   - Seeds 5-8 : [q, 2q, 3q, 3q+1] (final de Q1/Q2/Q3 e inicio de Q4)
- *     → 2 BYEs por cuarto cuando hay 8 BYEs en el cuadro
+ *   - Seed 1 : posición 1        (inicio de Q1  — extremo superior izquierdo)
+ *   - Seed 2 : posición N        (final de Q4   — extremo inferior derecho)  → se cruzan solo en la Final
+ *   - Seeds 3/4 : [2q+1, 2q]    (inicio de Q3 / final de Q2 — límite entre mitades)
+ *     → Seed 3 en el extremo superior de la mitad derecha (inicio de Q3) y Seed 4 en
+ *        el extremo inferior de la mitad izquierda (final de Q2), o viceversa (sorteo);
+ *        se cruzan con S1/S2 únicamente en Semis
+ *   - Seeds 5-8 : [q, q+1, 3q, 3q+1]  (final de Q1 / inicio de Q2 / final de Q3 / inicio de Q4)
+ *     → uno por cuarto, situado en el extremo opuesto al seed 1/2/3/4 de ese cuarto
  */
 function resolveTopSeedPlacement(bracketSize) {
   const q = Math.floor(bracketSize / 4);
   return {
     seed1:  1,
     seed2:  bracketSize,
-    seed34: [q + 1, 2 * q + 1],
-    seed58: [q, 2 * q, 3 * q, 3 * q + 1],
+    seed34: [2 * q + 1, 2 * q],
+    seed58: [q, q + 1, 3 * q, 3 * q + 1],
   };
 }
 
@@ -621,13 +624,15 @@ function resolveTopSeedPlacement(bracketSize) {
  * Coloca a los jugadores en las posiciones del cuadro siguiendo el estándar ATP/WTA.
  *
  * Distribución simétrica de BYEs:
- *   - Seeds 1-8 reciben BYE (si hay suficientes BYEs en el cuadro).
- *   - Seeds 1 y 2 van en los extremos opuestos; 3 y 4 en los inicios de los cuartos
- *     internos (halfes opuestos); 5-8 en los finales de cada cuarto (sorteados).
- *   - Resultado: exactamente 2 BYEs por cuarto cuando byesNeeded = 8.
+ *   - Seeds 1 y 2 van en los extremos opuestos del cuadro (posiciones 1 y N).
+ *   - Seed 3 va por defecto al inicio de Q3 (top-right) y Seed 4 al final de Q2 (bottom-left),
+ *     o viceversa por sorteo; garantiza que no se crucen con S1/S2 antes de las Semis.
+ *   - Seeds 5-8: uno por cuarto, en el extremo opuesto al seed que ancla dicho cuarto
+ *     (final de Q1, inicio de Q2, final de Q3, inicio de Q4), sorteados aleatoriamente.
+ *   - Los seeds reciben BYE en orden (1, 2, 3 …) si quedan lugares vacíos disponibles.
  *
- * Ejemplo: 24 inscritos en cuadro de 32 → 8 BYEs → S1-S8 avanzan automáticamente,
- * distribuidos 2 BYEs por cuarto. Los 16 restantes juegan la ronda inicial.
+ * Ejemplo para 24 inscritos en cuadro de 32 → 8 BYEs → S1-S8 avanzan automáticamente;
+ * los 16 restantes juegan la ronda inicial.
  */
 function placeTopSeedsByRanking(jugadoresOrdenados, bracketSize, randomFn = Math.random) {
   const players = Array.isArray(jugadoresOrdenados) ? [...jugadoresOrdenados] : [];
