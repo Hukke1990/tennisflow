@@ -288,6 +288,229 @@ const crearClubConAdmin = async (req, res) => {
   }
 };
 
+// ── Gestión de Torneos ────────────────────────────────────────────────────────
+
+const listarTorneos = async (req, res) => {
+  const { club_id } = req.query;
+  try {
+    let query = supabase
+      .from('torneos')
+      .select('id, nombre, fecha_inicio, fecha_fin, categoria, sexo, modalidad, estado, club_id')
+      .order('fecha_inicio', { ascending: false });
+
+    if (club_id) query = query.eq('club_id', club_id);
+
+    const { data, error } = await query;
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json(data || []);
+  } catch (_) {
+    return res.status(500).json({ error: 'Error al listar torneos.' });
+  }
+};
+
+const editarTorneo = async (req, res) => {
+  const { id } = req.params;
+  if (!id) return res.status(400).json({ error: 'ID de torneo requerido.' });
+
+  const ALLOWED_FIELDS = [
+    'nombre', 'fecha_inicio', 'fecha_fin', 'categoria', 'sexo',
+    'modalidad', 'estado', 'descripcion', 'max_inscriptos',
+    'puntos_ronda_32', 'puntos_ronda_16', 'puntos_ronda_8',
+    'puntos_ronda_4', 'puntos_ronda_2', 'puntos_campeon',
+  ];
+
+  const updates = {};
+  for (const field of ALLOWED_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+      updates[field] = req.body[field];
+    }
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'No se enviaron campos a actualizar.' });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('torneos')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json(data);
+  } catch (_) {
+    return res.status(500).json({ error: 'Error al editar torneo.' });
+  }
+};
+
+const softDeleteTorneo = async (req, res) => {
+  const { id } = req.params;
+  if (!id) return res.status(400).json({ error: 'ID de torneo requerido.' });
+
+  try {
+    const { error } = await supabase
+      .from('torneos')
+      .update({ estado: 'cancelado' })
+      .eq('id', id);
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ ok: true, message: 'Torneo marcado como cancelado.' });
+  } catch (_) {
+    return res.status(500).json({ error: 'Error al desactivar torneo.' });
+  }
+};
+
+// ── Gestión de Jugadores ──────────────────────────────────────────────────────
+
+const listarJugadores = async (req, res) => {
+  const { club_id, q } = req.query;
+  try {
+    let query = supabase
+      .from('perfiles')
+      .select('id, nombre_completo, telefono, rol, ranking_puntos, ranking_elo_singles, club_id')
+      .order('nombre_completo', { ascending: true });
+
+    if (club_id) query = query.eq('club_id', club_id);
+    if (q) query = query.ilike('nombre_completo', `%${q}%`);
+    query = query.neq('rol', 'super_admin');
+
+    const { data, error } = await query;
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json(data || []);
+  } catch (_) {
+    return res.status(500).json({ error: 'Error al listar jugadores.' });
+  }
+};
+
+const editarJugador = async (req, res) => {
+  const { id } = req.params;
+  if (!id) return res.status(400).json({ error: 'ID de jugador requerido.' });
+
+  const ALLOWED_FIELDS = [
+    'nombre_completo', 'telefono',
+    'ranking_puntos', 'ranking_elo_singles',
+  ];
+
+  const updates = {};
+  for (const field of ALLOWED_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+      updates[field] = req.body[field];
+    }
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'No se enviaron campos a actualizar.' });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('perfiles')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json(data);
+  } catch (_) {
+    return res.status(500).json({ error: 'Error al editar jugador.' });
+  }
+};
+
+// ── Gestión de Rankings ───────────────────────────────────────────────────────
+
+const listarRankings = async (req, res) => {
+  const { club_id, categoria, sexo } = req.query;
+  try {
+    let query = supabase
+      .from('perfiles')
+      .select('id, nombre_completo, ranking_puntos, ranking_elo_singles, club_id')
+      .order('ranking_elo_singles', { ascending: false });
+
+    if (club_id) query = query.eq('club_id', club_id);
+    if (sexo) query = query.eq('sexo', sexo);
+
+    const { data, error } = await query;
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json(data || []);
+  } catch (_) {
+    return res.status(500).json({ error: 'Error al listar rankings.' });
+  }
+};
+
+const ajustarPuntos = async (req, res) => {
+  const { id } = req.params;
+  const { delta, campo = 'ranking_elo_singles' } = req.body;
+  if (!id) return res.status(400).json({ error: 'ID de jugador requerido.' });
+
+  const ALLOWED_CAMPOS = ['ranking_puntos', 'ranking_elo_singles'];
+  if (!ALLOWED_CAMPOS.includes(campo)) {
+    return res.status(400).json({ error: 'Campo no permitido.' });
+  }
+
+  const parsed = Number(delta);
+  if (!Number.isFinite(parsed)) {
+    return res.status(400).json({ error: 'Delta debe ser un número.' });
+  }
+
+  try {
+    const { data: current, error: fetchErr } = await supabase
+      .from('perfiles')
+      .select(campo)
+      .eq('id', id)
+      .single();
+
+    if (fetchErr) return res.status(404).json({ error: 'Jugador no encontrado.' });
+
+    const currentVal = Number(current?.[campo] || 0);
+    const newVal = Math.max(0, currentVal + parsed);
+
+    const { data, error } = await supabase
+      .from('perfiles')
+      .update({ [campo]: newVal })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json(data);
+  } catch (_) {
+    return res.status(500).json({ error: 'Error al ajustar puntos.' });
+  }
+};
+
+const resetearPuntos = async (req, res) => {
+  const { club_id, campo = 'ranking_elo_singles' } = req.body;
+  if (!club_id) return res.status(400).json({ error: 'club_id requerido.' });
+
+  const ALLOWED_CAMPOS = ['ranking_puntos', 'ranking_elo_singles'];
+  if (!ALLOWED_CAMPOS.includes(campo)) {
+    return res.status(400).json({ error: 'Campo no permitido.' });
+  }
+
+  try {
+    const { error } = await supabase
+      .from('perfiles')
+      .update({ [campo]: 0 })
+      .eq('club_id', club_id);
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ ok: true, message: `${campo} reseteado a 0 para todos los jugadores del club.` });
+  } catch (_) {
+    return res.status(500).json({ error: 'Error al resetear puntos.' });
+  }
+};
+
 module.exports = {
   crearClubConAdmin,
+  listarTorneos,
+  editarTorneo,
+  softDeleteTorneo,
+  listarJugadores,
+  editarJugador,
+  listarRankings,
+  ajustarPuntos,
+  resetearPuntos,
 };

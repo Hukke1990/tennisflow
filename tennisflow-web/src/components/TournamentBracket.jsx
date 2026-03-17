@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { io } from 'socket.io-client';
 import CronogramaTorneo from './CronogramaTorneo';
-import { IconAlertTriangle } from './icons/UiIcons';
+import { IconAlertTriangle, IconCheckCircle } from './icons/UiIcons';
 import { resolveProfilePhotoUrl } from '../lib/profilePhoto';
 import { useClub } from '../context/ClubContext';
 import trophyHero from '../assets/trophy-hero.svg';
@@ -558,6 +558,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
   const [torneoCategoria, setTorneoCategoria] = useState(null);
   const [perfilMetaById, setPerfilMetaById] = useState({});
   const [rankingPosById, setRankingPosById] = useState({});
+  const [hasAnyClubElo, setHasAnyClubElo] = useState(false);
   const [scoreOverrideByPartido, setScoreOverrideByPartido] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -714,6 +715,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
   useEffect(() => {
     if (!torneoId || !torneoClubId) {
       setRankingPosById({});
+      setHasAnyClubElo(false);
       return;
     }
 
@@ -772,9 +774,16 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
           map[String(id)] = String(index + 1);
         });
 
-        if (!cancelled) setRankingPosById(map);
+        const hasNonZeroElo = rows.some((j) => toElo(j) > 0);
+        if (!cancelled) {
+          setHasAnyClubElo(hasNonZeroElo);
+          setRankingPosById(hasNonZeroElo ? map : {});
+        }
       } catch (_) {
-        if (!cancelled) setRankingPosById({});
+        if (!cancelled) {
+          setHasAnyClubElo(false);
+          setRankingPosById({});
+        }
       }
     })();
 
@@ -972,6 +981,8 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
   }, [partidos, getNombrePerfil, getRankingPerfil, getRankingPos]);
 
   const seedByJugadorId = useMemo(() => {
+    // Sorteo puro: si ningún jugador tiene ELO real, no hay cabezas de serie
+    if (!hasAnyClubElo) return {};
     if (!Array.isArray(partidos) || partidos.length === 0) return {};
 
     const roundOrders = partidos
@@ -1038,7 +1049,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     });
 
     return seeds;
-  }, [partidos, jugadoresPorPartido, getRankingPerfil, getRankingPos]);
+  }, [partidos, jugadoresPorPartido, getRankingPerfil, getRankingPos, hasAnyClubElo]);
 
   const getScoreDisplay = useCallback((partido) => {
     const partidoId = String(partido?.id || '').trim();
@@ -1912,6 +1923,10 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     const connClass = isChampionRoute || isPlayerHovered
       ? 'border-[#a6ce39] shadow-[0_0_8px_rgba(166,206,57,0.5)]'
       : hasGanador ? 'border-[#a6ce39]/40' : 'border-white/20 group-hover:border-white/35';
+    // Detecta si un lado es BYE (casilla vacía en primera ronda)
+    const matchNotas = String(partido?.notas || '').toUpperCase();
+    const j1IsBye = !j1Key && matchNotas.includes('BYE');
+    const j2IsBye = !j2Key && matchNotas.includes('BYE');
 
     // Vertical connector height: slotH/2 when column has fixed height (desktop ATP),
     // otherwise fall back to CSS-only calc based on gap-8 (mobile).
@@ -1981,14 +1996,18 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
                 {j1Seed ? (
                   <span className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-b from-[#f5c842] to-[#c98b0a] text-[#1a0a00] text-[10px] font-black shadow ring-1 ring-amber-300/50" title={`${seedLabel(j1Seed)} sembrado`}>{j1Seed}</span>
                 ) : null}
-                <span className={`font-bold break-words leading-snug transition-colors ${
-                  hasGanador && ganadorKey === j1Key ? 'text-[#a6ce39] font-black'
-                    : hasGanador && ganadorKey !== j1Key ? 'line-through text-white/25'
-                      : hoveredPlayerId === j1Key ? 'text-[#a6ce39]'
-                        : hallOfFameMode ? 'text-slate-700' : 'text-white/90'
-                }`}>{j1Name}</span>
+                {j1IsBye ? (
+                  <span className="italic text-slate-500 font-normal">BYE</span>
+                ) : (
+                  <span className={`font-bold break-words leading-snug transition-colors ${
+                    hasGanador && ganadorKey === j1Key ? 'text-[#ccff00] font-black'
+                      : hasGanador && ganadorKey !== j1Key ? 'text-slate-400'
+                        : hoveredPlayerId === j1Key ? 'text-[#a6ce39]'
+                          : hallOfFameMode ? 'text-slate-700' : 'text-white/90'
+                  }`}>{j1Name}</span>
+                )}
               </div>
-              {hasGanador && ganadorKey === j1Key ? <span className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#a6ce39] text-[#0d2740] text-[11px] font-black shadow">âœ“</span> : null}
+              {hasGanador && ganadorKey === j1Key ? <IconCheckCircle className="shrink-0 h-4 w-4 text-[#ccff00]" /> : null}
             </div>
 
             {score && parsedSets.length > 0 ? (
@@ -2017,14 +2036,18 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
                 {j2Seed ? (
                   <span className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-b from-[#f5c842] to-[#c98b0a] text-[#1a0a00] text-[10px] font-black shadow ring-1 ring-amber-300/50" title={`${seedLabel(j2Seed)} sembrado`}>{j2Seed}</span>
                 ) : null}
-                <span className={`font-bold break-words leading-snug transition-colors ${
-                  hasGanador && ganadorKey === j2Key ? 'text-[#a6ce39] font-black'
-                    : hasGanador && ganadorKey !== j2Key ? 'line-through text-white/25'
-                      : hoveredPlayerId === j2Key ? 'text-[#a6ce39]'
-                        : hallOfFameMode ? 'text-slate-700' : 'text-white/90'
-                }`}>{j2Name}</span>
+                {j2IsBye ? (
+                  <span className="italic text-slate-500 font-normal">BYE</span>
+                ) : (
+                  <span className={`font-bold break-words leading-snug transition-colors ${
+                    hasGanador && ganadorKey === j2Key ? 'text-[#ccff00] font-black'
+                      : hasGanador && ganadorKey !== j2Key ? 'text-slate-400'
+                        : hoveredPlayerId === j2Key ? 'text-[#a6ce39]'
+                          : hallOfFameMode ? 'text-slate-700' : 'text-white/90'
+                  }`}>{j2Name}</span>
+                )}
               </div>
-              {hasGanador && ganadorKey === j2Key ? <span className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#a6ce39] text-[#0d2740] text-[11px] font-black shadow">âœ“</span> : null}
+              {hasGanador && ganadorKey === j2Key ? <IconCheckCircle className="shrink-0 h-4 w-4 text-[#ccff00]" /> : null}
             </div>
           </button>
 

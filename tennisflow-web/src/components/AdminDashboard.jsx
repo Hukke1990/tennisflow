@@ -3,6 +3,8 @@ import axios from 'axios';
 import { io } from 'socket.io-client';
 import TournamentBracket from './TournamentBracket';
 import AdminLiveControl from './AdminLiveControl';
+import AdminControlPanel from './AdminControlPanel';
+import { useAuth } from '../context/AuthContext';
 
 const DEFAULT_POINTS_BY_ROUND = {
   32: '5',
@@ -144,6 +146,8 @@ const buildWhatsAppUrlForInscripcion = (inscripcion, template) => {
 };
 
 export default function AdminDashboard() {
+  const { rolReal } = useAuth();
+  const isSuperAdmin = rolReal === 'super_admin';
   const [activeTab, setActiveTab] = useState('canchas');
   const [canchas, setCanchas] = useState([]);
   const [loadingCanchas, setLoadingCanchas] = useState(true);
@@ -620,6 +624,7 @@ export default function AdminDashboard() {
     { id: 'inscripciones', label: 'Gestion de Inscripciones' },
     { id: 'cuadros', label: 'Cuadros y Cronogramas' },
     { id: 'live-control', label: 'Control en Vivo' },
+    ...(isSuperAdmin ? [{ id: 'panel-control', label: '⚙ Panel de Control' }] : []),
   ];
 
   return (
@@ -1325,6 +1330,10 @@ export default function AdminDashboard() {
 
       {activeTab === 'live-control' && (
         <AdminLiveControl torneos={torneosConfigurados} />
+      )}
+
+      {activeTab === 'panel-control' && isSuperAdmin && (
+        <AdminControlPanel />
       )}
 
     </div>
