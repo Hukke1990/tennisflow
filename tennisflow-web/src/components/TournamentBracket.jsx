@@ -1,5 +1,6 @@
-/* eslint-disable react/prop-types */
+﻿/* eslint-disable react/prop-types */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import axios from 'axios';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -97,8 +98,8 @@ const normalizeSurfaceLabel = (value) => {
   const raw = normalize(value);
   if (!raw) return 'A confirmar';
   if (raw.includes('ladrillo')) return 'Polvo de ladrillo';
-  if (raw.includes('cesped') || raw.includes('césped')) return 'Cesped';
-  if (raw.includes('rapida') || raw.includes('rápida') || raw.includes('dura') || raw.includes('hard')) return 'Cancha rapida';
+  if (raw.includes('cesped') || raw.includes('cÃ©sped')) return 'Cesped';
+  if (raw.includes('rapida') || raw.includes('rÃ¡pida') || raw.includes('dura') || raw.includes('hard')) return 'Cancha rapida';
   return String(value || 'A confirmar');
 };
 
@@ -303,14 +304,14 @@ const getEstadoPartido = (partido) => {
   const estado = normalize(partido?.estado);
 
   if (estado.includes('final') || estado.includes('termin') || estado.includes('complet') || partido?.ganador_id) {
-    return { key: 'finalizado', label: 'Finalizado', badge: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+    return { key: 'finalizado', label: 'Finalizado', badge: 'bg-white/8 text-white/55 border-white/15' };
   }
 
   if ((estado.includes('juego') || estado.includes('curso') || estado.includes('live')) && hasMeaningfulLiveEvidence(partido)) {
-    return { key: 'en_juego', label: 'En Juego', badge: 'bg-amber-100 text-amber-700 border-amber-200' };
+    return { key: 'en_juego', label: 'En Vivo', badge: 'bg-[#a6ce39]/15 text-[#a6ce39] border-[#a6ce39]/30' };
   }
 
-  return { key: 'programado', label: 'Programado', badge: 'bg-blue-100 text-blue-700 border-blue-200' };
+  return { key: 'programado', label: 'Programado', badge: 'bg-sky-500/10 text-sky-300 border-sky-400/25' };
 };
 
 const getJugadorNombre = (partido, side) => {
@@ -563,6 +564,8 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
   const [activeView, setActiveView] = useState('bracket');
   const [mutationBusy, setMutationBusy] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [hoveredPlayerId, setHoveredPlayerId] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const [cachedScoreByPartido, setCachedScoreByPartido] = useState({});
   const [pointsConfig, setPointsConfig] = useState(DEFAULT_POINTS_CONFIG);
@@ -573,6 +576,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     score: '',
   });
   const cachedScoreRef = useRef({});
+  const bracketContainerRef = useRef(null);
 
   useEffect(() => {
     cachedScoreRef.current = cachedScoreByPartido;
@@ -734,13 +738,13 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
         let rows = [];
 
         if (torneoCategoria) {
-          // Categoría conocida: una sola llamada
+          // CategorÃ­a conocida: una sola llamada
           const { data } = await axios.get(`${API_URL}/api/rankings`, {
             params: { ...baseParams, categoria: torneoCategoria },
           });
           rows = Array.isArray(data) ? data : Array.isArray(data?.jugadores) ? data.jugadores : [];
         } else {
-          // Categoría desconocida: pedir todas en paralelo y unir
+          // CategorÃ­a desconocida: pedir todas en paralelo y unir
           const results = await Promise.allSettled(
             [1, 2, 3, 4, 5].map((cat) =>
               axios.get(`${API_URL}/api/rankings`, { params: { ...baseParams, categoria: cat } })
@@ -896,7 +900,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
         return {
           id: String(directId || '').trim(),
           name: directName || 'Por definir',
-          // Priorizar posición de ranking (#1, #2…) sobre ELO crudo
+          // Priorizar posiciÃ³n de ranking (#1, #2â€¦) sobre ELO crudo
           ranking: String(rankingPos || directRanking || '').trim(),
         };
       }
@@ -1194,6 +1198,17 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     () => Object.keys(rondas).sort((a, b) => Number(b) - Number(a)),
     [rondas]
   );
+
+  const nonFinalRounds = useMemo(() => bracketOrder.slice(0, -1), [bracketOrder]);
+  const finalRoundKey = useMemo(() => bracketOrder[bracketOrder.length - 1] ?? null, [bracketOrder]);
+
+  const BRACKET_CELL_H = 240;
+  const firstRoundTopCount = useMemo(() => {
+    if (nonFinalRounds.length === 0) return 1;
+    const matches = sortPartidosByOrder(rondas[nonFinalRounds[0]] || []);
+    return Math.max(1, Math.ceil(matches.length / 2));
+  }, [nonFinalRounds, rondas]);
+  const symColHeight = firstRoundTopCount * BRACKET_CELL_H;
 
   const finalPartido = useMemo(() => {
     if (!Array.isArray(partidos) || partidos.length === 0) return null;
@@ -1790,6 +1805,278 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     }));
   }, [resultModal.open, resultModal.ganadorId, activeModalWinnerOptions]);
 
+  // â”€â”€ Drag-to-pan â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Fullscreen toggle ────────────────────────────────────────────────────
+  const toggleFullscreen = useCallback(() => {
+    const el = bracketContainerRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handler);
+    return () => document.removeEventListener('fullscreenchange', handler);
+  }, []);
+
+  // ── Zoom controls (glassmorphism floating panel) ──────────────────────────
+  const renderZoomControls = (onZoomIn, onZoomOut, onReset) => (
+    <div className="absolute bottom-4 right-4 z-40 flex flex-col gap-1.5 p-1.5 rounded-2xl border border-white/15 bg-white/[0.07] backdrop-blur-xl shadow-2xl">
+      <button
+        type="button"
+        onClick={() => onZoomIn(0.3)}
+        title="Acercar"
+        className="h-9 w-9 rounded-xl border border-white/10 bg-white/5 hover:bg-[#a6ce39]/20 hover:border-[#a6ce39]/40 text-white/80 hover:text-[#a6ce39] font-black text-xl leading-none transition-all flex items-center justify-center select-none"
+      >
+        +
+      </button>
+      <button
+        type="button"
+        onClick={() => onZoomOut(0.3)}
+        title="Alejar"
+        className="h-9 w-9 rounded-xl border border-white/10 bg-white/5 hover:bg-[#a6ce39]/20 hover:border-[#a6ce39]/40 text-white/80 hover:text-[#a6ce39] font-black text-xl leading-none transition-all flex items-center justify-center select-none"
+      >
+        −
+      </button>
+      <div className="h-px bg-white/10 mx-1 my-0.5" />
+      <button
+        type="button"
+        onClick={() => onReset()}
+        title="Restablecer vista"
+        className="h-9 w-9 rounded-xl border border-white/10 bg-white/5 hover:bg-[#a6ce39]/20 hover:border-[#a6ce39]/40 text-white/80 hover:text-[#a6ce39] font-bold text-base leading-none transition-all flex items-center justify-center select-none"
+      >
+        ↺
+      </button>
+      <button
+        type="button"
+        onClick={toggleFullscreen}
+        title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+        className="h-9 w-9 rounded-xl border border-white/10 bg-white/5 hover:bg-[#a6ce39]/20 hover:border-[#a6ce39]/40 text-white/80 hover:text-[#a6ce39] leading-none transition-all flex items-center justify-center select-none"
+      >
+        {isFullscreen ? (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+            <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
+            <line x1="10" y1="14" x2="3" y2="21" /><line x1="21" y1="3" x2="14" y2="10" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+            <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+            <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+          </svg>
+        )}
+      </button>
+    </div>
+  );
+
+  // â”€â”€ Match-card renderer (shared mobile + desktop) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const renderMatchCard = (partido, matchIndex, totalInColumn, connectorSide, fixedSlotH = null) => {
+    const partidoKey = String(partido?.id || '').trim();
+    const ganadorId = partido?.ganador_id;
+    const resolved = jugadoresPorPartido[partidoKey] || {};
+    const j1Id = resolved.j1Id || getJugadorId(partido, 1);
+    const j2Id = resolved.j2Id || getJugadorId(partido, 2);
+    const j1Name = resolved.j1Name || getJugadorNombre(partido, 1);
+    const j2Name = resolved.j2Name || getJugadorNombre(partido, 2);
+    const j1Ranking = resolved.j1Ranking || getJugadorRankingDirecto(partido, 1) || getRankingPerfil(j1Id) || getRankingPos(j1Id);
+    const j2Ranking = resolved.j2Ranking || getJugadorRankingDirecto(partido, 2) || getRankingPerfil(j2Id) || getRankingPos(j2Id);
+    const j1Photo = getFotoPerfil(j1Id);
+    const j2Photo = getFotoPerfil(j2Id);
+    const j1Seed = seedByJugadorId[String(j1Id || '').trim()] || null;
+    const j2Seed = seedByJugadorId[String(j2Id || '').trim()] || null;
+    const hasGanador = Boolean(ganadorId);
+    const estado = getEstadoPartido(partido);
+    const hasConflict = isConflictAvailability(partido);
+    const slot = formatSlot(partido);
+    const score = getScoreDisplay(partido);
+    const ganadorKey = String(ganadorId || '').trim();
+    const j1Key = String(j1Id || '').trim();
+    const j2Key = String(j2Id || '').trim();
+    const isChampionRoute = hallOfFameMode && championRouteMatchIds.has(partidoKey);
+    const isPlayed = hasGanador || estado.key === 'finalizado';
+    const isLive = estado.key === 'en_juego';
+    const canchaId = partido?.cancha?.id || partido?.cancha_id;
+    const canchaMeta = canchas.find((c) => String(c?.id || '') === String(canchaId || ''));
+    const superficie = normalizeSurfaceLabel(partido?.cancha?.superficie || partido?.superficie || canchaMeta?.superficie);
+    const isPlayerHovered = Boolean(hoveredPlayerId) && ((j1Key && j1Key === hoveredPlayerId) || (j2Key && j2Key === hoveredPlayerId));
+    const isOtherPlayerHovered = Boolean(hoveredPlayerId) && !isPlayerHovered;
+    const showV = totalInColumn > 1;
+    const parsedSets = score
+      ? score.trim().replace(/\s*\/\s*/g, ' ').split(/\s+/).filter((s) => /^\d+-\d+/.test(s))
+          .map((s) => { const m = s.match(/^(\d+)-(\d+)/); return m ? [parseInt(m[1], 10), parseInt(m[2], 10)] : null; })
+          .filter(Boolean)
+      : [];
+    const connClass = isChampionRoute || isPlayerHovered
+      ? 'border-[#a6ce39] shadow-[0_0_8px_rgba(166,206,57,0.5)]'
+      : hasGanador ? 'border-[#a6ce39]/40' : 'border-white/20 group-hover:border-white/35';
+
+    // Vertical connector height: slotH/2 when column has fixed height (desktop ATP),
+    // otherwise fall back to CSS-only calc based on gap-8 (mobile).
+    const cH = fixedSlotH ? fixedSlotH / 2 : null;
+    const vFallback = cH ? '' : 'h-[calc(50%+2rem)] lg:h-[calc(50%+2.5rem)]';
+    const vStyleDown = cH ? { top: '50%', height: cH } : { top: '50%' };
+    const vStyleUp   = cH ? { bottom: '50%', height: cH } : { bottom: '50%' };
+
+    return (
+      <div
+        key={partido.id}
+        className={`relative group transition-opacity ${isOtherPlayerHovered ? 'opacity-30' : 'opacity-100'}`}
+        onMouseLeave={() => setHoveredPlayerId(null)}
+      >
+        {connectorSide === 'right' && (
+          <>
+            <div className={`absolute top-1/2 -right-6 w-6 border-b-2 z-0 transition-colors ${connClass}`} />
+            {showV && matchIndex % 2 === 0 && <div className={`absolute -right-6 w-0 border-r-2 z-0 transition-colors ${connClass} ${vFallback}`} style={vStyleDown} />}
+            {showV && matchIndex % 2 !== 0 && <div className={`absolute -right-6 w-0 border-r-2 z-0 transition-colors ${connClass} ${vFallback}`} style={vStyleUp} />}
+            <div className={`absolute top-1/2 -right-12 w-6 border-b-2 z-0 transition-colors ${connClass}`} />
+          </>
+        )}
+        {connectorSide === 'left' && (
+          <>
+            <div className={`absolute top-1/2 -left-6 w-6 border-b-2 z-0 transition-colors ${connClass}`} />
+            {showV && matchIndex % 2 === 0 && <div className={`absolute -left-6 w-0 border-r-2 z-0 transition-colors ${connClass} ${vFallback}`} style={vStyleDown} />}
+            {showV && matchIndex % 2 !== 0 && <div className={`absolute -left-6 w-0 border-r-2 z-0 transition-colors ${connClass} ${vFallback}`} style={vStyleUp} />}
+            <div className={`absolute top-1/2 -left-12 w-6 border-b-2 z-0 transition-colors ${connClass}`} />
+          </>
+        )}
+
+        <div className={`relative z-10 rounded-xl border overflow-hidden transition-all ${
+          hasConflict
+            ? 'border-red-400/60 bg-red-500/10 backdrop-blur-sm shadow-sm'
+            : isLive
+              ? 'border-[#a6ce39]/50 bg-white/[0.06] backdrop-blur-md shadow-[0_0_24px_rgba(166,206,57,0.2)]'
+              : hallOfFameMode
+                ? 'border-white/45 bg-white/74 backdrop-blur-md shadow-[0_12px_28px_rgba(15,23,42,0.34)]'
+                : 'border-white/10 bg-white/5 backdrop-blur-md shadow-lg hover:border-white/[0.18] hover:bg-white/[0.08]'
+        } ${isChampionRoute || isPlayerHovered ? 'ring-1 ring-[#a6ce39]/60 shadow-[0_0_16px_rgba(166,206,57,0.3)]' : ''}`}>
+          {isLive && <div className="absolute inset-0 rounded-xl ring-1 ring-[#a6ce39]/60 animate-pulse pointer-events-none z-20" />}
+
+          <div className={`px-3 py-2 text-xs border-b ${hasConflict ? 'bg-red-500/15 border-red-400/20 text-red-300' : isLive ? 'bg-[#a6ce39]/[0.08] border-[#a6ce39]/20 text-[#a6ce39]/90' : hallOfFameMode ? 'bg-white/62 border-white/80 text-slate-600' : 'bg-white/5 border-white/8 text-white/45'}`}>
+            <p className="font-semibold">Hora: {slot.timeLabel}</p>
+            <p className="font-semibold flex items-center gap-1.5">
+              {isLive && <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#a6ce39] animate-pulse" />}
+              Cancha: {slot.canchaLabel}
+            </p>
+          </div>
+
+          {hasConflict && (
+            <div className="px-3 py-1.5 text-xs font-bold text-red-300 bg-red-500/10 border-b border-red-400/20 inline-flex items-center gap-1.5">
+              <IconAlertTriangle className="h-3.5 w-3.5" />
+              Conflicto de disponibilidad
+            </div>
+          )}
+
+          <button type="button" onClick={() => openResultadoModal(partido)} disabled={!adminMode || !partido?.fecha_hora} className="w-full text-left">
+            <div
+              className={`flex items-center justify-between px-4 py-3 border-b transition-opacity ${hallOfFameMode ? 'border-white/40 bg-white/55' : 'border-white/8'} ${hasGanador && ganadorKey !== j1Key ? 'opacity-35' : ''}`}
+              onMouseEnter={() => j1Key && setHoveredPlayerId(j1Key)}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="h-6 w-6 rounded-full border border-white/30 bg-white/20 overflow-hidden shrink-0">
+                  {j1Photo ? <img src={j1Photo} alt={j1Name} className="h-full w-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-blue-700">{formatRankingLabel(j1Ranking) || ''}</div>}
+                </div>
+                {j1Seed ? (
+                  <span className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-b from-[#f5c842] to-[#c98b0a] text-[#1a0a00] text-[10px] font-black shadow ring-1 ring-amber-300/50" title={`${seedLabel(j1Seed)} sembrado`}>{j1Seed}</span>
+                ) : null}
+                <span className={`font-bold break-words leading-snug transition-colors ${
+                  hasGanador && ganadorKey === j1Key ? 'text-[#a6ce39] font-black'
+                    : hasGanador && ganadorKey !== j1Key ? 'line-through text-white/25'
+                      : hoveredPlayerId === j1Key ? 'text-[#a6ce39]'
+                        : hallOfFameMode ? 'text-slate-700' : 'text-white/90'
+                }`}>{j1Name}</span>
+              </div>
+              {hasGanador && ganadorKey === j1Key ? <span className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#a6ce39] text-[#0d2740] text-[11px] font-black shadow">âœ“</span> : null}
+            </div>
+
+            {score && parsedSets.length > 0 ? (
+              <div className={`px-4 py-1.5 border-b flex justify-center gap-1.5 ${hallOfFameMode ? 'border-white/50 bg-white/35' : 'border-white/8 bg-white/[0.03]'}`}>
+                {parsedSets.map(([a, b], si) => (
+                  <div key={si} className="flex flex-col gap-0.5">
+                    <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-[11px] font-black border ${a > b ? 'bg-[#a6ce39] text-[#0d2740] border-[#a6ce39]/70' : 'bg-white/10 text-white/45 border-white/10'}`}>{a}</span>
+                    <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-[11px] font-black border ${b > a ? 'bg-[#a6ce39] text-[#0d2740] border-[#a6ce39]/70' : 'bg-white/10 text-white/45 border-white/10'}`}>{b}</span>
+                  </div>
+                ))}
+              </div>
+            ) : score ? (
+              <div className={`px-4 py-1.5 border-b text-center ${hallOfFameMode ? 'border-white/50 bg-white/35' : 'border-white/8 bg-white/[0.03]'}`}>
+                <span className={`font-mono text-sm tracking-wide ${hallOfFameMode ? 'font-black text-lg text-slate-800' : 'text-white/60'}`}>{score}</span>
+              </div>
+            ) : null}
+
+            <div
+              className={`flex items-center justify-between px-4 py-3 transition-opacity ${hallOfFameMode ? 'bg-white/55' : ''} ${hasGanador && ganadorKey !== j2Key ? 'opacity-35' : ''}`}
+              onMouseEnter={() => j2Key && setHoveredPlayerId(j2Key)}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="h-6 w-6 rounded-full border border-white/30 bg-white/20 overflow-hidden shrink-0">
+                  {j2Photo ? <img src={j2Photo} alt={j2Name} className="h-full w-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-blue-700">{formatRankingLabel(j2Ranking) || ''}</div>}
+                </div>
+                {j2Seed ? (
+                  <span className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-b from-[#f5c842] to-[#c98b0a] text-[#1a0a00] text-[10px] font-black shadow ring-1 ring-amber-300/50" title={`${seedLabel(j2Seed)} sembrado`}>{j2Seed}</span>
+                ) : null}
+                <span className={`font-bold break-words leading-snug transition-colors ${
+                  hasGanador && ganadorKey === j2Key ? 'text-[#a6ce39] font-black'
+                    : hasGanador && ganadorKey !== j2Key ? 'line-through text-white/25'
+                      : hoveredPlayerId === j2Key ? 'text-[#a6ce39]'
+                        : hallOfFameMode ? 'text-slate-700' : 'text-white/90'
+                }`}>{j2Name}</span>
+              </div>
+              {hasGanador && ganadorKey === j2Key ? <span className="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#a6ce39] text-[#0d2740] text-[11px] font-black shadow">âœ“</span> : null}
+            </div>
+          </button>
+
+          <div className={`px-3 py-2 border-t flex flex-col gap-1 text-xs ${hallOfFameMode ? 'border-white/20 text-slate-200' : 'border-white/8 text-white/50'}`}>
+            <div className="flex items-center justify-between gap-2">
+              <span className={`font-semibold ${hallOfFameMode ? 'text-slate-200/85' : 'text-white/35'}`}>{getCategoriaRama(partido)}</span>
+              <span className={`px-2 py-0.5 rounded border font-bold ${estado.badge}`}>{estado.label}</span>
+            </div>
+            {isPlayed && <span className={`text-[11px] ${hallOfFameMode ? 'text-slate-200/80' : 'text-white/30'}`}>Superficie: {superficie}</span>}
+            {adminMode && partido?.fecha_hora && (
+              <button type="button" onClick={() => openResultadoModal(partido)} className="mt-1 text-xs font-bold text-[#a6ce39] bg-[#a6ce39]/10 hover:bg-[#a6ce39]/20 border border-[#a6ce39]/30 rounded px-2 py-1 transition-colors">
+                Gestionar resultado
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // â”€â”€ Bracket column renderer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const renderBracketCol = (rondaOrden, colMatches, keyPrefix, connectorSide, { blurMode = false, desktopHeight = undefined } = {}) => {
+    if (!colMatches || colMatches.length === 0) return null;
+    const roundOrder = Number.parseInt(String(rondaOrden || ''), 10);
+    const pointsHint = resolveRoundPointsHint(roundOrder, pointsConfig);
+    const roundBadgePoints = roundOrder === 2
+      ? toSafeNonNegativeInt(pointsConfig.puntos_campeon, 0)
+      : toSafeNonNegativeInt(pointsHint?.badges?.[1]?.value ?? pointsHint?.badges?.[0]?.value, 0);
+    const roundBadgeClass = roundOrder === 2
+      ? 'from-emerald-300/90 via-emerald-200/90 to-emerald-100/90 text-emerald-950 border-emerald-200/80'
+      : 'from-sky-300/90 via-cyan-200/90 to-blue-100/90 text-sky-950 border-sky-200/80';
+    const nombreRonda = colMatches[0]?.ronda || `Ronda ${rondaOrden}`;
+    const shouldBlur = blurMode && hallOfFameMode;
+    return (
+      <div
+        key={`${keyPrefix}-${rondaOrden}`}
+        className={`flex flex-col justify-around w-72 relative pt-14 gap-8 transition-all ${shouldBlur ? 'opacity-45 blur-[1.2px] saturate-[0.6]' : 'opacity-100'}`}
+        style={desktopHeight ? { height: `${desktopHeight}px`, gap: 0 } : undefined}
+      >
+        <div className="absolute top-0 left-0 right-0 text-center">
+          <h4 className={`text-xl font-black leading-none mb-1 ${hallOfFameMode ? 'text-white/88 [font-family:Georgia,Times,serif]' : 'text-white/80'}`}>
+            {nombreRonda}
+          </h4>
+          <span className={`inline-flex items-center rounded-full border bg-gradient-to-r px-3 py-1 text-[11px] font-black tracking-wide ${hallOfFameMode ? roundBadgeClass : 'from-[#a6ce39]/20 to-[#a6ce39]/10 text-[#a6ce39] border-[#a6ce39]/30'}`}>
+            +{roundBadgePoints} pts ELO
+          </span>
+        </div>
+        {colMatches.map((partido, matchIndex) => renderMatchCard(partido, matchIndex, colMatches.length, connectorSide, desktopHeight ? desktopHeight / colMatches.length : null))}
+      </div>
+    );
+  };
+
   if (!torneoId) return <div className="text-gray-500">Selecciona un torneo para ver el cuadro.</div>;
   if (loading) return <div className="animate-spin h-8 w-8 border-b-2 border-blue-600 mx-auto mt-10"></div>;
   if (error) return <div className="text-red-500 font-medium">{error}</div>;
@@ -1799,14 +2086,14 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     <div className={`w-full p-6 rounded-2xl mt-6 border transition-colors ${
       hallOfFameMode
         ? 'bg-gradient-to-br from-[#0b1322] via-[#1b2d45] to-[#36281a] border-amber-200/35 shadow-2xl'
-        : 'bg-gray-50 border-gray-200'
-    }`}>
+        : 'bg-gradient-to-br from-[#0d2740] via-[#16476d] to-[#123a5c] border-white/10 shadow-2xl'
+    }}`}>
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-6">
         <div>
-          <h3 className={`text-2xl font-black tracking-tight uppercase ${hallOfFameMode ? 'text-white' : 'text-gray-800'}`}>
+          <h3 className="text-2xl font-black tracking-tight uppercase text-white">
             {hallOfFameMode ? 'Cuadro - Salon de la Fama' : 'Gestor de Llaves y Cronograma'}
           </h3>
-          <p className={`text-sm ${hallOfFameMode ? 'text-slate-200/85' : 'text-gray-500'}`}>
+          <p className="text-sm text-white/60">
             {hallOfFameMode
               ? 'Resultados finales del torneo con foco en la final y el campeon.'
               : 'Visualiza el cuadro, administra horarios/canchas y carga resultados.'}
@@ -1815,10 +2102,10 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
 
         <button
           onClick={fetchCuadro}
-          className={`text-sm font-semibold px-4 py-2 rounded-lg transition-colors ${
+          className={`text-sm font-semibold px-4 py-2 rounded-lg border transition-colors ${
             hallOfFameMode
-              ? 'text-amber-100 hover:text-white bg-amber-500/20 border border-amber-300/45'
-              : 'text-blue-600 hover:text-blue-800 bg-blue-50'
+              ? 'text-amber-100 hover:text-white bg-amber-500/20 border-amber-300/45'
+              : 'text-white/80 hover:text-white bg-white/10 border-white/15 hover:bg-white/15'
           }`}
         >
           Refrescar
@@ -1831,8 +2118,8 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
           onClick={() => setActiveView('bracket')}
           className={`px-4 py-2 rounded-lg text-sm font-bold border ${
             activeView === 'bracket'
-              ? (hallOfFameMode ? 'bg-amber-500 text-[#1e293b] border-amber-400' : 'bg-blue-600 text-white border-blue-600')
-              : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+              ? (hallOfFameMode ? 'bg-amber-500 text-[#1e293b] border-amber-400' : 'bg-[#a6ce39] text-[#0d2740] border-[#a6ce39]')
+              : 'bg-white/8 text-white/60 border-white/10 hover:bg-white/[0.12]'
           }`}
         >
           Llaves
@@ -1841,7 +2128,9 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
           type="button"
           onClick={() => setActiveView('cronograma')}
           className={`px-4 py-2 rounded-lg text-sm font-bold border ${
-            activeView === 'cronograma' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+            activeView === 'cronograma'
+              ? (hallOfFameMode ? 'bg-amber-500 text-[#1e293b] border-amber-400' : 'bg-[#a6ce39] text-[#0d2740] border-[#a6ce39]')
+              : 'bg-white/8 text-white/60 border-white/10 hover:bg-white/[0.12]'
           }`}
         >
           Cronograma
@@ -1852,8 +2141,8 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
         <div
           className={`mb-4 rounded-lg px-4 py-3 text-sm font-semibold border ${
             statusMessage.type === 'success'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-              : 'bg-red-50 border-red-200 text-red-700'
+              ? 'bg-emerald-500/15 border-emerald-400/30 text-emerald-300'
+              : 'bg-red-500/15 border-red-400/30 text-red-300'
           }`}
         >
           {statusMessage.text}
@@ -1877,7 +2166,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
           actionBusy={mutationBusy}
         />
       ) : (
-        <div className="relative">
+        <div ref={bracketContainerRef} className={`relative${isFullscreen ? ' bg-[#0d2740] p-4' : ''}`}>
           <div className={`relative rounded-2xl ${hallOfFameMode ? 'border border-white/20 bg-white/10 backdrop-blur-md pt-4' : ''}`}>
             {hallOfFameMode && (
               <>
@@ -1889,191 +2178,101 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
               </>
             )}
 
-            <div className="w-full overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300">
-              <div className="flex space-x-12 min-w-max mx-auto pb-10 pt-8 px-8">
-                {bracketOrder.map((rondaOrden, colIndex) => {
-                  const partidosDeLaRonda = sortPartidosByOrder(rondas[rondaOrden]);
-                  const nombreRonda = partidosDeLaRonda[0]?.ronda || `Ronda ${rondaOrden}`;
-                  const isFinal = bracketOrder.length - 1 === colIndex;
-                  const roundOrder = Number.parseInt(String(rondaOrden || ''), 10);
-                  const pointsHint = resolveRoundPointsHint(roundOrder, pointsConfig);
-                  const shouldBlurRound = hallOfFameMode && !isFinal;
-                  const roundBadgePoints = roundOrder === 2
-                    ? toSafeNonNegativeInt(pointsConfig.puntos_campeon, 0)
-                    : toSafeNonNegativeInt(pointsHint?.badges?.[1]?.value ?? pointsHint?.badges?.[0]?.value, 0);
-                  const roundBadgeClass = roundOrder === 2
-                    ? 'from-emerald-300/90 via-emerald-200/90 to-emerald-100/90 text-emerald-950 border-emerald-200/80'
-                    : 'from-sky-300/90 via-cyan-200/90 to-blue-100/90 text-sky-950 border-sky-200/80';
+            <div className="w-full">
+              {/* â”€â”€ MOBILE: horizontal left-to-right â”€â”€ */}
+              <div className="lg:hidden relative">
+                <TransformWrapper
+                  initialScale={0.85}
+                  minScale={0.2}
+                  maxScale={2.5}
+                  centerOnInit
+                  limitToBounds={false}
+                  wheel={{ step: 0.08 }}
+                  doubleClick={{ mode: 'zoomIn' }}
+                >
+                  {({ zoomIn, zoomOut, resetTransform }) => (
+                    <>
+                      <TransformComponent
+                        wrapperClass="!w-full cursor-grab active:cursor-grabbing"
+                        wrapperStyle={{ height: isFullscreen ? 'calc(100vh - 3rem)' : '70vh' }}
+                      >
+                        <div className="flex space-x-12 min-w-max mx-auto pb-10 pt-8 px-8">
+                          {bracketOrder.map((rondaOrden, colIndex) => {
+                            const isFinal = bracketOrder.length - 1 === colIndex;
+                            const matches = sortPartidosByOrder(rondas[rondaOrden]);
+                            return renderBracketCol(rondaOrden, matches, 'mob', isFinal ? 'none' : 'right', { blurMode: !isFinal });
+                          })}
+                        </div>
+                      </TransformComponent>
+                      {renderZoomControls(zoomIn, zoomOut, resetTransform)}
+                    </>
+                  )}
+                </TransformWrapper>
+              </div>
 
-                  return (
-                    <div
-                      key={rondaOrden}
-                      className={`flex flex-col justify-around w-80 space-y-8 relative pt-16 transition-all ${
-                        shouldBlurRound ? 'opacity-45 blur-[1.2px] saturate-[0.6]' : 'opacity-100'
-                      }`}
-                    >
-                      <div className="absolute top-0 left-0 right-0 text-center">
-                        <h4 className={`text-[30px] font-black leading-none mb-1 ${hallOfFameMode ? 'text-white/88 [font-family:Georgia,Times,serif]' : 'text-gray-700'}`}>
-                          {nombreRonda}
-                        </h4>
-                        <span className={`inline-flex items-center rounded-full border bg-gradient-to-r px-4 py-1.5 text-[11px] font-black tracking-wide ${hallOfFameMode ? roundBadgeClass : 'from-slate-100 to-slate-50 text-slate-700 border-slate-200'}`}>
-                          +{roundBadgePoints} pts ELO
-                        </span>
-                      </div>
+              {/* â”€â”€ DESKTOP: ATP symmetric â€” drag-to-pan â”€â”€ */}
+              <div className="hidden lg:block w-full relative">
+                <TransformWrapper
+                  initialScale={1}
+                  minScale={0.2}
+                  maxScale={2.5}
+                  centerOnInit
+                  limitToBounds={false}
+                  wheel={{ step: 0.08 }}
+                  doubleClick={{ mode: 'zoomIn' }}
+                >
+                  {({ zoomIn, zoomOut, resetTransform }) => (
+                    <>
+                      <TransformComponent
+                        wrapperClass="!w-full cursor-grab active:cursor-grabbing"
+                        wrapperStyle={{ height: isFullscreen ? 'calc(100vh - 3rem)' : '82vh' }}
+                      >
+                        <div className="flex items-stretch justify-center min-w-max mx-auto pb-12 pt-4 px-8">
 
-                      {partidosDeLaRonda.map((partido, matchIndex) => {
-                        const partidoKey = String(partido?.id || '').trim();
-                        const ganadorId = partido?.ganador_id;
-                        const resolved = jugadoresPorPartido[partidoKey] || {};
-                        const j1Id = resolved.j1Id || getJugadorId(partido, 1);
-                        const j2Id = resolved.j2Id || getJugadorId(partido, 2);
-                        const j1Name = resolved.j1Name || getJugadorNombre(partido, 1);
-                        const j2Name = resolved.j2Name || getJugadorNombre(partido, 2);
-                        const j1Ranking = resolved.j1Ranking || getJugadorRankingDirecto(partido, 1) || getRankingPerfil(j1Id) || getRankingPos(j1Id);
-                        const j2Ranking = resolved.j2Ranking || getJugadorRankingDirecto(partido, 2) || getRankingPerfil(j2Id) || getRankingPos(j2Id);
-                        const j1Photo = getFotoPerfil(j1Id);
-                        const j2Photo = getFotoPerfil(j2Id);
-                        const j1Seed = seedByJugadorId[String(j1Id || '').trim()] || null;
-                        const j2Seed = seedByJugadorId[String(j2Id || '').trim()] || null;
-                        const j1Initials = String(j1Name || '').split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'J1';
-                        const j2Initials = String(j2Name || '').split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'J2';
-                        const hasGanador = Boolean(ganadorId);
-                        const estado = getEstadoPartido(partido);
-                        const hasConflict = isConflictAvailability(partido);
-                        const slot = formatSlot(partido);
-                        const score = getScoreDisplay(partido);
-                        const ganadorKey = String(ganadorId || '').trim();
-                        const j1Key = String(j1Id || '').trim();
-                        const j2Key = String(j2Id || '').trim();
-                        const isChampionRoute = hallOfFameMode && championRouteMatchIds.has(partidoKey);
-                        const isPlayed = hasGanador || estado.key === 'finalizado';
-                        const canchaId = partido?.cancha?.id || partido?.cancha_id;
-                        const canchaMeta = canchas.find((cancha) => String(cancha?.id || '') === String(canchaId || ''));
-                        const superficie = normalizeSurfaceLabel(partido?.cancha?.superficie || partido?.superficie || canchaMeta?.superficie);
+                  {/* LEFT HALF: outer â†’ inner, connectors â†’ right */}
+                  <div className="flex items-stretch gap-12">
+                    {nonFinalRounds.map((rondaOrden) => {
+                      const allMatches = sortPartidosByOrder(rondas[rondaOrden]);
+                      const topMatches = allMatches.slice(0, Math.ceil(allMatches.length / 2));
+                      return renderBracketCol(rondaOrden, topMatches, 'left', 'right', { blurMode: true, desktopHeight: symColHeight });
+                    })}
+                  </div>
 
-                        const connectorClass = isChampionRoute
-                          ? 'border-emerald-300 shadow-[0_0_10px_rgba(74,222,128,0.55)]'
-                          : 'border-gray-300 group-hover:border-blue-400';
-
-                        return (
-                          <div key={partido.id} className="relative group">
-                            {!isFinal && (
-                              <>
-                                <div className={`absolute top-1/2 -right-6 w-6 border-b-2 z-0 transition-colors ${connectorClass}`}></div>
-                                {matchIndex % 2 === 0 && (
-                                  <div className={`absolute top-1/2 -right-6 w-0 h-[calc(50%+2rem)] lg:h-[calc(50%+2.5rem)] border-r-2 z-0 transition-colors ${connectorClass}`}></div>
-                                )}
-                                {matchIndex % 2 !== 0 && (
-                                  <div className={`absolute bottom-1/2 -right-6 w-0 h-[calc(50%+2rem)] lg:h-[calc(50%+2.5rem)] border-r-2 z-0 transition-colors ${connectorClass}`}></div>
-                                )}
-                                <div className={`absolute top-1/2 -right-12 w-6 border-b-2 z-0 transition-colors ${connectorClass}`}></div>
-                              </>
-                            )}
-
-                            <div
-                              className={`relative z-10 rounded-xl border-2 overflow-hidden transition-all ${
-                                hasConflict
-                                  ? 'border-red-300 bg-red-50 shadow-sm'
-                                  : hallOfFameMode
-                                    ? 'border-white/45 bg-white/74 backdrop-blur-md shadow-[0_12px_28px_rgba(15,23,42,0.34)]'
-                                    : 'border-blue-100 bg-white shadow-sm hover:border-blue-300 hover:shadow-md'
-                              } ${isChampionRoute ? 'ring-2 ring-emerald-300/70 shadow-[0_0_16px_rgba(74,222,128,0.35)]' : ''}`}
-                            >
-                              <div className={`px-3 py-2 text-xs border-b ${hasConflict ? 'bg-red-100 border-red-200 text-red-700' : hallOfFameMode ? 'bg-white/62 border-white/80 text-slate-600' : 'bg-gray-100 border-gray-200 text-gray-600'}`}>
-                                <p className="font-semibold">Hora: {slot.timeLabel}</p>
-                                <p className="font-semibold">Cancha: {slot.canchaLabel}</p>
-                              </div>
-
-                              {hasConflict && (
-                                <div className="px-3 py-1.5 text-xs font-bold text-red-700 bg-red-100 border-b border-red-200 inline-flex items-center gap-1.5">
-                                  <IconAlertTriangle className="h-3.5 w-3.5" />
-                                  Conflicto de disponibilidad
-                                </div>
-                              )}
-
-                              <button
-                                type="button"
-                                onClick={() => openResultadoModal(partido)}
-                                disabled={!adminMode || !partido?.fecha_hora}
-                                className="w-full text-left"
-                              >
-                                <div className={`flex items-center justify-between px-4 py-3 border-b ${hallOfFameMode ? 'border-white/60' : 'border-gray-100'} ${hasGanador && ganadorKey !== j1Key ? 'opacity-60 bg-gray-50/70' : hallOfFameMode ? 'bg-white/55' : ''}`}>
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <div className="h-6 w-6 rounded-full border border-white/30 bg-white/20 overflow-hidden shrink-0">
-                                      {j1Photo ? <img src={j1Photo} alt={j1Name} className="h-full w-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-blue-700">{formatRankingLabel(j1Ranking) || ''}</div>}
-                                    </div>
-                                    {j1Seed ? (
-                                      <span className="shrink-0 inline-flex flex-col items-center rounded-md border border-amber-300 bg-gradient-to-r from-amber-200 to-yellow-100 px-1.5 py-0.5 text-amber-900 leading-tight">
-                                        <span className="text-[11px] font-black">{seedLabel(j1Seed)}</span>
-                                        <span className="text-[8px] font-semibold uppercase tracking-tight">Cab. Serie</span>
-                                      </span>
-                                    ) : null}
-                                    <span className={`font-bold break-words leading-snug ${hasGanador && ganadorKey === j1Key ? 'text-emerald-600' : hallOfFameMode ? 'text-slate-500' : 'text-gray-800'} ${hasGanador && ganadorKey !== j1Key ? 'line-through text-gray-400' : ''}`}>
-                                      {j1Name}
-                                    </span>
-                                  </div>
-                                  {hasGanador && ganadorKey === j1Key ? <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-b from-amber-200 to-amber-400 text-amber-900 text-[11px] font-black">✓</span> : null}
-                                </div>
-
-                                {hallOfFameMode && score ? (
-                                  <div className="px-4 py-1.5 border-b border-white/50 text-center bg-white/40">
-                                    <span className="font-black text-lg text-slate-800 tracking-wide">{score}</span>
-                                  </div>
-                                ) : null}
-
-                                <div className={`flex items-center justify-between px-4 py-3 ${hasGanador && ganadorKey !== j2Key ? 'opacity-60 bg-gray-50/70' : hallOfFameMode ? 'bg-white/55' : ''}`}>
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <div className="h-6 w-6 rounded-full border border-white/30 bg-white/20 overflow-hidden shrink-0">
-                                      {j2Photo ? <img src={j2Photo} alt={j2Name} className="h-full w-full object-cover" /> : <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-blue-700">{formatRankingLabel(j2Ranking) || ''}</div>}
-                                    </div>
-                                    {j2Seed ? (
-                                      <span className="shrink-0 inline-flex flex-col items-center rounded-md border border-amber-300 bg-gradient-to-r from-amber-200 to-yellow-100 px-1.5 py-0.5 text-amber-900 leading-tight">
-                                        <span className="text-[11px] font-black">{seedLabel(j2Seed)}</span>
-                                        <span className="text-[8px] font-semibold uppercase tracking-tight">Cab. Serie</span>
-                                      </span>
-                                    ) : null}
-                                    <span className={`font-bold break-words leading-snug ${hasGanador && ganadorKey === j2Key ? 'text-emerald-600' : hallOfFameMode ? 'text-slate-500' : 'text-gray-800'} ${hasGanador && ganadorKey !== j2Key ? 'line-through text-gray-400' : ''}`}>
-                                      {j2Name}
-                                    </span>
-                                  </div>
-                                  {hasGanador && ganadorKey === j2Key ? <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-b from-amber-200 to-amber-400 text-amber-900 text-[11px] font-black">✓</span> : null}
-                                </div>
-                              </button>
-
-                              <div className={`px-3 py-2 border-t flex flex-col gap-1 text-xs ${hallOfFameMode ? 'border-white/20 text-slate-200' : 'border-gray-100'}`}>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className={`font-semibold ${hallOfFameMode ? 'text-slate-200/85' : 'text-gray-500'}`}>{getCategoriaRama(partido)}</span>
-                                  <span className={`px-2 py-0.5 rounded border font-bold ${estado.badge}`}>{estado.label}</span>
-                                </div>
-
-                                {!hallOfFameMode && score && (
-                                  <span className={`font-mono ${hallOfFameMode ? 'text-slate-100' : 'text-gray-600'}`}>Score: {score}</span>
-                                )}
-
-                                {hallOfFameMode && isPlayed && (
-                                  <span className="text-[11px] text-slate-200/80">Superficie: {superficie}</span>
-                                )}
-
-                                {adminMode && partido?.fecha_hora && (
-                                  <button
-                                    type="button"
-                                    onClick={() => openResultadoModal(partido)}
-                                    className="mt-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded px-2 py-1"
-                                  >
-                                    Gestionar resultado
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                  {/* CENTER: GRAN FINAL */}
+                  <div className="flex flex-col items-center justify-center self-center px-10 shrink-0">
+                    <div className="text-center mb-6">
+                      <div className={`text-[11px] font-black tracking-[0.28em] uppercase mb-1 ${hallOfFameMode ? 'text-amber-400' : 'text-[#a6ce39]/70'}`}>Punto de convergencia</div>
+                      <h4 className={`text-3xl font-black tracking-[0.12em] uppercase ${hallOfFameMode ? 'text-amber-200 [font-family:Georgia,Times,serif]' : 'text-white'}`}>
+                        Gran Final
+                      </h4>
+                      <span className={`mt-2 inline-flex items-center rounded-full border bg-gradient-to-r px-4 py-1.5 text-[11px] font-black tracking-wide ${hallOfFameMode ? 'from-emerald-300/90 via-emerald-200/90 to-emerald-100/90 text-emerald-950 border-emerald-200/80' : 'from-[#a6ce39]/25 to-[#a6ce39]/10 text-[#a6ce39] border-[#a6ce39]/35'}`}>
+                        +{toSafeNonNegativeInt(pointsConfig.puntos_campeon, 0)} pts ELO â€” CampeÃ³n
+                      </span>
                     </div>
-                  );
-                })}
+                    <div className="w-80">
+                      {finalRoundKey && sortPartidosByOrder(rondas[finalRoundKey] || []).map((partido, idx) =>
+                        renderMatchCard(partido, idx, 1, 'none')
+                      )}
+                    </div>
+                  </div>
+
+                  {/* RIGHT HALF: inner â†’ outer, connectors â†’ left */}
+                  <div className="flex items-stretch gap-12">
+                    {[...nonFinalRounds].reverse().map((rondaOrden) => {
+                      const allMatches = sortPartidosByOrder(rondas[rondaOrden]);
+                      const bottomMatches = allMatches.slice(Math.ceil(allMatches.length / 2));
+                      return renderBracketCol(rondaOrden, bottomMatches, 'right', 'left', { blurMode: true, desktopHeight: symColHeight });
+                    })}
+                  </div>
+
+                        </div>
+                      </TransformComponent>
+                      {renderZoomControls(zoomIn, zoomOut, resetTransform)}
+                    </>
+                  )}
+                </TransformWrapper>
               </div>
             </div>
-
             {torneoFinalizado && finalWinnerDisplayName && (
               <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center px-4">
                 <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_center,rgba(255,255,255,0)_0%,rgba(2,6,23,0.16)_72%,rgba(2,6,23,0.32)_100%)]"></div>
@@ -2143,8 +2342,8 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
             disabled={mutationBusy || torneoFinalizado || !finalPartido?.ganador_id}
             className={`rounded-xl px-6 py-3 text-sm font-black tracking-wide border transition-colors ${
               mutationBusy || torneoFinalizado || !finalPartido?.ganador_id
-                ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                : 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700'
+                ? 'bg-white/10 text-white/30 border-white/10 cursor-not-allowed'
+                : 'bg-[#a6ce39] text-[#0d2740] border-[#a6ce39] hover:bg-[#95ba32]'
             }`}
           >
             {torneoFinalizado ? 'TORNEO FINALIZADO' : 'FINALIZAR TORNEO'}
@@ -2154,28 +2353,28 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
 
       {resultModal.open && adminMode && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-xl bg-white rounded-2xl border border-gray-200 shadow-xl p-6 space-y-4">
+          <div className="w-full max-w-xl bg-[#0d2740] rounded-2xl border border-white/10 shadow-xl p-6 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h4 className="text-lg font-black text-gray-900">Gestion de Resultado</h4>
-                <p className="text-sm text-gray-500">Partido P{activeModalPartido?.id || resultModal.partido?.id}</p>
+                <h4 className="text-lg font-black text-white">Gestion de Resultado</h4>
+                <p className="text-sm text-white/50">Partido P{activeModalPartido?.id || resultModal.partido?.id}</p>
               </div>
               <button
                 type="button"
                 onClick={closeResultadoModal}
-                className="text-sm font-bold text-gray-500 hover:text-gray-700"
+                className="text-sm font-bold text-white/50 hover:text-white"
               >
                 Cerrar
               </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <label className="text-sm font-semibold text-gray-700">
+              <label className="text-sm font-semibold text-white/80">
                 Ganador
                 <select
                   value={resultModal.ganadorId}
                   onChange={(event) => setResultModal((prev) => ({ ...prev, ganadorId: event.target.value }))}
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300"
+                  className="mt-1 w-full px-3 py-2 rounded-lg border border-white/15 bg-white/8 text-white outline-none focus:border-[#a6ce39]/50"
                 >
                   <option value="">Seleccionar...</option>
                   {activeModalWinnerOptions.map((option) => (
@@ -2189,19 +2388,19 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
                 )}
               </label>
 
-              <label className="text-sm font-semibold text-gray-700">
+              <label className="text-sm font-semibold text-white/80">
                 Score
                 <input
                   type="text"
                   value={resultModal.score}
                   onChange={(event) => setResultModal((prev) => ({ ...prev, score: event.target.value }))}
                   placeholder="Ej: 6-4 / 7-5"
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300"
+                  className="mt-1 w-full px-3 py-2 rounded-lg border border-white/15 bg-white/8 text-white placeholder:text-white/30 outline-none focus:border-[#a6ce39]/50"
                 />
               </label>
             </div>
 
-            <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+            <div className="rounded-lg border border-[#a6ce39]/20 bg-[#a6ce39]/8 px-3 py-2 text-xs text-[#a6ce39]/80">
               Al confirmar, el sistema finaliza el partido y empuja automaticamente al ganador a la ronda siguiente.
             </div>
 
@@ -2209,7 +2408,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
               <button
                 type="button"
                 onClick={closeResultadoModal}
-                className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                className="px-4 py-2 rounded-lg border border-white/15 text-sm font-semibold text-white/60 hover:bg-white/8"
               >
                 Cancelar
               </button>
