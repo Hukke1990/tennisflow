@@ -1,6 +1,10 @@
 /* eslint-disable react/prop-types */
 import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
+import {
+  Clock, MapPin, Play, Check, Plus, RefreshCcw, X,
+  ChevronLeft, ChevronRight, AlertTriangle,
+} from 'lucide-react';
 
 const DAY_OPTIONS = [
   { key: 'viernes', label: 'Viernes', weekday: 5 },
@@ -324,6 +328,8 @@ export default function CronogramaTorneo({
   const [dragSourceSlot, setDragSourceSlot] = useState(null);
   const [dragOverSlot, setDragOverSlot] = useState('');
   const [liveScoreByPartido, setLiveScoreByPartido] = useState({});
+  const [mobileCanchaIdx, setMobileCanchaIdx] = useState(0);
+  const [canchaFilter, setCanchaFilter] = useState('');
 
   const referenceDateByDay = useMemo(() => {
     const referenceMap = {};
@@ -573,6 +579,10 @@ export default function CronogramaTorneo({
 
   const dayLabel = DAY_OPTIONS.find((day) => day.key === selectedDay)?.label || 'Dia';
 
+  const displayCanchas = canchaFilter
+    ? canchasGrid.filter((c) => c.key === canchaFilter)
+    : canchasGrid;
+
   const getLiveScoreValue = (partido) => {
     const partidoId = String(partido?.id || '');
     if (!partidoId) return '';
@@ -611,194 +621,366 @@ export default function CronogramaTorneo({
     await onFinalizarPartidoRapido(partido.id, marcador);
   };
 
-  return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-5 mt-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
-        <div>
-          <h3 className="text-xl font-black text-gray-800 uppercase tracking-tight">Cronograma por Cancha</h3>
-          <p className="text-sm text-gray-500">{dayLabel}: arrastra un partido para reprogramar o toca un slot vacio para asignarlo manualmente.</p>
+  // ── Slot card renderer ─────────────────────────────────────────────────────
+  const renderSlotCard = (partido, cancha, time, key) => {
+    const isSameDraggedMatch = partido && draggedPartidoId && String(partido.id) === String(draggedPartidoId);
+    const canReceiveDrop = Boolean(adminMode && draggedPartidoId && !actionBusy && cancha.id && !isSameDraggedMatch);
+    const isDropTarget = dragOverSlot === key && canReceiveDrop;
+
+    const dropHandlers = {
+      onDragOver: (e) => { if (!canReceiveDrop) return; e.preventDefault(); setDragOverSlot(key); },
+      onDragLeave: () => { if (dragOverSlot === key) setDragOverSlot(''); },
+      onDrop: async (e) => { if (!canReceiveDrop) return; e.preventDefault(); await handleDrop({ canchaId: cancha.id, time, slotId: key, dragEvent: e, targetPartido: partido ?? null }); },
+    };
+
+    if (partido) {
+      const estadoPartido = getPartidoEstado(partido);
+      const isEnJuego = estadoPartido.key === 'en_juego';
+      const isProgramado = estadoPartido.key === 'programado';
+      const isFinalizado = estadoPartido.key === 'finalizado';
+      const marcador = getPartidoMarcador(partido);
+      const j1 = getJugadorLabelResuelto(partido, 1);
+      const j2 = getJugadorLabelResuelto(partido, 2);
+      const catRama = getCategoriaRama(partido);
+
+      return (
+        <div
+          key={key}
+          draggable={adminMode}
+          onDragStart={(e) => handleDragStart(e, partido.id, { canchaId: cancha.id, time, slotId: key })}
+          onDragEnd={clearDragState}
+          {...dropHandlers}
+          className={`relative rounded-xl p-3 overflow-hidden transition-all select-none ${
+            adminMode ? 'cursor-grab active:cursor-grabbing' : ''
+          } ${
+            isDropTarget ? 'ring-2 ring-[#a6ce39]/60' : ''
+          } ${
+            isEnJuego
+              ? 'bg-amber-500/10 border border-amber-400/30'
+              : isFinalizado
+                ? 'bg-emerald-500/8 border border-emerald-400/15'
+                : 'bg-sky-500/8 border border-sky-400/20'
+          }`}
+        >
+          {/* Live animated overlay */}
+          {isEnJuego && (
+            <div className="absolute inset-0 bg-gradient-to-br from-amber-400/8 to-orange-500/5 animate-pulse pointer-events-none rounded-xl" />
+          )}
+
+          <div className="relative">
+            {/* Status badge */}
+            <div className="flex items-center justify-between gap-1 mb-2">
+              {isEnJuego && (
+                <div className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-ping shrink-0" />
+                  <span className="text-[10px] font-black text-amber-400 uppercase tracking-wide">En Juego</span>
+                </div>
+              )}
+              {isFinalizado && (
+                <div className="flex items-center gap-1">
+                  <Check className="h-3 w-3 text-emerald-400 shrink-0" />
+                  <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wide">Finalizado</span>
+                </div>
+              )}
+              {isProgramado && (
+                <span className="text-[10px] font-black text-sky-400 uppercase tracking-wide">Programado</span>
+              )}
+              <span className="text-[10px] text-white/20 ml-auto shrink-0">#{partido.id}</span>
+            </div>
+
+            {/* Players */}
+            <p className="text-xs font-bold text-white leading-tight truncate">{j1}</p>
+            <p className="text-[10px] text-white/30 my-0.5">vs</p>
+            <p className="text-xs font-bold text-white leading-tight truncate">{j2}</p>
+            <p className="text-[10px] text-white/25 mt-1 truncate">{catRama}</p>
+
+            {/* Live/final score */}
+            {marcador && (isEnJuego || isFinalizado) && (
+              <p className={`text-sm font-black text-center mt-2 ${
+                isEnJuego ? 'text-amber-300' : 'text-emerald-300'
+              }`}>
+                {marcador}
+              </p>
+            )}
+
+            {/* Admin actions */}
+            {adminMode && (
+              <div className="mt-3 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                {isProgramado && (
+                  <button
+                    type="button"
+                    onClick={() => handleIniciarPartidoClick(partido)}
+                    disabled={actionBusy}
+                    className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-[#a6ce39]/15 border border-[#a6ce39]/30 text-[#a6ce39] text-[11px] font-black px-2 py-1.5 hover:bg-[#a6ce39]/25 disabled:opacity-50 transition-colors"
+                  >
+                    <Play className="h-3 w-3" />
+                    Iniciar partido
+                  </button>
+                )}
+
+                {isEnJuego && (
+                  <div className="space-y-1.5">
+                    <input
+                      type="text"
+                      value={getLiveScoreValue(partido)}
+                      onChange={(e) => setLiveScoreValue(partido.id, e.target.value)}
+                      placeholder="Ej: 6-4 6-3"
+                      className="w-full rounded-lg border border-amber-400/30 bg-amber-500/10 px-2.5 py-1.5 text-xs font-semibold text-white placeholder-white/25 focus:outline-none focus:border-amber-400/60"
+                    />
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleActualizarMarcadorClick(partido)}
+                        disabled={actionBusy}
+                        className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-2 py-1.5 text-[11px] font-bold text-amber-300 hover:bg-amber-500/20 disabled:opacity-50 transition-colors"
+                      >
+                        Actualizar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleFinalizarPartidoClick(partido)}
+                        disabled={actionBusy}
+                        className="rounded-lg bg-white/8 border border-white/12 px-2 py-1.5 text-[11px] font-bold text-white/60 hover:bg-white/15 hover:text-white disabled:opacity-50 transition-colors"
+                      >
+                        Finalizar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => onAbrirResultado?.(partido)}
+                  disabled={actionBusy}
+                  className={`w-full flex items-center justify-center gap-1.5 rounded-lg border text-[11px] font-bold px-2 py-1.5 disabled:opacity-50 transition-colors ${
+                    isEnJuego
+                      ? 'bg-amber-500/20 border-amber-400/40 text-amber-300 hover:bg-amber-500/30'
+                      : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  <Check className="h-3 w-3" />
+                  Cargar resultado
+                </button>
+              </div>
+            )}
+          </div>
         </div>
+      );
+    }
 
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={selectedDay}
-            onChange={(event) => setSelectedDay(event.target.value)}
-            className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-semibold"
-          >
-            {DAY_OPTIONS.map((day) => (
-              <option key={day.key} value={day.key}>
-                {day.label}
-              </option>
-            ))}
-          </select>
+    // Empty slot
+    return (
+      <button
+        key={key}
+        type="button"
+        onClick={() => openManualModal({ canchaId: cancha.id, canchaKey: cancha.key, time })}
+        {...dropHandlers}
+        disabled={!adminMode || actionBusy || !cancha.id}
+        className={`w-full min-h-[72px] rounded-xl border border-dashed flex items-center justify-center transition-all ${
+          isDropTarget
+            ? 'border-[#a6ce39]/50 bg-[#a6ce39]/5 text-[#a6ce39]'
+            : adminMode && cancha.id
+              ? 'border-white/10 bg-white/[0.015] text-white/15 hover:border-[#a6ce39]/30 hover:bg-[#a6ce39]/5 hover:text-[#a6ce39]/50'
+              : 'border-white/5 bg-transparent cursor-default'
+        }`}
+      >
+        {adminMode && cancha.id && <Plus className="h-4 w-4" />}
+      </button>
+    );
+  };
 
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-sm p-5 mt-6">
+
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
+        <div>
+          <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-2">
+            <Clock className="h-5 w-5 text-[#a6ce39] shrink-0" />
+            Cronograma
+          </h3>
+          <p className="text-xs text-white/35 mt-0.5">
+            {adminMode
+              ? 'Arrastrá para reprogramar · Tocá un slot vacío para asignar'
+              : `${dayLabel} · Horarios y canchas del torneo`}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={onRefresh}
-            className="px-3 py-2 text-sm font-semibold rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+            title="Refrescar"
+            className="p-2 rounded-lg bg-white/5 border border-white/10 text-white/40 hover:text-white hover:border-white/20 transition-colors"
           >
-            Refrescar
+            <RefreshCcw className="h-4 w-4" />
           </button>
-
           {adminMode && (
             <button
               type="button"
               onClick={onPublicarCronograma}
               disabled={publishing}
-              className="px-4 py-2 text-sm font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-60"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#a6ce39]/15 border border-[#a6ce39]/30 text-[#a6ce39] text-sm font-black hover:bg-[#a6ce39]/25 disabled:opacity-50 transition-colors"
             >
-              {publishing ? 'Publicando...' : 'Publicar Cronograma'}
+              <Check className="h-3.5 w-3.5" />
+              {publishing ? 'Publicando…' : 'Publicar'}
             </button>
           )}
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* ── Filtros: día + cancha ────────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-x-4 gap-y-3 mb-5">
+        {/* Día pills */}
+        <div className="flex gap-1.5 flex-wrap">
+          {DAY_OPTIONS.map((day) => (
+            <button
+              key={day.key}
+              type="button"
+              onClick={() => setSelectedDay(day.key)}
+              className={`px-3.5 py-1 rounded-full text-xs font-black transition-all ${
+                selectedDay === day.key
+                  ? 'bg-[#a6ce39] text-[#0a1628] shadow-[0_0_10px_rgba(166,206,57,0.3)]'
+                  : 'bg-white/5 border border-white/10 text-white/50 hover:text-white hover:border-white/20'
+              }`}
+            >
+              {day.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Cancha filter pills — solo si hay más de 1 */}
+        {canchasGrid.length > 1 && (
+          <div className="flex gap-1.5 flex-wrap items-center">
+            <span className="text-[10px] text-white/30 font-black uppercase tracking-wide flex items-center gap-1">
+              <MapPin className="h-3 w-3" />
+            </span>
+            <button
+              type="button"
+              onClick={() => setCanchaFilter('')}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                canchaFilter === ''
+                  ? 'bg-white/15 border border-white/25 text-white'
+                  : 'bg-white/5 border border-white/10 text-white/40 hover:text-white/70'
+              }`}
+            >
+              Todas
+            </button>
+            {canchasGrid.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => setCanchaFilter(c.key === canchaFilter ? '' : c.key)}
+                className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                  canchaFilter === c.key
+                    ? 'bg-white/15 border border-white/25 text-white'
+                    : 'bg-white/5 border border-white/10 text-white/40 hover:text-white/70'
+                }`}
+              >
+                {c.nombre}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Mobile: carrusel por cancha ──────────────────────────────────── */}
+      <div className="md:hidden">
+        {canchasGrid.length > 0 && (() => {
+          const clampedIdx = Math.min(mobileCanchaIdx, canchasGrid.length - 1);
+          const cancha = canchasGrid[clampedIdx];
+          return (
+            <>
+              {/* Cancha nav */}
+              <div className="flex items-center justify-between mb-4 bg-white/[0.04] border border-white/8 rounded-xl px-3 py-2">
+                <button
+                  type="button"
+                  onClick={() => setMobileCanchaIdx((i) => Math.max(0, i - 1))}
+                  disabled={clampedIdx === 0}
+                  className="p-1.5 rounded-lg bg-white/5 text-white/50 disabled:opacity-25 hover:text-white transition-colors"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <div className="flex items-center gap-2 text-sm font-black text-white">
+                  <MapPin className="h-4 w-4 text-[#a6ce39]" />
+                  <span>{cancha.nombre}</span>
+                  <span className="text-white/25 text-xs font-normal">{clampedIdx + 1}/{canchasGrid.length}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobileCanchaIdx((i) => Math.min(canchasGrid.length - 1, i + 1))}
+                  disabled={clampedIdx >= canchasGrid.length - 1}
+                  className="p-1.5 rounded-lg bg-white/5 text-white/50 disabled:opacity-25 hover:text-white transition-colors"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Rows */}
+              <div className="space-y-2">
+                {slots.map((time) => {
+                  const key = slotKey({ canchaKey: cancha.key, time, day: selectedDay });
+                  const partido = partidosBySlot.get(key);
+                  return (
+                    <div key={key} className="flex gap-3 items-start">
+                      <div className="shrink-0 w-11 pt-3 flex flex-col items-center gap-0.5">
+                        <Clock className="h-3 w-3 text-white/25" />
+                        <span className="text-[10px] font-bold text-white/35">{time}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        {renderSlotCard(partido, cancha, time, key)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          );
+        })()}
+      </div>
+
+      {/* ── Desktop: tabla de rejilla ────────────────────────────────────── */}
+      <div className="hidden md:block overflow-x-auto rounded-xl border border-white/8">
         <table className="min-w-full border-separate border-spacing-0">
           <thead>
             <tr>
-              <th className="sticky left-0 z-20 bg-gray-100 border border-gray-200 px-3 py-2 text-left text-xs font-black uppercase tracking-wider text-gray-500">Hora</th>
-              {canchasGrid.map((cancha) => (
-                <th key={cancha.key} className="bg-gray-100 border border-gray-200 px-3 py-2 text-left text-xs font-black uppercase tracking-wider text-gray-600 min-w-[220px]">
-                  {cancha.nombre}
+              <th className="sticky left-0 z-20 bg-white/[0.04] border-b border-r border-white/8 px-3 py-2.5 text-left w-16 min-w-[4rem]">
+                <div className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-white/35">
+                  <Clock className="h-3 w-3" />
+                  Hora
+                </div>
+              </th>
+              {displayCanchas.map((cancha) => (
+                <th
+                  key={cancha.key}
+                  className="bg-white/[0.04] border-b border-r border-white/8 px-3 py-2.5 text-left min-w-[200px]"
+                >
+                  <div className="flex items-center gap-1.5 text-xs font-black text-white/60">
+                    <MapPin className="h-3 w-3 text-[#a6ce39] shrink-0" />
+                    {cancha.nombre}
+                  </div>
                 </th>
               ))}
             </tr>
           </thead>
 
-          <tbody>
+          <tbody className="divide-y divide-white/5">
             {slots.map((time) => (
-              <tr key={`${selectedDay}-${time}`}>
-                <td className="sticky left-0 z-10 bg-white border border-gray-200 px-3 py-3 text-sm font-bold text-gray-700">{time}</td>
-
-                {canchasGrid.map((cancha) => {
+              <tr key={`${selectedDay}-${time}`} className="group">
+                <td className="sticky left-0 z-10 bg-[#0a1628] group-hover:bg-white/[0.02] border-r border-white/8 px-3 py-2 transition-colors">
+                  <div className="flex flex-col items-center gap-0.5">
+                    <Clock className="h-3 w-3 text-white/20" />
+                    <span className="text-[11px] font-black text-white/40 whitespace-nowrap">{time}</span>
+                  </div>
+                </td>
+                {displayCanchas.map((cancha) => {
                   const key = slotKey({ canchaKey: cancha.key, time, day: selectedDay });
                   const partido = partidosBySlot.get(key);
-                  const isSameDraggedMatch = partido && draggedPartidoId && String(partido.id) === String(draggedPartidoId);
-                  const canReceiveDrop = Boolean(adminMode && draggedPartidoId && !actionBusy && cancha.id && !isSameDraggedMatch);
-                  const isDropTarget = dragOverSlot === key && canReceiveDrop;
-
                   return (
                     <td
                       key={key}
-                      className={`align-top border p-2 bg-white transition-colors ${isDropTarget ? 'border-blue-300 bg-blue-50/40' : 'border-gray-200'}`}
-                      onDragOver={(event) => {
-                        if (!canReceiveDrop) return;
-                        event.preventDefault();
-                        setDragOverSlot(key);
-                      }}
-                      onDragLeave={() => {
-                        if (dragOverSlot === key) setDragOverSlot('');
-                      }}
-                      onDrop={async (event) => {
-                        event.preventDefault();
-                        if (!canReceiveDrop) return;
-                        await handleDrop({ canchaId: cancha.id, time, slotId: key, dragEvent: event, targetPartido: partido });
-                      }}
+                      className="align-top border-r border-white/5 p-2 bg-transparent"
                     >
-                      {partido ? (
-                        <div
-                          draggable={adminMode}
-                          onDragStart={(event) => handleDragStart(event, partido.id, { canchaId: cancha.id, time, slotId: key })}
-                          onDragEnd={clearDragState}
-                          className="w-full cursor-grab active:cursor-grabbing text-left rounded-lg border border-blue-100 bg-blue-50 p-3 hover:border-blue-300 hover:bg-blue-100 transition-colors"
-                        >
-                          {(() => {
-                            const estadoPartido = getPartidoEstado(partido);
-                            const isProgramado = estadoPartido.key === 'programado';
-                            const isEnJuego = estadoPartido.key === 'en_juego';
-
-                            return (
-                              <>
-                                <div className="flex items-center justify-between gap-2 mb-2">
-                                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded border ${estadoPartido.badge}`}>
-                                    {estadoPartido.label}
-                                  </span>
-                                  <span className="text-[10px] font-bold text-gray-500">P{partido.id}</span>
-                                </div>
-
-                                <p className="text-sm font-bold text-gray-800 leading-tight break-words">{getJugadorLabelResuelto(partido, 1)}</p>
-                                <p className="text-xs font-semibold text-gray-500 mb-1 leading-tight break-words">vs {getJugadorLabelResuelto(partido, 2)}</p>
-                                <p className="text-[11px] text-gray-500">{getCategoriaRama(partido)}</p>
-
-                                {adminMode && (
-                                  <div className="mt-3 space-y-2" onClick={(event) => event.stopPropagation()}>
-                                    {isProgramado && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleIniciarPartidoClick(partido)}
-                                        disabled={actionBusy}
-                                        className="w-full rounded-md bg-emerald-600 px-2.5 py-2 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-60"
-                                      >
-                                        Iniciar Partido
-                                      </button>
-                                    )}
-
-                                    {isEnJuego && (
-                                      <div className="space-y-2">
-                                        <input
-                                          type="text"
-                                          value={getLiveScoreValue(partido)}
-                                          onChange={(event) => setLiveScoreValue(partido.id, event.target.value)}
-                                          placeholder="Ej: 4-2"
-                                          className="w-full rounded-md border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-800"
-                                        />
-
-                                        <div className="grid grid-cols-2 gap-2">
-                                          <button
-                                            type="button"
-                                            onClick={() => handleActualizarMarcadorClick(partido)}
-                                            disabled={actionBusy}
-                                            className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] font-bold text-amber-700 hover:bg-amber-100 disabled:opacity-60"
-                                          >
-                                            Actualizar
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => handleFinalizarPartidoClick(partido)}
-                                            disabled={actionBusy}
-                                            className="rounded-md bg-gray-900 px-2 py-1.5 text-[11px] font-bold text-white hover:bg-gray-800 disabled:opacity-60"
-                                          >
-                                            Finalizar
-                                          </button>
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    <button
-                                      type="button"
-                                      onClick={() => onAbrirResultado?.(partido)}
-                                      disabled={actionBusy}
-                                      className="w-full rounded-md border border-blue-200 bg-blue-100 px-2 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-200 disabled:opacity-60"
-                                    >
-                                      Cargar resultado
-                                    </button>
-                                  </div>
-                                )}
-                              </>
-                            );
-                          })()}
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => openManualModal({ canchaId: cancha.id, canchaKey: cancha.key, time })}
-                          onDragOver={(event) => {
-                            if (!canReceiveDrop) return;
-                            event.preventDefault();
-                            setDragOverSlot(key);
-                          }}
-                          onDrop={async (event) => {
-                            if (!canReceiveDrop) return;
-                            event.preventDefault();
-                            await handleDrop({ canchaId: cancha.id, time, slotId: key, dragEvent: event, targetPartido: null });
-                          }}
-                          disabled={!adminMode || actionBusy || !cancha.id}
-                          className="w-full rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-5 text-xs font-semibold text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed"
-                        >
-                          + Slot vacio
-                        </button>
-                      )}
+                      {renderSlotCard(partido, cancha, time, key)}
                     </td>
                   );
                 })}
@@ -808,53 +990,71 @@ export default function CronogramaTorneo({
         </table>
       </div>
 
+      {/* ── Modal: asignación manual ─────────────────────────────────────── */}
       {slotModal.open && adminMode && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <form onSubmit={handleManualAssign} className="w-full max-w-xl bg-white rounded-2xl border border-gray-200 shadow-xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <form
+            onSubmit={handleManualAssign}
+            className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0d1d35] shadow-2xl p-6 space-y-4"
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h4 className="text-lg font-black text-gray-900">Asignar Partido Manualmente</h4>
-                <p className="text-sm text-gray-500">
-                  {dayLabel} - {slotModal.time} - {getCanchaLabel(canchasGrid.find((c) => c.key === slotModal.canchaKey))}
+                <h4 className="text-lg font-black text-white">Asignar Partido</h4>
+                <p className="text-xs text-white/40 mt-0.5">
+                  {dayLabel} · {slotModal.time} · {getCanchaLabel(canchasGrid.find((c) => c.key === slotModal.canchaKey))}
                 </p>
               </div>
-              <button type="button" onClick={closeManualModal} className="text-sm font-bold text-gray-500 hover:text-gray-700">Cerrar</button>
+              <button
+                type="button"
+                onClick={closeManualModal}
+                className="text-white/40 hover:text-white transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Partido</label>
+              <label className="block text-xs font-black text-white/50 uppercase tracking-wide mb-2">
+                Partido
+              </label>
               <select
                 required
                 value={selectedPartidoId}
                 onChange={(event) => setSelectedPartidoId(event.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300"
+                className="w-full px-3 py-2.5 rounded-lg bg-white/5 border border-white/15 text-sm text-white focus:outline-none focus:border-[#a6ce39]/60"
               >
-                <option value="">Seleccionar partido...</option>
+                <option value="">Seleccionar partido…</option>
                 {partidosAsignables.map((partido) => {
                   const descripcion = `${getJugadorLabelResuelto(partido, 1)} vs ${getJugadorLabelResuelto(partido, 2)}`;
                   return (
                     <option key={partido.id} value={partido.id}>
-                      P{partido.id} - {descripcion}
+                      #{partido.id} — {descripcion}
                     </option>
                   );
                 })}
               </select>
             </div>
 
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              Esta accion fuerza horario y cancha para el partido seleccionado.
+            <div className="flex items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-500/8 px-3 py-2.5 text-xs text-amber-300">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              Esta acción fuerza horario y cancha para el partido seleccionado.
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
-              <button type="button" onClick={closeManualModal} className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">
+              <button
+                type="button"
+                onClick={closeManualModal}
+                className="px-4 py-2 rounded-lg border border-white/15 text-white/60 hover:text-white text-sm font-semibold transition-colors"
+              >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={savingManual}
-                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-500 disabled:opacity-60"
+                className="flex items-center gap-1.5 px-5 py-2 rounded-lg bg-[#a6ce39]/15 border border-[#a6ce39]/30 text-[#a6ce39] font-black text-sm hover:bg-[#a6ce39]/25 disabled:opacity-50 transition-colors"
               >
-                {savingManual ? 'Asignando...' : 'Asignar partido'}
+                <Plus className="h-3.5 w-3.5" />
+                {savingManual ? 'Asignando…' : 'Asignar'}
               </button>
             </div>
           </form>

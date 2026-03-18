@@ -23,27 +23,29 @@ const extractBearerToken = (req) => {
   return match[1].trim();
 };
 
-const resolveProfileRole = async (userId) => {
-  if (!userId) return '';
+const resolveProfile = async (userId) => {
+  if (!userId) return { rol: '', club_id: null };
 
   try {
     const { data } = await supabase
       .from('perfiles')
-      .select('rol, es_admin')
+      .select('rol, es_admin, club_id')
       .eq('id', userId)
       .single();
 
     const roleByEnum = normalizeRole(data?.rol);
-    if (roleByEnum) return roleByEnum;
-
     const roleByLegacyFlag = normalizeRole(data?.es_admin);
-    if (roleByLegacyFlag) return roleByLegacyFlag;
+    const rol = roleByEnum || roleByLegacyFlag || '';
+    const club_id = data?.club_id || null;
 
-    return '';
+    return { rol, club_id };
   } catch (_) {
-    return '';
+    return { rol: '', club_id: null };
   }
 };
+
+// Keep backward-compatible alias
+const resolveProfileRole = async (userId) => (await resolveProfile(userId)).rol;
 
 const requireAuth = async (req, res, next) => {
   try {
@@ -58,13 +60,14 @@ const requireAuth = async (req, res, next) => {
     }
 
     const authUser = data.user;
-    const profileRole = await resolveProfileRole(authUser.id);
+    const { rol: profileRole, club_id: profileClubId } = await resolveProfile(authUser.id);
     const metadataRole = normalizeRole(authUser?.user_metadata?.rol || authUser?.user_metadata?.role);
 
     req.authUser = {
       id: authUser.id,
       email: authUser.email || '',
       rol: profileRole || metadataRole || 'jugador',
+      club_id: profileClubId,
       raw: authUser,
     };
 

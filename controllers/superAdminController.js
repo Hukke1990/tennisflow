@@ -290,15 +290,23 @@ const crearClubConAdmin = async (req, res) => {
 
 // ── Gestión de Torneos ────────────────────────────────────────────────────────
 
+// Devuelve el club_id a usar: para admin siempre el de su perfil; para
+// super_admin acepta el query param (para filtros opcionales).
+const resolveClubId = (req) => {
+  const rol = String(req.authUser?.rol || '').toLowerCase();
+  if (rol === 'admin') return req.authUser?.club_id || null;
+  return req.query?.club_id || null;
+};
+
 const listarTorneos = async (req, res) => {
-  const { club_id } = req.query;
+  const clubId = resolveClubId(req);
   try {
     let query = supabase
       .from('torneos')
-      .select('id, nombre, fecha_inicio, fecha_fin, categoria, sexo, modalidad, estado, club_id')
+      .select('id, titulo, fecha_inicio, fecha_fin, categoria_id, rama, modalidad, estado, club_id, costo, puntos_ronda_32, puntos_ronda_16, puntos_ronda_8, puntos_ronda_4, puntos_ronda_2, puntos_campeon')
       .order('fecha_inicio', { ascending: false });
 
-    if (club_id) query = query.eq('club_id', club_id);
+    if (clubId) query = query.eq('club_id', clubId);
 
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });
@@ -312,9 +320,20 @@ const editarTorneo = async (req, res) => {
   const { id } = req.params;
   if (!id) return res.status(400).json({ error: 'ID de torneo requerido.' });
 
+  // Un admin solo puede editar torneos de su propio club.
+  const clubId = resolveClubId(req);
+  if (clubId) {
+    const { data: existing, error: checkErr } = await supabase
+      .from('torneos').select('club_id').eq('id', id).single();
+    if (checkErr || !existing) return res.status(404).json({ error: 'Torneo no encontrado.' });
+    if (String(existing.club_id) !== String(clubId)) {
+      return res.status(403).json({ error: 'No tienes permiso para editar este torneo.' });
+    }
+  }
+
   const ALLOWED_FIELDS = [
-    'nombre', 'fecha_inicio', 'fecha_fin', 'categoria', 'sexo',
-    'modalidad', 'estado', 'descripcion', 'max_inscriptos',
+    'titulo', 'fecha_inicio', 'fecha_fin', 'categoria_id', 'rama',
+    'modalidad', 'estado', 'costo', 'descripcion', 'max_inscriptos',
     'puntos_ronda_32', 'puntos_ronda_16', 'puntos_ronda_8',
     'puntos_ronda_4', 'puntos_ronda_2', 'puntos_campeon',
   ];
@@ -349,6 +368,17 @@ const softDeleteTorneo = async (req, res) => {
   const { id } = req.params;
   if (!id) return res.status(400).json({ error: 'ID de torneo requerido.' });
 
+  // Un admin solo puede cancelar torneos de su propio club.
+  const clubId = resolveClubId(req);
+  if (clubId) {
+    const { data: existing, error: checkErr } = await supabase
+      .from('torneos').select('club_id').eq('id', id).single();
+    if (checkErr || !existing) return res.status(404).json({ error: 'Torneo no encontrado.' });
+    if (String(existing.club_id) !== String(clubId)) {
+      return res.status(403).json({ error: 'No tienes permiso para cancelar este torneo.' });
+    }
+  }
+
   try {
     const { error } = await supabase
       .from('torneos')
@@ -365,14 +395,15 @@ const softDeleteTorneo = async (req, res) => {
 // ── Gestión de Jugadores ──────────────────────────────────────────────────────
 
 const listarJugadores = async (req, res) => {
-  const { club_id, q } = req.query;
+  const { q } = req.query;
+  const clubId = resolveClubId(req);
   try {
     let query = supabase
       .from('perfiles')
       .select('id, nombre_completo, telefono, rol, ranking_puntos, ranking_elo_singles, club_id')
       .order('nombre_completo', { ascending: true });
 
-    if (club_id) query = query.eq('club_id', club_id);
+    if (clubId) query = query.eq('club_id', clubId);
     if (q) query = query.ilike('nombre_completo', `%${q}%`);
     query = query.neq('rol', 'super_admin');
 
@@ -387,6 +418,17 @@ const listarJugadores = async (req, res) => {
 const editarJugador = async (req, res) => {
   const { id } = req.params;
   if (!id) return res.status(400).json({ error: 'ID de jugador requerido.' });
+
+  // Un admin solo puede editar jugadores de su propio club.
+  const clubId = resolveClubId(req);
+  if (clubId) {
+    const { data: existing, error: checkErr } = await supabase
+      .from('perfiles').select('club_id').eq('id', id).single();
+    if (checkErr || !existing) return res.status(404).json({ error: 'Jugador no encontrado.' });
+    if (String(existing.club_id) !== String(clubId)) {
+      return res.status(403).json({ error: 'No tienes permiso para editar este jugador.' });
+    }
+  }
 
   const ALLOWED_FIELDS = [
     'nombre_completo', 'telefono',
@@ -422,14 +464,15 @@ const editarJugador = async (req, res) => {
 // ── Gestión de Rankings ───────────────────────────────────────────────────────
 
 const listarRankings = async (req, res) => {
-  const { club_id, categoria, sexo } = req.query;
+  const { sexo } = req.query;
+  const clubId = resolveClubId(req);
   try {
     let query = supabase
       .from('perfiles')
       .select('id, nombre_completo, ranking_puntos, ranking_elo_singles, club_id')
       .order('ranking_elo_singles', { ascending: false });
 
-    if (club_id) query = query.eq('club_id', club_id);
+    if (clubId) query = query.eq('club_id', clubId);
     if (sexo) query = query.eq('sexo', sexo);
 
     const { data, error } = await query;
@@ -482,8 +525,11 @@ const ajustarPuntos = async (req, res) => {
 };
 
 const resetearPuntos = async (req, res) => {
-  const { club_id, campo = 'ranking_elo_singles' } = req.body;
-  if (!club_id) return res.status(400).json({ error: 'club_id requerido.' });
+  // Para admin, forzar su propio club; para super_admin, aceptar el body.
+  const clubId = resolveClubId(req) || req.body?.club_id;
+  const { campo = 'ranking_elo_singles' } = req.body;
+  if (!clubId) return res.status(400).json({ error: 'club_id requerido.' });
+  const club_id = clubId;
 
   const ALLOWED_CAMPOS = ['ranking_puntos', 'ranking_elo_singles'];
   if (!ALLOWED_CAMPOS.includes(campo)) {

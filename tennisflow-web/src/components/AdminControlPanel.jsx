@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { Edit, Trash2, RefreshCcw, UserMinus, Search, X, Check, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 const API_URL = '';
 
@@ -14,14 +15,16 @@ const fmtDate = (iso) => {
 };
 
 const ESTADO_LABELS = {
+  borrador: 'Borrador',
+  publicado: 'Publicado',
   abierto: 'Abierto',
-  en_curso: 'En curso',
+  en_progreso: 'En progreso',
   finalizado: 'Finalizado',
   cancelado: 'Cancelado',
 };
 
-const CATEGORIA_LABELS = { 1: 'Cat 1', 2: 'Cat 2', 3: 'Cat 3', 4: 'Cat 4', 5: 'Cat 5' };
-const SEXO_LABELS = { M: 'Masculino', F: 'Femenino', mixto: 'Mixto' };
+const CATEGORIA_LABELS = { 1: '1ª', 2: '2ª', 3: '3ª', 4: '4ª', 5: '5ª' };
+const SEXO_LABELS = { Masculino: 'Masculino', Femenino: 'Femenino', Mixto: 'Mixto' };
 const ROL_OPTIONS = ['jugador', 'admin', 'super_admin'];
 
 // ── sub-components ────────────────────────────────────────────────────────────
@@ -89,7 +92,7 @@ function TorneosTab() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
-  const [clubFilter, setClubFilter] = useState('');
+  const [search, setSearch] = useState('');
   const [editForm, setEditForm] = useState({});
 
   const showToast = (msg, type = 'ok') => {
@@ -100,31 +103,51 @@ function TorneosTab() {
   const fetchTorneos = useCallback(async () => {
     setLoading(true);
     try {
-      const params = clubFilter ? { club_id: clubFilter } : {};
-      const { data } = await axios.get(`${API_URL}/api/super-admin/torneos`, { params });
+      const { data } = await axios.get(`${API_URL}/api/super-admin/torneos`);
       setTorneos(Array.isArray(data) ? data : []);
     } catch {
       showToast('Error al cargar torneos.', 'error');
     } finally {
       setLoading(false);
     }
-  }, [clubFilter]);
+  }, [])
 
   const openEdit = (torneo) => {
     setEditTarget(torneo);
     setEditForm({
-      nombre: torneo.nombre || '',
-      fecha_inicio: torneo.fecha_inicio || '',
-      fecha_fin: torneo.fecha_fin || '',
-      estado: torneo.estado || '',
+      titulo: torneo.titulo || '',
+      rama: torneo.rama || 'Masculino',
+      modalidad: torneo.modalidad || 'Singles',
+      categoria_id: String(torneo.categoria_id || '3'),
+      fecha_inicio: torneo.fecha_inicio ? torneo.fecha_inicio.slice(0, 10) : '',
+      fecha_fin: torneo.fecha_fin ? torneo.fecha_fin.slice(0, 10) : '',
+      estado: torneo.estado || 'abierto',
+      costo: torneo.costo ?? 0,
+      puntos_ronda_32: torneo.puntos_ronda_32 ?? 5,
+      puntos_ronda_16: torneo.puntos_ronda_16 ?? 10,
+      puntos_ronda_8: torneo.puntos_ronda_8 ?? 25,
+      puntos_ronda_4: torneo.puntos_ronda_4 ?? 50,
+      puntos_ronda_2: torneo.puntos_ronda_2 ?? 100,
+      puntos_campeon: torneo.puntos_campeon ?? 100,
     });
   };
 
   const saveEdit = async () => {
     if (!editTarget) return;
     setSaving(true);
+    const payload = {
+      ...editForm,
+      categoria_id: Number(editForm.categoria_id) || null,
+      costo: parseFloat(editForm.costo) || 0,
+      puntos_ronda_32: Number(editForm.puntos_ronda_32) || 0,
+      puntos_ronda_16: Number(editForm.puntos_ronda_16) || 0,
+      puntos_ronda_8: Number(editForm.puntos_ronda_8) || 0,
+      puntos_ronda_4: Number(editForm.puntos_ronda_4) || 0,
+      puntos_ronda_2: Number(editForm.puntos_ronda_2) || 0,
+      puntos_campeon: Number(editForm.puntos_campeon) || 0,
+    };
     try {
-      await axios.patch(`${API_URL}/api/super-admin/torneos/${editTarget.id}`, editForm);
+      await axios.patch(`${API_URL}/api/super-admin/torneos/${editTarget.id}`, payload);
       showToast('Torneo actualizado.');
       setEditTarget(null);
       fetchTorneos();
@@ -147,6 +170,12 @@ function TorneosTab() {
     }
   };
 
+  useEffect(() => { fetchTorneos(); }, [fetchTorneos]);
+
+  const filtered = search.trim()
+    ? torneos.filter((t) => t.titulo?.toLowerCase().includes(search.toLowerCase()))
+    : torneos;
+
   const inputCls = 'bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#a6ce39]/60 w-full';
 
   return (
@@ -156,7 +185,7 @@ function TorneosTab() {
       {deleteTarget && (
         <ConfirmModal
           title="¿Cancelar torneo?"
-          message={`"${deleteTarget.nombre}" cambiará su estado a 'cancelado'. Los datos históricos se mantienen.`}
+          message={`"${deleteTarget.titulo}" cambiará su estado a 'cancelado'. Los datos históricos se mantienen.`}
           dangerous
           onConfirm={confirmDelete}
           onCancel={() => setDeleteTarget(null)}
@@ -165,18 +194,48 @@ function TorneosTab() {
 
       {editTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0d1d35] shadow-2xl p-6">
-            <div className="flex items-center justify-between mb-5">
+          <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0d1d35] shadow-2xl flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
               <h3 className="font-black text-white text-xl">Editar Torneo</h3>
               <button type="button" onClick={() => setEditTarget(null)} className="text-white/40 hover:text-white/80 transition-colors">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="grid grid-cols-1 gap-4">
+            {/* Body – scrollable */}
+            <div className="overflow-y-auto px-6 py-4 grid grid-cols-1 gap-4">
               <label className="flex flex-col gap-1.5 text-xs text-white/50 font-semibold uppercase tracking-wide">
-                Nombre
-                <input className={inputCls} value={editForm.nombre} onChange={(e) => setEditForm((p) => ({ ...p, nombre: e.target.value }))} />
+                Título
+                <input className={inputCls} value={editForm.titulo} onChange={(e) => setEditForm((p) => ({ ...p, titulo: e.target.value }))} />
               </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1.5 text-xs text-white/50 font-semibold uppercase tracking-wide">
+                  Rama
+                  <select className={inputCls} value={editForm.rama} onChange={(e) => setEditForm((p) => ({ ...p, rama: e.target.value }))}>
+                    {['Masculino', 'Femenino', 'Mixto'].map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5 text-xs text-white/50 font-semibold uppercase tracking-wide">
+                  Modalidad
+                  <select className={inputCls} value={editForm.modalidad} onChange={(e) => setEditForm((p) => ({ ...p, modalidad: e.target.value }))}>
+                    {['Singles', 'Dobles'].map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1.5 text-xs text-white/50 font-semibold uppercase tracking-wide">
+                  Categoría
+                  <select className={inputCls} value={editForm.categoria_id} onChange={(e) => setEditForm((p) => ({ ...p, categoria_id: e.target.value }))}>
+                    {[1,2,3,4,5].map((c) => <option key={c} value={String(c)}>{CATEGORIA_LABELS[c]}</option>)}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5 text-xs text-white/50 font-semibold uppercase tracking-wide">
+                  Estado
+                  <select className={inputCls} value={editForm.estado} onChange={(e) => setEditForm((p) => ({ ...p, estado: e.target.value }))}>
+                    {Object.entries(ESTADO_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </label>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1.5 text-xs text-white/50 font-semibold uppercase tracking-wide">
                   Fecha inicio
@@ -188,13 +247,30 @@ function TorneosTab() {
                 </label>
               </div>
               <label className="flex flex-col gap-1.5 text-xs text-white/50 font-semibold uppercase tracking-wide">
-                Estado
-                <select className={inputCls} value={editForm.estado} onChange={(e) => setEditForm((p) => ({ ...p, estado: e.target.value }))}>
-                  {Object.entries(ESTADO_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
+                Costo inscripción ($)
+                <input type="number" min="0" step="0.01" className={inputCls} value={editForm.costo} onChange={(e) => setEditForm((p) => ({ ...p, costo: e.target.value }))} />
               </label>
+              <div>
+                <p className="text-xs text-white/50 font-semibold uppercase tracking-wide mb-2">Puntos por ronda</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { key: 'puntos_ronda_32', label: 'Primera (32)' },
+                    { key: 'puntos_ronda_16', label: 'Octavos (16)' },
+                    { key: 'puntos_ronda_8',  label: 'Cuartos (8)' },
+                    { key: 'puntos_ronda_4',  label: 'Semifinal (4)' },
+                    { key: 'puntos_ronda_2',  label: 'Finalista (2)' },
+                    { key: 'puntos_campeon',  label: 'Campeón' },
+                  ].map(({ key, label }) => (
+                    <label key={key} className="flex flex-col gap-1 text-xs text-white/40 font-semibold uppercase tracking-wide">
+                      {label}
+                      <input type="number" min="0" className={inputCls} value={editForm[key] ?? ''} onChange={(e) => setEditForm((p) => ({ ...p, [key]: e.target.value }))} />
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="flex gap-3 justify-end mt-6">
+            {/* Footer */}
+            <div className="flex gap-3 justify-end px-6 py-4 border-t border-white/10 shrink-0">
               <button type="button" onClick={() => setEditTarget(null)} className="px-4 py-2 rounded-lg border border-white/15 text-white/60 hover:text-white text-sm font-semibold transition-colors">Cancelar</button>
               <button type="button" onClick={saveEdit} disabled={saving} className="px-5 py-2 rounded-lg bg-[#a6ce39]/20 border border-[#a6ce39]/40 text-[#a6ce39] font-black text-sm hover:bg-[#a6ce39]/30 transition-colors disabled:opacity-50">
                 {saving ? 'Guardando…' : 'Guardar'}
@@ -207,14 +283,14 @@ function TorneosTab() {
       <div className="flex items-center gap-3 mb-4">
         <input
           className="bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#a6ce39]/60 w-64"
-          placeholder="Filtrar por club_id…"
-          value={clubFilter}
-          onChange={(e) => setClubFilter(e.target.value)}
+          placeholder="Buscar por nombre…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
         />
         <button type="button" onClick={fetchTorneos} className="p-2 rounded-lg bg-white/5 border border-white/15 text-white/50 hover:text-white hover:border-white/30 transition-colors" title="Recargar">
           <RefreshCcw className="h-4 w-4" />
         </button>
-        <span className="text-xs text-white/30 ml-auto">{torneos.length} torneos</span>
+        <span className="text-xs text-white/30 ml-auto">{filtered.length} torneos</span>
       </div>
 
       {loading ? <Spinner /> : (
@@ -228,14 +304,14 @@ function TorneosTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {torneos.length === 0 && (
+              {filtered.length === 0 && (
                 <tr><td colSpan={7} className="px-4 py-8 text-center text-white/30 text-sm">Sin torneos</td></tr>
               )}
-              {torneos.map((t) => (
+              {filtered.map((t) => (
                 <tr key={t.id} className="transition-colors hover:bg-white/[0.03]">
-                  <td className="px-4 py-3 text-white font-semibold max-w-[180px] truncate">{t.nombre}</td>
-                  <td className="px-4 py-3 text-white/60">{CATEGORIA_LABELS[t.categoria] || t.categoria || '—'}</td>
-                  <td className="px-4 py-3 text-white/60">{SEXO_LABELS[t.sexo] || t.sexo || '—'}</td>
+                  <td className="px-4 py-3 text-white font-semibold max-w-[180px] truncate">{t.titulo}</td>
+                  <td className="px-4 py-3 text-white/60">{CATEGORIA_LABELS[t.categoria_id] || t.categoria_id || '—'}</td>
+                  <td className="px-4 py-3 text-white/60">{SEXO_LABELS[t.rama] || t.rama || '—'}</td>
                   <td className="px-4 py-3 text-white/60 whitespace-nowrap">{fmtDate(t.fecha_inicio)}</td>
                   <td className="px-4 py-3 text-white/60 whitespace-nowrap">{fmtDate(t.fecha_fin)}</td>
                   <td className="px-4 py-3">
@@ -625,8 +701,17 @@ const TABS = [
 ];
 
 export default function AdminControlPanel({ onBack }) {
-  const { user, rolReal } = useAuth();
+  const { user, rolReal, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('torneos');
+  const [sessionReady, setSessionReady] = useState(false);
+
+  // Calienta la sesión en cache ANTES de montar los tabs para evitar que
+  // el interceptor de axios quede colgado esperando getSession() en reload frío.
+  useEffect(() => {
+    if (!authLoading) {
+      supabase.auth.getSession().then(() => setSessionReady(true));
+    }
+  }, [authLoading]);
 
   // Guard: solo super_admin
   const isSuperAdmin = String(rolReal || '').toLowerCase() === 'super_admin';
@@ -696,9 +781,17 @@ export default function AdminControlPanel({ onBack }) {
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {activeTab === 'torneos' && <TorneosTab />}
-        {activeTab === 'jugadores' && <JugadoresTab />}
-        {activeTab === 'rankings' && <RankingsTab />}
+        {(authLoading || !sessionReady) ? (
+          <div className="flex justify-center py-20">
+            <div className="h-8 w-8 rounded-full border-4 border-[#a6ce39] border-t-transparent animate-spin" />
+          </div>
+        ) : (
+          <>
+            {activeTab === 'torneos' && <TorneosTab />}
+            {activeTab === 'jugadores' && <JugadoresTab />}
+            {activeTab === 'rankings' && <RankingsTab />}
+          </>
+        )}
       </div>
     </div>
   );

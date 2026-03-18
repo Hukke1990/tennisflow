@@ -13,22 +13,25 @@ const {
 } = require('../controllers/superAdminController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 
+// super_admin only (crear clubes)
 const SA = [requireAuth, requireRole(['super_admin'])];
+// admin o super_admin (panel de control del club)
+const CA = [requireAuth, requireRole(['admin', 'super_admin'])];
 
 router.post('/clubes', ...SA, crearClubConAdmin);
 
 // Torneos
-router.get('/torneos', ...SA, listarTorneos);
-router.patch('/torneos/:id', ...SA, editarTorneo);
-router.delete('/torneos/:id', ...SA, softDeleteTorneo);
+router.get('/torneos', ...CA, listarTorneos);
+router.patch('/torneos/:id', ...CA, editarTorneo);
+router.delete('/torneos/:id', ...CA, softDeleteTorneo);
 
 // Jugadores
-router.get('/jugadores', ...SA, listarJugadores);
-router.patch('/jugadores/:id', ...SA, editarJugador);
+router.get('/jugadores', ...CA, listarJugadores);
+router.patch('/jugadores/:id', ...CA, editarJugador);
 
 // Rankings
-router.get('/rankings', ...SA, listarRankings);
-router.patch('/rankings/:id/puntos', ...SA, ajustarPuntos);
-router.post('/rankings/resetear', ...SA, resetearPuntos);
+router.get('/rankings', ...CA, listarRankings);
+router.patch('/rankings/:id/puntos', ...CA, ajustarPuntos);
+router.post('/rankings/resetear', ...CA, resetearPuntos);
 
 module.exports = router;

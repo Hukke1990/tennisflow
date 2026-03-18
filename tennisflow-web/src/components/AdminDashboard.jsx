@@ -148,6 +148,7 @@ const buildWhatsAppUrlForInscripcion = (inscripcion, template) => {
 export default function AdminDashboard() {
   const { rolReal } = useAuth();
   const isSuperAdmin = rolReal === 'super_admin';
+  const isAdminOrSuperAdmin = rolReal === 'admin' || rolReal === 'super_admin';
   const [activeTab, setActiveTab] = useState('canchas');
   const [canchas, setCanchas] = useState([]);
   const [loadingCanchas, setLoadingCanchas] = useState(true);
@@ -624,7 +625,7 @@ export default function AdminDashboard() {
     { id: 'inscripciones', label: 'Gestion de Inscripciones' },
     { id: 'cuadros', label: 'Cuadros y Cronogramas' },
     { id: 'live-control', label: 'Control en Vivo' },
-    ...(isSuperAdmin ? [{ id: 'panel-control', label: '⚙ Panel de Control' }] : []),
+    ...(isAdminOrSuperAdmin ? [{ id: 'panel-control', label: '⚙ Panel de Control' }] : []),
   ];
 
   return (
@@ -1332,7 +1333,7 @@ export default function AdminDashboard() {
         <AdminLiveControl torneos={torneosConfigurados} />
       )}
 
-      {activeTab === 'panel-control' && isSuperAdmin && (
+      {activeTab === 'panel-control' && isAdminOrSuperAdmin && (
         <AdminControlPanel />
       )}
 
