@@ -307,6 +307,7 @@ const listarTorneos = async (req, res) => {
       .order('fecha_inicio', { ascending: false });
 
     if (clubId) query = query.eq('club_id', clubId);
+    query = query.neq('estado', 'cancelado');
 
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });

@@ -1313,6 +1313,7 @@ const obtenerTodosLosTorneos = async (req, res) => {
         fecha_cierre_inscripcion
       `)
       .eq('club_id', clubId)
+      .neq('estado', 'cancelado')
       .order('fecha_inicio', { ascending: false });
 
     if (error) {
