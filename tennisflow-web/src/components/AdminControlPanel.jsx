@@ -212,13 +212,13 @@ function TorneosTab() {
                 <label className="flex flex-col gap-1.5 text-xs text-white/50 font-semibold uppercase tracking-wide">
                   Rama
                   <select className={inputCls} value={editForm.rama} onChange={(e) => setEditForm((p) => ({ ...p, rama: e.target.value }))}>
-                    {['Masculino', 'Femenino', 'Mixto'].map((r) => <option key={r} value={r}>{r}</option>)}
+                    {['Masculino', 'Femenino', 'Mixto'].map((r) => <option key={r} value={r} className="bg-[#0d1d35] text-white">{r}</option>)}
                   </select>
                 </label>
                 <label className="flex flex-col gap-1.5 text-xs text-white/50 font-semibold uppercase tracking-wide">
                   Modalidad
                   <select className={inputCls} value={editForm.modalidad} onChange={(e) => setEditForm((p) => ({ ...p, modalidad: e.target.value }))}>
-                    {['Singles', 'Dobles'].map((m) => <option key={m} value={m}>{m}</option>)}
+                    {['Singles', 'Dobles'].map((m) => <option key={m} value={m} className="bg-[#0d1d35] text-white">{m}</option>)}
                   </select>
                 </label>
               </div>
@@ -226,13 +226,13 @@ function TorneosTab() {
                 <label className="flex flex-col gap-1.5 text-xs text-white/50 font-semibold uppercase tracking-wide">
                   Categoría
                   <select className={inputCls} value={editForm.categoria_id} onChange={(e) => setEditForm((p) => ({ ...p, categoria_id: e.target.value }))}>
-                    {[1,2,3,4,5].map((c) => <option key={c} value={String(c)}>{CATEGORIA_LABELS[c]}</option>)}
+                    {[1,2,3,4,5].map((c) => <option key={c} value={String(c)} className="bg-[#0d1d35] text-white">{CATEGORIA_LABELS[c]}</option>)}
                   </select>
                 </label>
                 <label className="flex flex-col gap-1.5 text-xs text-white/50 font-semibold uppercase tracking-wide">
                   Estado
                   <select className={inputCls} value={editForm.estado} onChange={(e) => setEditForm((p) => ({ ...p, estado: e.target.value }))}>
-                    {Object.entries(ESTADO_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    {Object.entries(ESTADO_LABELS).map(([v, l]) => <option key={v} value={v} className="bg-[#0d1d35] text-white">{l}</option>)}
                   </select>
                 </label>
               </div>
