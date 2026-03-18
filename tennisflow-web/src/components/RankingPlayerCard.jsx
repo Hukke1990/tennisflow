@@ -541,52 +541,46 @@ export default function RankingPlayerCard({
         <div className="absolute left-3 top-20 h-8 w-8 border border-amber-200/70 rounded-sm pointer-events-none opacity-70" />
         <div className="absolute right-4 top-28 h-8 w-8 border border-sky-200/80 rounded-sm pointer-events-none opacity-70" />
 
-        <div className={`w-full ${rankingAsideOffset} ${rankingLiftClass} relative z-20 rounded-2xl border border-slate-200 overflow-hidden shadow-md`}>
-          <div className="relative grid grid-cols-2">
-            <div className="px-3 sm:px-4 py-2.5 bg-gradient-to-r from-[#9b7422] via-[#d9b857] to-[#f2df9c] text-slate-950">
-              <div className="flex items-start gap-3">
-                <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#0b3f73] to-[#012849] text-2xl flex items-center justify-center shadow text-amber-300">
-                  <IconStarFill className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-[11px] sm:text-xs font-black uppercase tracking-[0.16em] text-slate-900/80">Singles</p>
-                  <p className="text-4xl sm:text-[46px] leading-none font-black mt-1">
-                    {rankingSingles.posicion ? `#${rankingSingles.posicion}` : '---'}
-                  </p>
-                  {rankingSingles.categoria ? (
-                    <span className={`mt-2 inline-flex rounded-full border bg-white/90 px-2.5 py-1 text-xs font-black ${getCategoriaBadgeClasses(categoriaSingles)}`}>
-                      Categoria {rankingSingles.categoria}a
-                    </span>
-                  ) : (
-                    <span className="mt-2 inline-flex rounded-full border border-slate-300 bg-white/85 px-2.5 py-1 text-xs font-black text-slate-700">
-                      No participa
-                    </span>
-                  )}
-                </div>
+        <div className={`${rankingAsideOffset} ${rankingLiftClass} relative z-20 rounded-2xl border border-slate-200 overflow-hidden shadow-md`}>
+          <div className="grid grid-cols-2">
+            {/* ── Singles (dorado) — mitad izquierda ── */}
+            <div className="flex flex-col items-center justify-start gap-1.5 px-3 py-4 bg-gradient-to-br from-[#9b7422] via-[#d9b857] to-[#f2df9c] text-slate-950">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#0b3f73] to-[#012849] flex items-center justify-center shadow text-amber-300">
+                <IconStarFill className="h-5 w-5" />
               </div>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-900/70 text-center">Singles</p>
+              <p className="text-4xl sm:text-[46px] leading-none font-black text-center">
+                {rankingSingles.posicion ? `#${rankingSingles.posicion}` : '---'}
+              </p>
+              {rankingSingles.categoria ? (
+                <span className={`inline-flex rounded-full border bg-white/90 px-2.5 py-1 text-xs font-black ${getCategoriaBadgeClasses(categoriaSingles)}`}>
+                  Categoria {rankingSingles.categoria}a
+                </span>
+              ) : (
+                <span className="inline-flex rounded-full border border-slate-300 bg-white/85 px-2.5 py-1 text-xs font-black text-slate-700">
+                  No participa
+                </span>
+              )}
             </div>
 
-            <div className="px-3 sm:px-4 py-2.5 bg-gradient-to-r from-[#0e3157] via-[#1a5689] to-[#2f8ec6] text-white border-l border-white/25">
-              <div className="flex items-start gap-3">
-                <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#f8fafc] to-[#cbd5e1] flex items-center justify-center shadow">
-                  <ShieldBadgeIcon />
-                </div>
-                <div>
-                  <p className="text-[11px] sm:text-xs font-black uppercase tracking-[0.16em] text-sky-100">Dobles</p>
-                  <p className="text-4xl sm:text-[46px] leading-none font-black mt-1">
-                    {rankingDobles.posicion ? `#${rankingDobles.posicion}` : '---'}
-                  </p>
-                  {rankingDobles.categoria ? (
-                    <span className={`mt-2 inline-flex rounded-full border bg-white/95 px-2.5 py-1 text-xs font-black ${getCategoriaBadgeClasses(categoriaDobles)}`}>
-                      Categoria {rankingDobles.categoria}a
-                    </span>
-                  ) : (
-                    <span className="mt-2 inline-flex rounded-full border border-white/35 bg-white/15 px-2.5 py-1 text-xs font-black text-white">
-                      No participa
-                    </span>
-                  )}
-                </div>
+            {/* ── Dobles (azul) — mitad derecha ── */}
+            <div className="flex flex-col items-center justify-start gap-1.5 px-3 py-4 bg-gradient-to-bl from-[#0e3157] via-[#1a5689] to-[#2f8ec6] text-white border-l border-white/20">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#f8fafc] to-[#cbd5e1] flex items-center justify-center shadow">
+                <ShieldBadgeIcon />
               </div>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-sky-100 text-center">Dobles</p>
+              <p className="text-4xl sm:text-[46px] leading-none font-black text-center">
+                {rankingDobles.posicion ? `#${rankingDobles.posicion}` : '---'}
+              </p>
+              {rankingDobles.categoria ? (
+                <span className={`inline-flex rounded-full border bg-white/95 px-2.5 py-1 text-xs font-black ${getCategoriaBadgeClasses(categoriaDobles)}`}>
+                  Categoria {rankingDobles.categoria}a
+                </span>
+              ) : (
+                <span className="inline-flex rounded-full border border-white/35 bg-white/15 px-2.5 py-1 text-xs font-black text-white">
+                  No participa
+                </span>
+              )}
             </div>
 
           </div>
