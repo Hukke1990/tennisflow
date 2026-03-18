@@ -31,6 +31,9 @@ export default function LandingPage() {
     }));
   };
 
+  const isMobileDevice = () =>
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
   const handleContactSubmit = (e) => {
     e.preventDefault();
 
@@ -47,10 +50,14 @@ export default function LandingPage() {
       'Gracias.',
     ].join('\n');
 
-    const gmailComposeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(contactEmail)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    const openedWindow = window.open(gmailComposeUrl, '_blank', 'noopener,noreferrer');
-    if (!openedWindow) {
-      window.location.href = gmailComposeUrl;
+    if (isMobileDevice()) {
+      // En móvil abre la app de correo nativa
+      window.location.href = `mailto:${contactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    } else {
+      // En desktop abre Gmail web en pestaña nueva
+      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(contactEmail)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      const opened = window.open(gmailUrl, '_blank', 'noopener,noreferrer');
+      if (!opened) window.location.href = gmailUrl;
     }
     setIsContactOpen(false);
   };
@@ -212,7 +219,7 @@ export default function LandingPage() {
                   type="submit"
                   className="h-11 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-[#05281f] transition-colors hover:bg-emerald-400"
                 >
-                  Abrir Gmail
+                  {isMobileDevice() ? 'Abrir mi correo' : 'Abrir Gmail'}
                 </button>
               </div>
             </form>
