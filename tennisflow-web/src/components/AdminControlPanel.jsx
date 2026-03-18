@@ -438,13 +438,13 @@ function JugadoresTab() {
                 <label className="flex flex-col gap-1.5 text-xs text-white/50 font-semibold uppercase tracking-wide">
                   Categoría Singles
                   <select className={inputCls} value={editForm.categoria_singles} onChange={(e) => setEditForm((p) => ({ ...p, categoria_singles: Number(e.target.value) }))}>
-                    {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>Categoría {n}</option>)}
+                    {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n} className="bg-[#0d1d35] text-white">Categoría {n}</option>)}
                   </select>
                 </label>
                 <label className="flex flex-col gap-1.5 text-xs text-white/50 font-semibold uppercase tracking-wide">
                   Categoría Dobles
                   <select className={inputCls} value={editForm.categoria_dobles} onChange={(e) => setEditForm((p) => ({ ...p, categoria_dobles: Number(e.target.value) }))}>
-                    {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>Categoría {n}</option>)}
+                    {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n} className="bg-[#0d1d35] text-white">Categoría {n}</option>)}
                   </select>
                 </label>
               </div>
