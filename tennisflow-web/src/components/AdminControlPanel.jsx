@@ -390,6 +390,8 @@ function JugadoresTab() {
     setEditForm({
       nombre_completo: j.nombre_completo || '',
       telefono: j.telefono || '',
+      categoria_singles: j.categoria_singles ?? 3,
+      categoria_dobles: j.categoria_dobles ?? 3,
     });
   };
 
@@ -432,6 +434,20 @@ function JugadoresTab() {
                 Teléfono
                 <input className={inputCls} value={editForm.telefono} onChange={(e) => setEditForm((p) => ({ ...p, telefono: e.target.value }))} />
               </label>
+              <div className="grid grid-cols-2 gap-4">
+                <label className="flex flex-col gap-1.5 text-xs text-white/50 font-semibold uppercase tracking-wide">
+                  Categoría Singles
+                  <select className={inputCls} value={editForm.categoria_singles} onChange={(e) => setEditForm((p) => ({ ...p, categoria_singles: Number(e.target.value) }))}>
+                    {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>Categoría {n}</option>)}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5 text-xs text-white/50 font-semibold uppercase tracking-wide">
+                  Categoría Dobles
+                  <select className={inputCls} value={editForm.categoria_dobles} onChange={(e) => setEditForm((p) => ({ ...p, categoria_dobles: Number(e.target.value) }))}>
+                    {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>Categoría {n}</option>)}
+                  </select>
+                </label>
+              </div>
             </div>
             <div className="flex gap-3 justify-end mt-6">
               <button type="button" onClick={() => setEditTarget(null)} className="px-4 py-2 rounded-lg border border-white/15 text-white/60 hover:text-white text-sm font-semibold transition-colors">Cancelar</button>

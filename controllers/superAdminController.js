@@ -401,7 +401,7 @@ const listarJugadores = async (req, res) => {
   try {
     let query = supabase
       .from('perfiles')
-      .select('id, nombre_completo, telefono, rol, ranking_puntos, ranking_elo_singles, club_id')
+      .select('id, nombre_completo, telefono, rol, ranking_puntos, ranking_elo_singles, categoria_singles, categoria_dobles, club_id')
       .order('nombre_completo', { ascending: true });
 
     if (clubId) query = query.eq('club_id', clubId);
@@ -434,6 +434,7 @@ const editarJugador = async (req, res) => {
   const ALLOWED_FIELDS = [
     'nombre_completo', 'telefono',
     'ranking_puntos', 'ranking_elo_singles',
+    'categoria_singles', 'categoria_dobles',
   ];
 
   const updates = {};
