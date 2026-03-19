@@ -6,7 +6,7 @@ import setGoMarkFallback from '../assets/setgo-mark.svg';
 // ── Mock Player Card (Mi Ficha del Jugador) ───────────────────────────────────────────────────────
 function MockPlayerCard() {
   return (
-    <div className="relative w-full max-w-[272px] mx-auto rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-[#f0f2f5] text-slate-900">
+    <div className="relative w-full max-w-[280px] mx-auto rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-[#f0f2f5] text-slate-900">
 
       {/* ── Status bar ── */}
       <div className="flex items-center justify-between px-3.5 py-2 bg-[#0a0f1e]">
@@ -275,10 +275,10 @@ function MockRankingScreen() {
   );
 }
 
-// ── Mock Bracket Screen ───────────────────────────────────────────────────────────────────────
-function MockBracketScreen() {
+// ── Mock Torneos Screen (Cartelera) ───────────────────────────────────────────────────────────────────────
+function MockTorneosScreen() {
   return (
-    <div className="w-full max-w-[278px] mx-auto rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-[#f0f2f5]">
+    <div className="w-full max-w-[280px] mx-auto rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-[#f0f2f5]">
 
       {/* ── Status bar ── */}
       <div className="flex items-center justify-between px-3.5 py-2 bg-[#0a0f1e]">
@@ -289,138 +289,258 @@ function MockBracketScreen() {
         </div>
       </div>
 
-      {/* ── Torneos page header ── */}
+      {/* ── Page header ── */}
       <div className="bg-white px-3 pt-2.5 pb-2 border-b border-slate-200">
         <p className="text-[13px] font-black text-slate-900">Torneos</p>
         <p className="text-[8px] text-blue-500 font-bold mb-2">Cartelera de torneos, estado e inscripción</p>
-        {/* Filter chips */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex-1 flex items-center gap-1 rounded-lg bg-slate-100 border border-slate-200 px-2 py-1 mr-2">
+            <span className="text-[7px] text-slate-400">Buscar por nombre, categoría...</span>
+          </div>
+          <div className="rounded-lg bg-slate-100 border border-slate-200 px-2 py-1 text-[7px] text-slate-500 font-bold whitespace-nowrap">Más recientes</div>
+        </div>
         <div className="flex gap-1">
-          {['Todos (7)', 'Activos (7)', 'Inscripción Abierta (3)'].map((t, i) => (
-            <span key={t} className={`rounded-full px-2 py-0.5 text-[7px] font-extrabold ${
-              i === 0
-                ? 'bg-[#d9b857] text-slate-900'
-                : 'bg-slate-100 text-slate-500 border border-slate-200'
+          {['Todos (7)', 'Activos (7)', 'Inscripción Abierta (3)', 'Finalizados (0)'].map((t, i) => (
+            <span key={t} className={`rounded-full px-1.5 py-0.5 text-[6px] font-extrabold whitespace-nowrap ${
+              i === 0 ? 'bg-[#d9b857] text-slate-900' : 'bg-slate-100 text-slate-500 border border-slate-200'
             }`}>{t}</span>
           ))}
         </div>
       </div>
 
-      {/* ── Tournament card ── */}
+      {/* ── Tournament card 1 ── */}
       <div className="mx-2.5 mt-2.5 rounded-2xl overflow-hidden ring-1 ring-white/20 shadow-lg">
-        {/* Banner */}
-        <div className="relative h-[52px] bg-gradient-to-r from-[#0b2a4a] via-[#0e3d6e] to-[#b8861a] overflow-hidden">
-          {/* court lines */}
-          <svg className="absolute right-2 top-2 opacity-20" width="60" height="40" viewBox="0 0 60 40">
+        <div className="relative h-[50px] bg-gradient-to-r from-[#0b2a4a] via-[#0e3d6e] to-[#b8861a] overflow-hidden">
+          <svg className="absolute right-2 top-1 opacity-20" width="58" height="38" viewBox="0 0 60 40">
             <rect x="4" y="4" width="52" height="32" fill="none" stroke="white" strokeWidth="1.5" />
             <line x1="30" y1="4" x2="30" y2="36" stroke="white" strokeWidth="1" />
             <line x1="4" y1="20" x2="56" y2="20" stroke="white" strokeWidth="1" />
           </svg>
-          <span className="absolute top-2 right-2 rounded-md bg-white/90 px-1.5 py-0.5 text-[7px] font-black text-slate-800">EN_PROGRESO</span>
-          <div className="absolute bottom-2 left-3">
-            <p className="text-[7px] text-slate-400">viernes 27 de marzo, 2026 · 16:24</p>
-            <p className="text-[11px] font-black text-white leading-tight">Categoria Primera Dobles</p>
+          <span className="absolute top-2 right-2 rounded-md bg-white/90 px-1.5 py-0.5 text-[6px] font-black text-slate-800">EN_PROGRESO</span>
+          <div className="absolute bottom-2 left-2.5">
+            <p className="text-[6px] text-slate-400">viernes 27 de marzo, 2026 · 16:24</p>
+            <p className="text-[10px] font-black text-white leading-tight">Categoria Primera Dobles</p>
           </div>
         </div>
-
-        {/* Details grid */}
-        <div className="bg-[#0c1a2e] grid grid-cols-3 gap-px border-t border-white/[0.06]">
+        <div className="bg-[#0c1a2e] grid grid-cols-3 border-t border-white/[0.06]">
           {[
-            { label: 'CATEGORÍA',  val: 'Cat 1'          },
-            { label: 'MODALIDAD',  val: 'Dobles'         },
-            { label: 'SEXO',       val: 'Masculino'      },
-            { label: 'SUPERFICIE', val: 'Mixta'          },
-            { label: 'INICIO',     val: '27 mar · 16:24' },
-            { label: 'COSTO',      val: '$10.000'        },
+            { label: 'CATEGORÍA', val: 'Cat 1'     },
+            { label: 'MODALIDAD', val: 'Dobles'    },
+            { label: 'SEXO',      val: 'Masculino' },
+            { label: 'SUPERFICIE',val: 'Mixta'     },
+            { label: 'INICIO',    val: '27 mar'    },
+            { label: 'COSTO',     val: '$10.000'   },
           ].map(({ label, val }) => (
-            <div key={label} className="px-2 py-1.5 bg-[#0c1a2e]">
+            <div key={label} className="px-2 py-1.5">
               <p className="text-[5px] font-extrabold uppercase tracking-widest text-slate-600">{label}</p>
               <p className="text-[8px] font-black text-slate-200 truncate">{val}</p>
             </div>
           ))}
         </div>
-
-        {/* Inscriptos bar */}
-        <div className="bg-[#0a1525] px-3 py-2">
+        <div className="bg-[#0a1525] px-2.5 py-1.5">
           <div className="flex items-center justify-between mb-1">
-            <p className="text-[7px] text-slate-500 font-bold">Inscriptos confirmados</p>
-            <span className="text-[8px] font-black text-slate-300">32</span>
+            <p className="text-[6px] text-slate-500 font-bold">Inscriptos confirmados</p>
+            <span className="text-[7px] font-black text-slate-300">32</span>
           </div>
           <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
             <div className="h-full w-full rounded-full bg-gradient-to-r from-emerald-500 to-[#a6ce39]" />
           </div>
-          <p className="text-[7px] text-emerald-400/80 mt-1">Torneo en juego. Ver cuadro y cronograma en vivo.</p>
+          <p className="text-[6px] text-emerald-400/80 mt-1">Torneo en juego. Ver cuadro y cronograma en vivo.</p>
+        </div>
+        <div className="bg-[#0a1525] px-2.5 pb-2 grid grid-cols-3 gap-1.5">
+          {[{ l: 'Inscriptos', v: '32' }, { l: 'Costo', v: '$10.000' }, { l: 'Pendientes', v: '0' }].map(({ l, v }) => (
+            <div key={l} className="rounded-lg bg-[#07101e] border border-white/[0.07] p-1.5 text-center">
+              <p className="text-[6px] text-slate-600 font-bold uppercase">{l}</p>
+              <p className={`text-[10px] font-black ${v === '0' ? 'text-emerald-400' : 'text-slate-200'}`}>{v}</p>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* ── Mini bracket preview ── */}
-      <div className="mx-2.5 mt-2 mb-3">
-        <p className="text-[7px] font-extrabold uppercase tracking-widest text-slate-500 mb-1.5">Cuadro en Vivo</p>
-        <div className="rounded-xl bg-[#0c1a2e] ring-1 ring-white/[0.07] overflow-hidden">
-          {/* Round labels */}
-          <div className="grid grid-cols-3 border-b border-white/[0.05]">
-            {['1ra Ronda', 'Cuartos', 'Semi'].map((r, i) => (
-              <p key={r} className={`text-center text-[6px] font-extrabold uppercase tracking-widest py-1 ${
-                i === 1 ? 'text-[#a6ce39]/70' : 'text-slate-600'
-              }`}>{r}</p>
-            ))}
+      {/* ── Tournament card 2 (preview) ── */}
+      <div className="mx-2.5 mt-1.5 mb-3 rounded-2xl overflow-hidden ring-1 ring-white/10 shadow">
+        <div className="relative h-[40px] bg-gradient-to-r from-[#0b2a4a] via-[#0e3d6e] to-[#b8861a] overflow-hidden">
+          <svg className="absolute right-2 top-1 opacity-15" width="48" height="30" viewBox="0 0 60 40">
+            <rect x="4" y="4" width="52" height="32" fill="none" stroke="white" strokeWidth="1.5" />
+            <line x1="30" y1="4" x2="30" y2="36" stroke="white" strokeWidth="1" />
+          </svg>
+          <span className="absolute top-2 right-2 rounded-md bg-white/80 px-1.5 py-0.5 text-[6px] font-black text-slate-800">EN_PROGRESO</span>
+          <div className="absolute bottom-1.5 left-2.5">
+            <p className="text-[6px] text-slate-400">viernes 27 de marzo, 2026 · 15:22</p>
+            <p className="text-[9px] font-black text-white leading-tight">Categoria Primera 24 Jugadores</p>
           </div>
-          {/* Sample bracket rows */}
-          <div className="px-1.5 py-1.5 flex gap-1 items-start">
-            {/* Col 1 */}
-            <div className="flex flex-col gap-1 flex-1">
-              {[['S. Gómez', true], ['F. Ortiz', false], ['F. Morales', true], ['G. Ibarra', false]].map(([name, w], i) => (
-                <div key={i} className={`flex items-center gap-1 rounded px-1.5 py-1 ${
-                  w ? 'bg-[#0e2a46]' : 'bg-[#070d1a]'
-                }`}>
-                  <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 shrink-0" />
-                  <span className={`text-[7px] font-bold truncate ${w ? 'text-slate-200' : 'text-slate-600'}`}>{name}</span>
-                  {w && <span className="ml-auto text-[6px] text-[#a6ce39] font-black">W</span>}
-                </div>
-              ))}
-            </div>
-            {/* Connector */}
-            <div className="opacity-20 flex flex-col gap-2.5 pt-2 shrink-0">
-              <div className="w-1.5 h-px bg-slate-400" />
-              <div className="w-1.5 h-px bg-slate-400" />
-            </div>
-            {/* Col 2 */}
-            <div className="flex flex-col gap-1 flex-1">
-              {[['S. Gómez', false, true], ['F. Morales', false, true]].map(([name, w, live], i) => (
-                <div key={i} className={`flex items-center gap-1 rounded px-1.5 py-1 ${
-                  live ? 'bg-[#0a2010] ring-1 ring-emerald-500/30' : 'bg-[#070d1a]'
-                }`}>
-                  <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                    live ? 'bg-emerald-400 animate-pulse' : 'bg-gradient-to-br from-blue-500 to-indigo-600'
-                  }`} />
-                  <span className={`text-[7px] font-bold truncate ${live ? 'text-emerald-300' : 'text-slate-400'}`}>{name}</span>
-                </div>
-              ))}
-            </div>
-            {/* Connector */}
-            <div className="opacity-20 flex items-center pt-2 shrink-0">
-              <div className="w-1.5 h-px bg-slate-400" />
-            </div>
-            {/* Col 3: Final */}
-            <div className="flex flex-col flex-1">
-              <div className="rounded-lg ring-1 ring-[#d9b857]/30 bg-gradient-to-b from-[#1a1200] to-[#0d0c00] p-1.5 flex flex-col items-center gap-0.5 mt-0.5">
-                <Trophy className="h-3 w-3 text-[#d9b857]/60" />
-                <span className="text-[6px] font-black text-[#d9b857]/50 uppercase text-center leading-none">Gran<br/>Final</span>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+// ── Mock Cuadro Screen (Bracket) ─────────────────────────────────────────────────────────────────────────
+function MockCuadroScreen() {
+  // Reusable player row
+  const PR = ({ name, seed, winner, live }) => (
+    <div className={`flex items-center gap-1 px-1.5 py-[4px] border-b border-white/[0.04] last:border-0 ${
+      winner ? 'bg-[#0e2a46]' : live ? 'bg-[#071f0e]' : 'bg-[#07101e]'
+    }`}>
+      <div className={`relative w-3 h-3 rounded-full shrink-0 ${
+        live ? 'bg-emerald-400 animate-pulse' : 'bg-gradient-to-br from-blue-500 to-indigo-600'
+      }`}>
+        {seed && (
+          <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[#d9b857] flex items-center justify-center text-[4px] font-black text-slate-900">{seed}</span>
+        )}
+      </div>
+      <span className={`text-[7px] font-bold flex-1 truncate ${
+        winner ? 'text-white' : live ? 'text-emerald-300' : 'text-slate-500'
+      }`}>{name}</span>
+      {winner && <span className="text-[5px] font-black text-[#a6ce39]">W</span>}
+    </div>
+  );
+
+  const MatchCard = ({ players, live, label }) => (
+    <div className={`rounded-lg overflow-hidden ring-1 ${
+      live ? 'ring-emerald-500/40' : 'ring-white/[0.06]'
+    } mb-1`}>
+      {players.map((p, i) => <PR key={i} {...p} />)}
+      {label && (
+        <div className={`px-1.5 py-0.5 text-center text-[6px] font-extrabold uppercase tracking-wider ${
+          live ? 'bg-emerald-900/40 text-emerald-400' : 'bg-[#060d1c] text-slate-600'
+        }`}>{label}</div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="w-full max-w-[280px] mx-auto rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-[#07101e]">
+
+      {/* ── Status bar ── */}
+      <div className="flex items-center justify-between px-3.5 py-2 bg-[#040c1a]">
+        <span className="text-[10px] text-slate-400 font-black tracking-wide">SetGo</span>
+        <div className="flex gap-1">
+          <div className="w-3 h-1 rounded-full bg-slate-700" />
+          <div className="w-1 h-1 rounded-full bg-slate-700" />
+        </div>
+      </div>
+
+      <div className="bg-gradient-to-b from-[#0c1e38] to-[#07101e] px-3 pt-3 pb-4">
+
+        {/* Tournament name */}
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-[6px] font-extrabold uppercase tracking-[0.18em] text-slate-600">Cuadro de juego</p>
+            <p className="text-[11px] font-black text-[#d9b857] leading-none">Copa Almafuerte 2026</p>
+          </div>
+          <span className="rounded-full bg-[#d9b857]/15 border border-[#d9b857]/30 px-2 py-0.5 text-[7px] font-black text-[#d9b857]">32 jug.</span>
+        </div>
+
+        {/* ─ 4-column bracket ─ */}
+        <div className="flex items-start gap-0.5">
+
+          {/* Col 1: Primera Ronda */}
+          <div className="flex flex-col gap-1 flex-1">
+            <p className="text-[6px] font-extrabold uppercase text-slate-600 text-center mb-0.5">1ra Ronda</p>
+            <MatchCard players={[
+              { name: 'S. Gómez',  seed: 1, winner: true  },
+              { name: 'F. Ortiz',  seed: null, winner: false },
+            ]} label="Programado" />
+            <MatchCard players={[
+              { name: 'F. Morales', winner: true  },
+              { name: 'G. Ibarra',  winner: false },
+            ]} label="Programado" />
+            <MatchCard players={[
+              { name: 'M. Cruz',   seed: 3 },
+              { name: 'R. Dom.',   },
+            ]} label="Programado" />
+            <MatchCard players={[
+              { name: 'P. Gutiérrez' },
+              { name: 'T. Fernández' },
+            ]} label="Programado" />
+          </div>
+
+          {/* Connector */}
+          <div className="flex flex-col justify-around self-stretch pt-5 opacity-20 shrink-0 gap-[14px]">
+            {[0,1,2,3].map(i => <div key={i} className="w-1 h-px bg-slate-400" />)}
+          </div>
+
+          {/* Col 2: Cuartos */}
+          <div className="flex flex-col gap-1 flex-1">
+            <p className="text-[6px] font-extrabold uppercase text-[#a6ce39]/70 text-center mb-0.5">Cuartos</p>
+            <MatchCard players={[
+              { name: 'S. Gómez',  seed: 1, winner: true },
+              { name: 'F. Morales', winner: false },
+            ]} label="Programado" />
+            <MatchCard players={[
+              { name: 'M. Cruz', seed: 3 },
+              { name: 'Por def.' },
+            ]} label="Programado" />
+          </div>
+
+          {/* Connector */}
+          <div className="flex flex-col justify-around self-stretch pt-5 opacity-20 shrink-0 gap-5">
+            {[0,1].map(i => <div key={i} className="w-1 h-px bg-slate-400" />)}
+          </div>
+
+          {/* Col 3: Semifinal */}
+          <div className="flex flex-col gap-1 flex-1">
+            <p className="text-[6px] font-extrabold uppercase text-slate-600 text-center mb-0.5">Semi</p>
+            <MatchCard live players={[
+              { name: 'S. Gómez', seed: 1, live: true  },
+              { name: 'M. Cruz',   seed: 3, live: true  },
+            ]} label="En curso" />
+            <MatchCard players={[
+              { name: 'Por def.' },
+              { name: 'Por def.' },
+            ]} label="Programado" />
+          </div>
+
+          {/* Connector */}
+          <div className="flex flex-col justify-around self-stretch pt-5 opacity-20 shrink-0">
+            <div className="w-1 h-px bg-slate-400" />
+          </div>
+
+          {/* Col 4: Gran Final */}
+          <div className="flex flex-col justify-start flex-1">
+            <p className="text-[5px] font-extrabold uppercase text-[#d9b857]/70 text-center mb-0.5">Gran Final</p>
+            <div className="rounded-lg overflow-hidden ring-1 ring-[#d9b857]/30 bg-gradient-to-b from-[#1c1400] to-[#0d0c00] mt-1">
+              <div className="px-1 py-2 flex flex-col items-center gap-0.5">
+                <Trophy className="h-3.5 w-3.5 text-[#d9b857]/60" />
+                <span className="text-[5px] font-black text-[#d9b857]/50 uppercase text-center leading-none">Por<br/>definir</span>
               </div>
             </div>
           </div>
-          {/* Live banner */}
-          <div className="flex items-center justify-between px-2.5 py-1.5 bg-emerald-900/30 border-t border-emerald-500/20">
-            <div className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[8px] font-black text-emerald-300">Partido en vivo</span>
-            </div>
-            <span className="text-[7px] text-emerald-400/70 font-bold">Cancha 2</span>
-          </div>
         </div>
+
+        {/* ─ GRAN FINAL label ─ */}
+        <div className="mt-2.5 flex flex-col items-center">
+          <p className="text-[6px] uppercase tracking-[0.2em] text-slate-600 font-bold">Punto de Convergencia</p>
+          <p className="text-[13px] font-black text-white tracking-wide leading-none">GRAN FINAL</p>
+        </div>
+
+        {/* Live banner */}
+        <div className="mt-2.5 flex items-center justify-between rounded-xl bg-emerald-500/10 border border-emerald-500/25 px-3 py-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[9px] font-black text-emerald-300">Partido en vivo</span>
+          </div>
+          <span className="text-[7px] text-emerald-400/70 font-bold">Cancha 1</span>
+        </div>
+
+        {/* Progress pills */}
+        <div className="mt-2 flex items-center gap-1 justify-center">
+          {['1ra', 'Octavos', 'Cuartos', 'Semi', 'Final'].map((r, i) => (
+            <div key={r} className={`h-1 rounded-full ${
+              i < 2 ? 'w-5 bg-[#a6ce39]/60'
+              : i === 2 ? 'w-5 bg-[#a6ce39]/30 animate-pulse'
+              : 'w-2.5 bg-white/10'
+            }`} />
+          ))}
+        </div>
+        <p className="text-center text-[6px] text-slate-600 mt-1">Cuartos en curso</p>
       </div>
     </div>
   );
 }
+
 
 // ── Mock Live Match Screen (Dashboard) ─────────────────────────────────────────────────────────
 function MockLiveMatchScreen() {
@@ -619,23 +739,42 @@ const CAROUSEL_SLIDES = [
     MockScreen: MockPlayerCard,
   },
   {
-    id: 'bracket',
-    badge: 'Cuadros en Vivo',
+    id: 'torneos',
+    badge: 'Cartelera de Torneos',
     badgeColor: 'border-[#d9b857]/30 bg-[#d9b857]/10 text-[#d9b857]',
-    title: 'Gestión de Torneos Sin Caos',
+    title: 'Inscribite y Competí',
     accent: 'text-[#d9b857]',
     description:
-      'Cuadros de juego, horarios y resultados transparentes para todos. Armá el sorteo, seguí el torneo en vivo y cerralo en minutos.',
+      'Navegá la cartelera de torneos activos, filtrá por categoría y confirmá tu inscripción en segundos.',
     bullets: [
-      'Sorteo automático del cuadro',
-      'Seguimiento de partidos en tiempo real',
-      'Resultados visibles para jugadores y público',
+      'Torneos filtrados por modalidad y categoría',
+      'Estado en tiempo real: Activo, Inscripción Abierta, Finalizado',
+      'Inscripción con un clic, sin papeles',
     ],
     bulletColor: 'bg-[#d9b857]',
     icon: Trophy,
     iconBg: 'bg-[#d9b857]/15 text-[#d9b857]',
     glow: 'from-[#d9b857]/10 to-transparent',
-    MockScreen: MockBracketScreen,
+    MockScreen: MockTorneosScreen,
+  },
+  {
+    id: 'cuadro',
+    badge: 'Cuadros en Vivo',
+    badgeColor: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+    title: 'Seguí el Cuadro en Vivo',
+    accent: 'text-emerald-400',
+    description:
+      'Sorteo automático, cuadro en tiempo real y partidos en vivo. Cerrá el torneo en minutos sin caos.',
+    bullets: [
+      'Sorteo automático con cabezas de serie',
+      'Partidos en vivo con seguimiento de cancha',
+      'Resultados transparentes para jugadores y público',
+    ],
+    bulletColor: 'bg-emerald-400',
+    icon: Zap,
+    iconBg: 'bg-emerald-500/15 text-emerald-300',
+    glow: 'from-emerald-600/15 to-transparent',
+    MockScreen: MockCuadroScreen,
   },
 ];
 
@@ -768,7 +907,7 @@ function FeaturesCarousel() {
               {/* Phone frame */}
               <div className="relative rounded-[2.5rem] border-4 border-[#1a2a40]/80 bg-[#040c1a] p-1 shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_32px_64px_rgba(0,0,0,0.6)]">
                 <div className="absolute top-1.5 left-1/2 -translate-x-1/2 w-16 h-1 rounded-full bg-[#1a2a40]" />
-                <div className="pt-4 pb-2">
+                <div className="w-[280px] overflow-hidden pt-4 pb-2">
                   <MockScreen />
                 </div>
               </div>
