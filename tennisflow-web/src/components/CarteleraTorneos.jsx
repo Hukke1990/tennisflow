@@ -19,6 +19,7 @@ import {
 } from './icons/UiIcons';
 
 const API_URL = '';
+const TORNEOS_CACHE = new Map();
 const ESTADOS_NO_INSCRIPCION = new Set(['borrador', 'cerrado', 'finalizado', 'cancelado', 'suspendido']);
 const ESTADOS_FINALIZADOS = new Set(['finalizado', 'disputado', 'terminado', 'completado']);
 const ESTADOS_ACTIVOS = new Set(['abierto', 'publicado', 'activo', 'en_progreso']);
@@ -298,8 +299,15 @@ export default function CarteleraTorneos() {
 
     setError(null);
 
-    try {
+    const cached = TORNEOS_CACHE.get(clubId);
+    if (cached) {
+      setTorneos(cached);
+      setLoading(false);
+    } else {
       setLoading(true);
+    }
+
+    try {
       // /api/torneos already returns all tournaments with correct inscription counts
       const [todosRes, disponiblesRes, dashboardRes] = await Promise.allSettled([
         axios.get(`${API_URL}/api/torneos`, { params: { club_id: clubId } }),
@@ -353,10 +361,13 @@ export default function CarteleraTorneos() {
       }
 
       const torneosOrdenados = [...data].sort((a, b) => new Date(b.fecha_inicio) - new Date(a.fecha_inicio));
+      TORNEOS_CACHE.set(clubId, torneosOrdenados);
       setTorneos(torneosOrdenados);
     } catch (err) {
       console.error('Error al cargar torneos:', err);
-      setError('No se pudieron cargar los torneos. Intenta más tarde.');
+      if (!cached) {
+        setError('No se pudieron cargar los torneos. Intenta más tarde.');
+      }
     } finally {
       setLoading(false);
     }

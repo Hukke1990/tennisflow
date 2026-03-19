@@ -21,6 +21,7 @@ const SEXOS = [
   { value: 'Femenino', label: 'Damas' },
 ];
 const CATEGORIAS = ['1', '2', '3', '4', '5'];
+const RANKINGS_CACHE = new Map();
 const PERFIL_NOMBRE_CACHE = new Map();
 const MODALIDAD_OPTIONS = [
   { value: 'Singles', label: 'Singles', icon: IconTennisBall, accent: 'text-emerald-500' },
@@ -287,7 +288,14 @@ export default function RankingsPage() {
         return;
       }
 
-      setLoading(true);
+      const cacheKey = `${clubId}:${modalidad}:${sexo}:${categoria}`;
+      const cached = RANKINGS_CACHE.get(cacheKey);
+      if (cached) {
+        setJugadores(cached);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
       setError('');
 
       try {
@@ -362,6 +370,7 @@ export default function RankingsPage() {
         });
 
         if (!active) return;
+        RANKINGS_CACHE.set(cacheKey, ranked);
         setJugadores(ranked);
         setAvatarErrors({});
         setSelectedPlayerId((prev) => (
@@ -371,9 +380,11 @@ export default function RankingsPage() {
         ));
       } catch (_) {
         if (!active) return;
-        setJugadores([]);
-        setSelectedPlayerId('');
-        setError('No se pudo cargar el ranking con los filtros seleccionados.');
+        if (!cached) {
+          setJugadores([]);
+          setSelectedPlayerId('');
+          setError('No se pudo cargar el ranking con los filtros seleccionados.');
+        }
       } finally {
         if (active) setLoading(false);
       }

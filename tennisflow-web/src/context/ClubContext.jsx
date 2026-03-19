@@ -32,7 +32,22 @@ export function ClubProvider({ children }) {
   const { clubSlug } = useParams();
   const navigate = useNavigate();
 
-  const [club, setClub] = useState(null);
+  // Pre-seed desde localStorage para que clubId sea disponible de inmediato
+  // en la primera renderización, evitando el spinner bloqueante.
+  const [club, setClub] = useState(() => {
+    try {
+      const savedId = typeof window !== 'undefined'
+        ? window.localStorage.getItem(CURRENT_CLUB_ID_STORAGE_KEY)
+        : null;
+      const savedSlug = typeof window !== 'undefined'
+        ? window.localStorage.getItem(CURRENT_CLUB_SLUG_STORAGE_KEY)
+        : null;
+      if (savedId && savedSlug === clubSlug) {
+        return { id: savedId, slug: savedSlug };
+      }
+    } catch (_) {}
+    return null;
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -142,14 +157,8 @@ export function ClubProvider({ children }) {
     }
   }, [club?.id, club?.slug]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="w-10 h-10 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
+  // No bloqueamos el renderizado: los hijos manejan su propio estado de carga
+  // via `clubId === null` o `context.loading === true`.
   return (
     <ClubContext.Provider value={value}>
       {children}

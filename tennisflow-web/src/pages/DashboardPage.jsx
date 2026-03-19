@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { io } from 'socket.io-client';
@@ -37,6 +37,7 @@ const RANKING_CATEGORIAS = ['1', '2', '3', '4', '5'];
 
 const FILTER_CHIP_BASE = 'px-3 py-1.5 text-xs font-bold rounded-xl border transition-all duration-150';
 const PERFIL_NOMBRE_CACHE = new Map();
+const DASHBOARD_CACHE = new Map();
 const SETGO_NEON_GREEN = '#A6CE39';
 
 const normalizeText = (value) => String(value || '').toLowerCase().trim();
@@ -1141,6 +1142,9 @@ function RankingSection({ sexo, titulo, jugadorId, clubId }) {
                 alt={j.nombre_completo}
                 onError={() => setAvatarErrors((prev) => ({ ...prev, [j.id]: true }))}
                 className="w-9 h-9 rounded-full object-cover flex-shrink-0 ring-2 ring-gray-100"
+                loading="lazy"
+                width="36"
+                height="36"
               />
             ) : (
               <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center flex-shrink-0">
@@ -1252,7 +1256,7 @@ function LiveBroadcastCard({ match, cardLabel, nowMs, defaultSurface, compact = 
       <div className={`flex flex-col ${alignRight ? 'items-end text-right' : 'items-start text-left'} gap-2 min-w-0`}>
         <div className={`rounded-full border-2 border-white/30 bg-gradient-to-br from-[#c8d8eb] to-[#6d89a8] overflow-hidden shadow-md ${compact ? 'h-9 w-9' : 'h-14 w-14 sm:h-16 sm:w-16'}`}>
           {player.avatarUrl ? (
-            <img src={player.avatarUrl} alt={player.nombre} className="h-full w-full object-cover" />
+            <img src={player.avatarUrl} alt={player.nombre} className="h-full w-full object-cover" loading="lazy" />
           ) : (
             <div className="h-full w-full flex items-center justify-center text-white font-black text-sm sm:text-base">{initials}</div>
           )}
@@ -1588,7 +1592,7 @@ function CourtsQuickAccess({ liveCenter }) {
 }
 
 // ── Dashboard Principal ───────────────────────────────────────────────────────
-export default function DashboardPage() {
+function DashboardPage() {
   const { user, perfil, isAdmin } = useAuth();
   const { clubId } = useClub();
   const navigate = useNavigate();
@@ -1748,23 +1752,39 @@ export default function DashboardPage() {
     let active = true;
 
     const cargarDashboard = async () => {
-      setLoading(true);
+      // Esperar a que ClubProvider resuelva el clubId antes de fetcher
+      if (!clubId) return;
 
+      const cacheKey = `${clubId}:${user?.id || ''}`;
+      const cached = DASHBOARD_CACHE.get(cacheKey);
+      if (cached) {
+        setData(cached);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+
+      // ── Fase 1: torneos (contenido visible al cargar) ────────────────────
       const torneosQuery = supabase.from('torneos').select('*').order('fecha_inicio', { ascending: true });
-      if (clubId) torneosQuery.eq('club_id', clubId);
-      const [torneosRes] = await Promise.allSettled([
-        torneosQuery,
-      ]);
+      torneosQuery.eq('club_id', clubId);
+      const torneosRes = await torneosQuery;
 
-      const torneosRaw = torneosRes.status === 'fulfilled' && Array.isArray(torneosRes.value?.data)
-        ? torneosRes.value.data
-        : [];
+      if (!active) return;
 
+      const torneosRaw = Array.isArray(torneosRes?.data) ? torneosRes.data : [];
       const torneosOrdenados = [...torneosRaw].sort((a, b) => new Date(a.fecha_inicio) - new Date(b.fecha_inicio));
       const proximos_torneos = torneosOrdenados.filter((t) => !ESTADOS_FINALIZADOS.has((t?.estado || '').toLowerCase()));
       const torneos_finalizados = [...torneosOrdenados]
         .filter((t) => ESTADOS_FINALIZADOS.has((t?.estado || '').toLowerCase()))
         .sort((a, b) => new Date(b.fecha_inicio) - new Date(a.fecha_inicio));
+
+      // Mostrar contenido above-the-fold de inmediato, sin esperar el live center
+      if (!cached) {
+        setData({ proximos_torneos, torneos_finalizados, live_center: null });
+        setLoading(false);
+      }
+
+      // ── Fase 2: live center en segundo plano ───────────────────────────
       const candidatosLive = getLiveCenterCandidates(torneosOrdenados);
       const allLiveResults = await Promise.allSettled(
         candidatosLive.map((torneo) => loadLiveCenterData(torneo, clubId))
@@ -1775,11 +1795,9 @@ export default function DashboardPage() {
 
       if (!active) return;
 
-      setData({
-        proximos_torneos,
-        torneos_finalizados,
-        live_center,
-      });
+      const dashData = { proximos_torneos, torneos_finalizados, live_center };
+      DASHBOARD_CACHE.set(cacheKey, dashData);
+      setData(dashData);
       setLoading(false);
     };
 
@@ -2279,3 +2297,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+export default memo(DashboardPage);

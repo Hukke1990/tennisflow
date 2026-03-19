@@ -1,8 +1,9 @@
-﻿import Navbar from '../components/Navbar';
+﻿import { memo } from 'react';
+import Navbar from '../components/Navbar';
 import BottomNav from '../components/BottomNav';
 import { Outlet } from 'react-router-dom';
 
-export default function MainLayout({ children = null }) {
+function MainLayout({ children = null }) {
   return (
     <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       <Navbar />
@@ -13,3 +14,5 @@ export default function MainLayout({ children = null }) {
     </div>
   );
 }
+
+export default memo(MainLayout);

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Trophy, BarChart2, User } from 'lucide-react';
 import { useClubPath } from '../context/ClubContext';
@@ -10,7 +11,7 @@ const items = [
   { to: '/perfil',    label: 'Perfil',    Icon: User },
 ];
 
-export default function BottomNav() {
+const BottomNav = memo(function BottomNav() {
   const location  = useLocation();
   const toClubPath = useClubPath();
   const { user }  = useAuth();
@@ -44,4 +45,6 @@ export default function BottomNav() {
       </div>
     </nav>
   );
-}
+});
+
+export default BottomNav;

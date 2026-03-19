@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useClubPath } from '../context/ClubContext';
@@ -11,7 +11,7 @@ const navLinks = [
   { to: '/rankings', label: 'Rankings' },
 ];
 
-export default function Navbar() {
+const Navbar = memo(function Navbar() {
   const logoVersion = '20260313-1';
   const location = useLocation();
   const navigate = useNavigate();
@@ -236,4 +236,6 @@ export default function Navbar() {
     )}
     </>
   );
-}
+});
+
+export default Navbar;
