@@ -3,92 +3,124 @@ import { useNavigate } from 'react-router-dom';
 import { Trophy, BarChart2, Users, Zap, Star, Medal, ShieldCheck, ArrowRight, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import setGoMarkFallback from '../assets/setgo-mark.svg';
 
-// ── Mock Player Card (Ficha del Jugador) ───────────────────────────────────────────────────────────
+// ── Mock Player Card (Mi Ficha del Jugador) ───────────────────────────────────────────────────────
 function MockPlayerCard() {
   return (
-    <div className="relative w-full max-w-[272px] mx-auto rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-[#07111f] text-white">
+    <div className="relative w-full max-w-[272px] mx-auto rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-[#f0f2f5] text-slate-900">
 
-      {/* ── Header banner ── */}
-      <div className="relative h-[72px] bg-gradient-to-br from-[#0b2a4a] via-[#0e3d6e] to-[#1560a8] overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_80%_20%,rgba(166,206,57,0.12),transparent_55%)]" />
-        {/* Decorative star */}
-        <div className="absolute right-3 top-3 opacity-20">
-          <Star className="h-9 w-9 text-[#a6ce39]" fill="currentColor" />
-        </div>
-        <div className="absolute bottom-2 left-3">
-          <p className="text-[8px] font-extrabold uppercase tracking-[0.18em] text-slate-400">Ficha del Jugador</p>
-          <p className="text-sm font-black text-white leading-tight">Gastón Ramírez</p>
+      {/* ── Status bar ── */}
+      <div className="flex items-center justify-between px-3.5 py-2 bg-[#0a0f1e]">
+        <span className="text-[10px] text-slate-400 font-black tracking-wide">SetGo</span>
+        <div className="flex gap-1">
+          <div className="w-3 h-1 rounded-full bg-slate-700" />
+          <div className="w-1 h-1 rounded-full bg-slate-700" />
         </div>
       </div>
 
-      {/* ── Avatar row ── */}
-      <div className="flex items-center gap-3 px-3 -mt-5 mb-3">
-        {/* Avatar with gold ring */}
+      {/* ── Profile header banner ── */}
+      <div className="relative h-[78px] bg-gradient-to-br from-[#0b2a4a] via-[#0e3d6e] to-[#1560a8] overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_75%_25%,rgba(166,206,57,0.10),transparent_55%)]" />
+        <div className="absolute right-3 top-2 opacity-15">
+          <Star className="h-10 w-10 text-[#a6ce39]" fill="currentColor" />
+        </div>
+        <div className="absolute bottom-2 left-[70px]">
+          <p className="text-[6px] font-extrabold uppercase tracking-[0.18em] text-slate-400">Mi Ficha de Jugador</p>
+          <p className="text-[13px] font-black text-white leading-tight">Gastón Ramírez</p>
+          <p className="text-[7px] text-blue-300/80">gaston@setgo.app</p>
+        </div>
+      </div>
+
+      {/* ── Avatar overlapping header ── */}
+      <div className="px-3 -mt-7 flex items-end gap-2 mb-1">
         <div className="relative shrink-0">
-          <div className="w-12 h-12 rounded-full ring-[2.5px] ring-[#d9b857] ring-offset-2 ring-offset-[#07111f] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-xl">
+          <div className="w-14 h-14 rounded-full ring-[2.5px] ring-white bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-xl">
             GR
           </div>
-          {/* Top-3 gold badge */}
-          <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#d9b857] text-[7px] font-black text-slate-900 shadow">
-            <Star className="h-2 w-2" fill="currentColor" />
-          </span>
+          <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-white" />
         </div>
-        <div className="min-w-0 mt-4">
-          <p className="text-[10px] text-slate-400 truncate flex items-center gap-1">
-            <span className="text-[8px]">📍</span> Cdad. del Uruguay, Entre Ríos
-          </p>
-        </div>
-      </div>
-
-      {/* ── Rankings block ── */}
-      <div className="mx-3 grid grid-cols-2 rounded-xl overflow-hidden ring-1 ring-white/8 mb-2.5">
-        {/* Singles — gold */}
-        <div className="relative flex flex-col items-center py-3 px-2 bg-gradient-to-br from-[#8a6218] via-[#c9a032] to-[#f0d778]">
-          <div className="flex items-center justify-center mb-1 w-6 h-6 rounded-lg bg-white/25">
-            <Star className="h-3 w-3 text-white" fill="currentColor" />
-          </div>
-          <p className="text-[8px] font-extrabold uppercase tracking-widest text-amber-900/80">Singles</p>
-          <p className="text-[22px] font-black text-amber-950 leading-none">#3</p>
-          <span className="mt-1 rounded-full bg-amber-950/25 px-2 py-0.5 text-[8px] font-black text-amber-950">Categoría 1a</span>
-        </div>
-        {/* Dobles — blue */}
-        <div className="relative flex flex-col items-center py-3 px-2 bg-gradient-to-bl from-[#0e3157] via-[#1a5689] to-[#2f8ec6] border-l border-white/10">
-          <div className="flex items-center justify-center mb-1 w-6 h-6 rounded-lg bg-white/15">
-            <ShieldCheck className="h-3 w-3 text-white/80" />
-          </div>
-          <p className="text-[8px] font-extrabold uppercase tracking-widest text-blue-200/70">Dobles</p>
-          <p className="text-[22px] font-black text-white leading-none">#7</p>
-          <span className="mt-1 rounded-full bg-white/15 px-2 py-0.5 text-[8px] font-black text-blue-100">Categoría 3a</span>
+        <div className="pb-1 flex flex-wrap gap-1">
+          {['Singles 1a', 'Dobles 3a', 'Masculino'].map((pill) => (
+            <span key={pill} className="rounded-full bg-white/20 border border-white/30 backdrop-blur-sm px-1.5 py-0.5 text-[7px] font-black text-white">
+              {pill}
+            </span>
+          ))}
         </div>
       </div>
 
-      {/* ── Physical stats row ── */}
-      <div className="mx-3 grid grid-cols-4 gap-1 mb-2.5">
-        {[
-          { label: 'Altura', val: '185 cm' },
-          { label: 'Peso',   val: '82 kg'  },
-          { label: 'Mano',   val: 'Diestro' },
-          { label: 'Revés',  val: '1 mano' },
-        ].map(({ label, val }) => (
-          <div key={label} className="rounded-lg bg-white/[0.05] border border-white/5 p-1.5 text-center">
-            <p className="text-[7px] font-bold uppercase tracking-wide text-slate-500 mb-0.5">{label}</p>
-            <p className="text-[9px] font-black text-slate-100 leading-tight">{val}</p>
+      {/* ── Ranking panels ── */}
+      <div className="mx-3 grid grid-cols-2 rounded-xl overflow-hidden ring-1 ring-white/20 mb-2 shadow-md">
+        <div className="flex flex-col items-center py-2.5 px-2 bg-gradient-to-br from-[#8a6218] via-[#c9a032] to-[#f0d778]">
+          <div className="flex items-center gap-1 mb-1">
+            <Star className="h-2.5 w-2.5 text-amber-900/70" fill="currentColor" />
+            <p className="text-[7px] font-extrabold uppercase tracking-widest text-amber-900/70">Ranking Singles</p>
           </div>
+          <p className="text-[18px] font-black text-amber-950 leading-none">---</p>
+          <span className="mt-1 rounded-full bg-amber-950/20 px-2 py-0.5 text-[7px] font-black text-amber-950">Categoría 1a</span>
+        </div>
+        <div className="flex flex-col items-center py-2.5 px-2 bg-gradient-to-bl from-[#0e3157] via-[#1a5689] to-[#2f8ec6] border-l border-white/10">
+          <div className="flex items-center gap-1 mb-1">
+            <Trophy className="h-2.5 w-2.5 text-blue-200/60" />
+            <p className="text-[7px] font-extrabold uppercase tracking-widest text-blue-200/70">Ranking Dobles</p>
+          </div>
+          <p className="text-[18px] font-black text-white leading-none">---</p>
+          <span className="mt-1 rounded-full bg-white/15 px-2 py-0.5 text-[7px] font-black text-blue-100">Categoría 3a</span>
+        </div>
+      </div>
+
+      {/* ── Rendimiento Actual ── */}
+      <div className="mx-3 mb-2 rounded-xl bg-white border border-slate-200 p-2.5 shadow-sm">
+        <p className="text-[7px] font-extrabold uppercase tracking-widest text-slate-500 mb-2">Rendimiento Actual</p>
+        <div className="grid grid-cols-3 gap-1.5">
+          {[
+            { label: 'Partidos Jugados', val: '24' },
+            { label: 'Victorias',         val: '18' },
+            { label: 'Efectividad',        val: '75%' },
+          ].map(({ label, val }) => (
+            <div key={label} className="text-center">
+              <p className="text-[14px] font-black text-slate-900 leading-none">{val}</p>
+              <p className="text-[7px] text-slate-500 font-medium mt-0.5 leading-tight">{label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Tabs ── */}
+      <div className="mx-3 mb-2 grid grid-cols-2 rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm">
+        {['Mi Perfil', 'Mi Actividad'].map((tab, i) => (
+          <div key={tab} className={`py-1.5 text-center text-[8px] font-black ${
+            i === 0 ? 'bg-[#0e3d6e] text-white' : 'text-slate-400 bg-white'
+          }`}>{tab}</div>
         ))}
       </div>
 
-      {/* ── Quick stats ── */}
-      <div className="mx-3 mb-3">
-        <p className="text-[8px] font-extrabold uppercase tracking-widest text-slate-500 mb-1.5">Estadísticas Rápidas</p>
-        <div className="grid grid-cols-3 gap-1.5">
+      {/* ── Datos columns ── */}
+      <div className="mx-3 mb-3 grid grid-cols-2 gap-2">
+        {/* Datos Personales */}
+        <div className="rounded-xl bg-white border border-slate-200 p-2 shadow-sm">
+          <p className="text-[7px] font-extrabold uppercase tracking-widest text-slate-500 mb-1.5">Datos Personales</p>
           {[
-            { label: 'Partidos',  val: '24'   },
-            { label: 'Victorias', val: '18'   },
-            { label: 'Eficacia',  val: '75%'  },
+            { label: 'Nombre', val: 'Gastón R.' },
+            { label: 'Sexo',   val: 'Caballeros' },
+            { label: 'Ciudad', val: 'Cdad. Uruguay' },
           ].map(({ label, val }) => (
-            <div key={label} className="rounded-xl bg-[#0d1d35] border border-white/[0.07] p-2 text-center">
-              <p className="text-[14px] font-black text-white leading-none">{val}</p>
-              <p className="text-[8px] text-slate-500 font-medium mt-0.5">{label}</p>
+            <div key={label} className="mb-1">
+              <p className="text-[6px] text-slate-400 font-bold uppercase">{label}</p>
+              <p className="text-[8px] font-black text-slate-700 truncate">{val}</p>
+            </div>
+          ))}
+        </div>
+        {/* Datos Técnicos */}
+        <div className="rounded-xl bg-white border border-slate-200 p-2 shadow-sm">
+          <p className="text-[7px] font-extrabold uppercase tracking-widest text-slate-500 mb-1.5">Datos Técnicos</p>
+          {[
+            { label: 'Altura', val: '185 cm' },
+            { label: 'Peso',   val: '82 kg'  },
+            { label: 'Mano',   val: 'Diestro' },
+            { label: 'Revés',  val: '1 mano'  },
+          ].map(({ label, val }) => (
+            <div key={label} className="mb-1">
+              <p className="text-[6px] text-slate-400 font-bold uppercase">{label}</p>
+              <p className="text-[8px] font-black text-slate-700">{val}</p>
             </div>
           ))}
         </div>
@@ -107,24 +139,23 @@ function GradientDivider({ from = 'emerald' }) {
 
 // ── Mock Ranking Screen ─────────────────────────────────────────────────────────────────────────
 function MockRankingScreen() {
+  // Dobles ranking data from screenshot
   const podium = [
-    { pos: 2, initials: 'LF', name: 'L. Fernández', pts: 2500, color: 'from-slate-500 to-slate-600', border: 'ring-slate-400/40', icon: '🥈' },
-    { pos: 1, initials: 'MG', name: 'M. Gutierrez', pts: 2500, color: 'from-blue-500 to-indigo-600',  border: 'ring-[#d9b857]/70',   icon: '🥇' },
-    { pos: 3, initials: 'GR', name: 'G. Ramírez',   pts: 2460, color: 'from-orange-500 to-amber-600', border: 'ring-amber-500/40',   icon: '🥉' },
+    { pos: 2, ini: 'FM', name: 'Franco Medina',    comp: 'M. Lemos',   pts: 25, color: 'from-slate-500 to-slate-700', border: 'ring-slate-400/40', icon: '🥈' },
+    { pos: 1, ini: 'AS', name: 'Agustin Sosa',     comp: 'T. Ojeda',   pts: 25, color: 'from-blue-500 to-indigo-600', border: 'ring-[#d9b857]/70',  icon: '🥇' },
+    { pos: 3, ini: 'GP', name: 'Guillermo Palma',  comp: 'L. Vega',    pts: 25, color: 'from-blue-400 to-blue-600',   border: 'ring-amber-500/40',  icon: '🥉' },
   ];
   const rows = [
-    { pos: 1, initials: 'MG', color: 'from-blue-500 to-indigo-600',    name: 'Marcos Gutierrez',  pts: 2500 },
-    { pos: 2, initials: 'LF', color: 'from-blue-400 to-blue-600',      name: 'Lucas Fernández',   pts: 2500 },
-    { pos: 3, initials: 'GR', color: 'from-blue-500 to-indigo-600',    name: 'Gastón Ramírez',    pts: 2460, highlight: true },
-    { pos: 4, initials: 'AN', color: 'from-blue-500 to-indigo-600',    name: 'Agustín Núñez',     pts: 2450 },
-    { pos: 5, initials: 'SG', color: 'from-blue-500 to-indigo-600',    name: 'Santiago Gómez',    pts: 2450 },
+    { pos: 1, ini: 'AS', name: 'Agustin Sosa',    comp: 'Tomas Ojeda',   pts: 25, h: true  },
+    { pos: 2, ini: 'FM', name: 'Franco Medina',   comp: 'Marcos Lemos',  pts: 25, h: false },
+    { pos: 3, ini: 'GP', name: 'Guillermo Palma', comp: 'Luciano Vega',  pts: 25, h: false },
   ];
 
   return (
-    <div className="w-full max-w-[280px] mx-auto rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-[#07101e]">
+    <div className="w-full max-w-[280px] mx-auto rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-[#f0f2f5]">
 
       {/* ── Status bar ── */}
-      <div className="flex items-center justify-between px-3.5 py-2 bg-[#040c1a]">
+      <div className="flex items-center justify-between px-3.5 py-2 bg-[#0a0f1e]">
         <span className="text-[10px] text-slate-400 font-black tracking-wide">SetGo</span>
         <div className="flex gap-1">
           <div className="w-3 h-1 rounded-full bg-slate-700" />
@@ -132,100 +163,110 @@ function MockRankingScreen() {
         </div>
       </div>
 
-      {/* ── Filtro inteligente bar ── */}
-      <div className="px-3 pt-2.5 pb-2 bg-[#0a1728] border-b border-white/[0.06]">
-        <div className="flex items-center justify-between mb-1.5">
-          <div>
-            <p className="text-[7px] font-extrabold uppercase tracking-[0.15em] text-slate-500">Filtros activos</p>
-            <p className="text-[9px] font-black text-white">Filtro Inteligente</p>
-          </div>
-          <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5">
-            <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[7px] font-black text-emerald-300 whitespace-nowrap">Singles · 1a</span>
-          </span>
-        </div>
-        {/* Filter pills */}
-        <div className="flex gap-1">
-          {[
-            { label: 'MODALIDAD', val: 'Singles',    active: true  },
-            { label: 'SEXO',      val: 'Caballeros', active: false },
-            { label: 'CATEGORÍA', val: '1a',         active: false },
-          ].map(({ label, val, active }) => (
-            <div key={label} className={`flex-1 rounded-lg border px-1.5 py-1 ${
-              active ? 'border-[#a6ce39]/40 bg-[#a6ce39]/10' : 'border-white/[0.07] bg-white/[0.04]'
-            }`}>
-              <p className="text-[6px] font-extrabold uppercase tracking-wider text-slate-500">{label}</p>
-              <p className={`text-[8px] font-black truncate ${active ? 'text-[#a6ce39]' : 'text-slate-300'}`}>{val}</p>
+      {/* ── Page header ── */}
+      <div className="bg-white px-3 pt-2.5 pb-0 border-b border-slate-200">
+        <p className="text-[13px] font-black text-slate-900">Rankings</p>
+        <p className="text-[8px] text-blue-500 font-bold mb-2">Leaderboard de elite por puntos ELO</p>
+
+        {/* Filtro Inteligente */}
+        <div className="rounded-xl bg-[#0a1728] p-2 mb-2">
+          <div className="flex items-center justify-between mb-1.5">
+            <div>
+              <p className="text-[6px] font-extrabold uppercase tracking-[0.15em] text-slate-500">Filtros activos</p>
+              <p className="text-[8px] font-black text-white">Filtro Inteligente</p>
             </div>
-          ))}
+            <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5">
+              <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[6px] font-black text-emerald-300 whitespace-nowrap">Dobles · 1a</span>
+            </span>
+          </div>
+          <div className="flex gap-1">
+            {[
+              { label: 'MODALIDAD', val: 'Dobles',     active: true  },
+              { label: 'SEXO',      val: 'Caballeros', active: false },
+              { label: 'CATEGORÍA', val: '1a',         active: false },
+            ].map(({ label, val, active }) => (
+              <div key={label} className={`flex-1 rounded-lg border px-1.5 py-1 ${
+                active ? 'border-emerald-500/40 bg-emerald-500/15' : 'border-white/[0.07] bg-white/[0.04]'
+              }`}>
+                <p className="text-[5px] font-extrabold uppercase tracking-wider text-slate-500">{label}</p>
+                <p className={`text-[7px] font-black truncate ${active ? 'text-emerald-300' : 'text-slate-300'}`}>{val}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* ── Podio de Honor ── */}
-      <div className="px-3 pt-2 pb-2 bg-gradient-to-b from-[#0c1e38] to-[#081528]">
+      <div className="bg-gradient-to-b from-[#0c1e38] to-[#081528] px-3 pt-2 pb-3">
         <div className="flex items-center justify-between mb-2">
           <p className="text-[9px] font-black text-white">Podio de Honor</p>
           <span className="text-[7px] font-extrabold text-slate-500 uppercase tracking-widest">TOP 3</span>
         </div>
         <div className="flex items-end justify-center gap-1.5">
-          {podium.map(({ pos, initials, name, pts, color, border, icon }) => (
+          {podium.map(({ pos, ini, name, comp, pts, color, border, icon }) => (
             <div
               key={pos}
-              className={`flex flex-col items-center rounded-xl border bg-[#0d1e35] px-2 py-2 ${border} ${
-                pos === 1 ? 'ring-1 pb-3 pt-2' : 'ring-1 opacity-90'
+              className={`flex flex-col items-center rounded-xl border bg-[#0d1e35] px-1.5 py-2 ring-1 ${border} ${
+                pos === 1 ? 'pb-3' : 'opacity-90'
               }`}
-              style={{ width: pos === 1 ? '84px' : '72px' }}
+              style={{ width: pos === 1 ? '88px' : '74px' }}
             >
-              <span className="text-base leading-none mb-1">{icon}</span>
-              {pos === 1 && <Trophy className="h-3 w-3 text-[#d9b857] mb-0.5" />}
-              <p className="text-[7px] font-black text-slate-500 mb-1">#{pos}</p>
-              <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${color} flex items-center justify-center text-white text-[8px] font-black mb-1 shadow-md`}>
-                {initials}
+              <span className="text-sm leading-none mb-0.5">{icon}</span>
+              {pos === 1 && <Trophy className="h-2.5 w-2.5 text-[#d9b857] mb-0.5" />}
+              <p className="text-[6px] font-black text-slate-500 mb-1">#{pos}</p>
+              <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${color} flex items-center justify-center text-white text-[8px] font-black mb-0.5 shadow`}>
+                {ini}
               </div>
-              <p className={`text-[${pos === 1 ? '11' : '10'}px] font-black text-white leading-none`}>{pts}</p>
-              <p className="text-[6px] text-slate-500 font-bold">ELO</p>
-              <p className="text-[7px] text-slate-400 font-bold mt-0.5 text-center leading-tight">{name}</p>
+              <p className="text-[10px] font-black text-white leading-none">{pts}</p>
+              <p className="text-[6px] text-slate-500 font-bold">pts ELO</p>
+              <p className="text-[7px] text-slate-300 font-black mt-0.5 text-center leading-none">{name}</p>
+              <span className="mt-0.5 rounded-full bg-blue-500/20 border border-blue-400/30 px-1.5 py-0.5 text-[6px] font-bold text-blue-300">
+                + {comp}
+              </span>
             </div>
           ))}
         </div>
       </div>
 
       {/* ── Tabla de Posición ── */}
-      <div className="bg-[#07101e]">
-        <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/[0.05]">
+      <div className="bg-white">
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-200">
           <div>
-            <p className="text-[7px] font-extrabold uppercase tracking-widest text-slate-500">Tabla de Posición</p>
-            <p className="text-[7px] text-slate-600">249 jugadores</p>
+            <p className="text-[8px] font-extrabold uppercase tracking-widest text-slate-600">Tabla de Posición</p>
+            <p className="text-[7px] text-slate-400">32 jugadores encontrados</p>
           </div>
-          <span className="flex items-center gap-1 rounded-full bg-[#d9b857]/15 border border-[#d9b857]/30 px-1.5 py-0.5">
+          <span className="flex items-center gap-1 rounded-full bg-[#d9b857]/10 border border-[#d9b857]/40 px-1.5 py-0.5">
             <span className="w-1 h-1 rounded-full bg-[#d9b857] animate-pulse" />
             <span className="text-[7px] font-black text-[#d9b857]">Ranking en vivo</span>
           </span>
         </div>
-
-        {/* Column headers */}
-        <div className="grid grid-cols-[28px_1fr_auto] gap-x-2 px-3 py-1 border-b border-white/[0.04]">
-          {['PUESTO', 'JUGADOR', 'ELO'].map(h => (
-            <p key={h} className="text-[6px] font-extrabold uppercase tracking-widest text-slate-600">{h}</p>
+        {/* Headers */}
+        <div className="grid grid-cols-[24px_1fr_auto] gap-x-2 px-3 py-1 border-b border-slate-100">
+          {['PUESTO', 'JUGADOR / COMPAÑERO', 'ELO'].map(h => (
+            <p key={h} className="text-[6px] font-extrabold uppercase tracking-widest text-slate-400">{h}</p>
           ))}
         </div>
-
-        {/* Rows */}
-        {rows.map(({ pos, initials, color, name, pts, highlight }) => (
-          <div
-            key={pos}
-            className={`grid grid-cols-[28px_1fr_auto] gap-x-2 items-center px-3 py-1.5 border-b border-white/[0.03] last:border-0 ${
-              highlight ? 'bg-[#a6ce39]/[0.07]' : ''
-            }`}
-          >
-            <span className={`text-[9px] font-black ${highlight ? 'text-[#a6ce39]' : 'text-slate-500'}`}>#{pos}</span>
-            <div className="flex items-center gap-1.5 min-w-0">
-              <div className={`w-5 h-5 shrink-0 rounded-full bg-gradient-to-br ${color} flex items-center justify-center text-white text-[7px] font-black`}>
-                {initials}
+        {rows.map(({ pos, ini, name, comp, pts, h }) => (
+          <div key={pos} className={`grid grid-cols-[24px_1fr_auto] gap-x-2 items-center px-3 py-1.5 border-b border-slate-100 last:border-0 ${
+            h ? 'bg-[#d9b857]/5' : ''
+          }`}>
+            <span className={`text-[9px] font-black ${h ? 'text-[#d9b857]' : 'text-slate-400'}`}>#{pos}</span>
+            <div className="flex items-start gap-1.5 min-w-0">
+              <div className="w-5 h-5 shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[7px] font-black mt-0.5">
+                {ini}
               </div>
-              <span className={`text-[9px] font-bold truncate ${highlight ? 'text-[#a6ce39]' : 'text-slate-300'}`}>{name}</span>
+              <div className="min-w-0">
+                <p className={`text-[8px] font-black truncate ${h ? 'text-[#d9b857]' : 'text-slate-800'}`}>{name}</p>
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-100 px-1 py-0.5">
+                  <span className="text-[6px] font-black text-blue-600">+ {comp}</span>
+                </span>
+              </div>
             </div>
-            <span className={`text-[9px] font-black tabular-nums ${highlight ? 'text-[#a6ce39]' : 'text-slate-400'}`}>{pts}</span>
+            <div className="text-right">
+              <p className={`text-[9px] font-black tabular-nums ${h ? 'text-[#d9b857]' : 'text-slate-700'}`}>{pts}</p>
+              <p className="text-[6px] text-slate-400">ELO</p>
+            </div>
           </div>
         ))}
       </div>
@@ -236,46 +277,11 @@ function MockRankingScreen() {
 
 // ── Mock Bracket Screen ───────────────────────────────────────────────────────────────────────
 function MockBracketScreen() {
-  // player helper: name, seed (null | number), avatar color, winner bool, live bool
-  const P = ({ name, seed, color = 'from-blue-500 to-indigo-600', winner, live }) => (
-    <div className={`flex items-center gap-1.5 px-2 py-[5px] border-b border-white/[0.04] last:border-0 ${
-      winner ? 'bg-[#0e2a46]' : live ? 'bg-[#0a2010]' : 'bg-[#090f1e]'
-    }`}>
-      {/* seed badge or avatar */}
-      <div className={`relative w-[14px] h-[14px] rounded-full shrink-0 bg-gradient-to-br ${color} flex items-center justify-center`}>
-        {seed && (
-          <span className="absolute -top-1 -right-1 w-[9px] h-[9px] rounded-full bg-[#d9b857] flex items-center justify-center text-[5px] font-black text-slate-900 leading-none">
-            {seed}
-          </span>
-        )}
-      </div>
-      <span className={`text-[9px] font-bold flex-1 truncate leading-none ${
-        winner ? 'text-white' : live ? 'text-emerald-300' : 'text-slate-400'
-      }`}>{name}</span>
-      {winner && <span className="text-[7px] font-black text-[#a6ce39] shrink-0">W</span>}
-      {live && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 animate-pulse" />}
-    </div>
-  );
-
-  // Match card
-  const Match = ({ players, status, live }) => (
-    <div className={`rounded-lg overflow-hidden ring-1 ${live ? 'ring-emerald-500/40' : 'ring-white/[0.07]'} shadow-md`}>
-      {players.map((p, i) => <P key={i} {...p} live={live && !p.winner} />)}
-      {status && (
-        <div className={`px-2 py-0.5 text-center text-[7px] font-extrabold uppercase tracking-wider ${
-          live
-            ? 'bg-emerald-900/50 text-emerald-400'
-            : 'bg-[#0b152a] text-slate-600'
-        }`}>{status}</div>
-      )}
-    </div>
-  );
-
   return (
-    <div className="w-full max-w-[278px] mx-auto rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-[#07101e]">
+    <div className="w-full max-w-[278px] mx-auto rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-[#f0f2f5]">
 
       {/* ── Status bar ── */}
-      <div className="flex items-center justify-between px-3.5 py-2 bg-[#040c1a]">
+      <div className="flex items-center justify-between px-3.5 py-2 bg-[#0a0f1e]">
         <span className="text-[10px] text-slate-400 font-black tracking-wide">SetGo</span>
         <div className="flex gap-1">
           <div className="w-3 h-1 rounded-full bg-slate-700" />
@@ -283,146 +289,146 @@ function MockBracketScreen() {
         </div>
       </div>
 
-      <div className="bg-gradient-to-b from-[#0c1e38] to-[#07101e] px-3 pt-3 pb-4">
+      {/* ── Torneos page header ── */}
+      <div className="bg-white px-3 pt-2.5 pb-2 border-b border-slate-200">
+        <p className="text-[13px] font-black text-slate-900">Torneos</p>
+        <p className="text-[8px] text-blue-500 font-bold mb-2">Cartelera de torneos, estado e inscripción</p>
+        {/* Filter chips */}
+        <div className="flex gap-1">
+          {['Todos (7)', 'Activos (7)', 'Inscripción Abierta (3)'].map((t, i) => (
+            <span key={t} className={`rounded-full px-2 py-0.5 text-[7px] font-extrabold ${
+              i === 0
+                ? 'bg-[#d9b857] text-slate-900'
+                : 'bg-slate-100 text-slate-500 border border-slate-200'
+            }`}>{t}</span>
+          ))}
+        </div>
+      </div>
 
-        {/* ── Tournament title ── */}
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <p className="text-[7px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Cuadro de juego</p>
-            <p className="text-[11px] font-black text-[#d9b857] leading-tight">Copa Almafuerte 2026</p>
+      {/* ── Tournament card ── */}
+      <div className="mx-2.5 mt-2.5 rounded-2xl overflow-hidden ring-1 ring-white/20 shadow-lg">
+        {/* Banner */}
+        <div className="relative h-[52px] bg-gradient-to-r from-[#0b2a4a] via-[#0e3d6e] to-[#b8861a] overflow-hidden">
+          {/* court lines */}
+          <svg className="absolute right-2 top-2 opacity-20" width="60" height="40" viewBox="0 0 60 40">
+            <rect x="4" y="4" width="52" height="32" fill="none" stroke="white" strokeWidth="1.5" />
+            <line x1="30" y1="4" x2="30" y2="36" stroke="white" strokeWidth="1" />
+            <line x1="4" y1="20" x2="56" y2="20" stroke="white" strokeWidth="1" />
+          </svg>
+          <span className="absolute top-2 right-2 rounded-md bg-white/90 px-1.5 py-0.5 text-[7px] font-black text-slate-800">EN_PROGRESO</span>
+          <div className="absolute bottom-2 left-3">
+            <p className="text-[7px] text-slate-400">viernes 27 de marzo, 2026 · 16:24</p>
+            <p className="text-[11px] font-black text-white leading-tight">Categoria Primera Dobles</p>
           </div>
-          <span className="rounded-full bg-[#d9b857]/15 border border-[#d9b857]/30 px-2 py-0.5 text-[8px] font-black text-[#d9b857]">32 jugadores</span>
         </div>
 
-        {/* ── 3-column bracket ── */}
-        <div className="flex items-start gap-1">
+        {/* Details grid */}
+        <div className="bg-[#0c1a2e] grid grid-cols-3 gap-px border-t border-white/[0.06]">
+          {[
+            { label: 'CATEGORÍA',  val: 'Cat 1'          },
+            { label: 'MODALIDAD',  val: 'Dobles'         },
+            { label: 'SEXO',       val: 'Masculino'      },
+            { label: 'SUPERFICIE', val: 'Mixta'          },
+            { label: 'INICIO',     val: '27 mar · 16:24' },
+            { label: 'COSTO',      val: '$10.000'        },
+          ].map(({ label, val }) => (
+            <div key={label} className="px-2 py-1.5 bg-[#0c1a2e]">
+              <p className="text-[5px] font-extrabold uppercase tracking-widest text-slate-600">{label}</p>
+              <p className="text-[8px] font-black text-slate-200 truncate">{val}</p>
+            </div>
+          ))}
+        </div>
 
-          {/* ── Col 1: Cuartos de Final ── */}
-          <div className="flex flex-col gap-1.5 flex-[1.1]">
-            <p className="text-[7px] font-extrabold uppercase tracking-widest text-slate-500 text-center mb-0.5">Cuartos</p>
-
-            <Match
-              players={[
-                { name: 'S. Gómez', seed: 1, winner: true },
-                { name: 'F. Ortiz',  seed: null },
-              ]}
-              status="Programado"
-            />
-            <Match
-              players={[
-                { name: 'F. Morales', seed: null, winner: true },
-                { name: 'G. Ibarra',  seed: null },
-              ]}
-              status="Programado"
-            />
-            <Match
-              players={[
-                { name: 'M. Cruz',   seed: 3 },
-                { name: 'R. Domíng.', seed: null },
-              ]}
-              status="Programado"
-            />
+        {/* Inscriptos bar */}
+        <div className="bg-[#0a1525] px-3 py-2">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[7px] text-slate-500 font-bold">Inscriptos confirmados</p>
+            <span className="text-[8px] font-black text-slate-300">32</span>
           </div>
+          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div className="h-full w-full rounded-full bg-gradient-to-r from-emerald-500 to-[#a6ce39]" />
+          </div>
+          <p className="text-[7px] text-emerald-400/80 mt-1">Torneo en juego. Ver cuadro y cronograma en vivo.</p>
+        </div>
+      </div>
 
-          {/* ── Connector ── */}
-          <div className="flex flex-col justify-around self-stretch pt-5 gap-0 opacity-25 shrink-0">
-            {[0, 1, 2].map(i => (
-              <div key={i} className="flex items-center">
-                <div className="w-1.5 h-px bg-slate-400" />
-              </div>
+      {/* ── Mini bracket preview ── */}
+      <div className="mx-2.5 mt-2 mb-3">
+        <p className="text-[7px] font-extrabold uppercase tracking-widest text-slate-500 mb-1.5">Cuadro en Vivo</p>
+        <div className="rounded-xl bg-[#0c1a2e] ring-1 ring-white/[0.07] overflow-hidden">
+          {/* Round labels */}
+          <div className="grid grid-cols-3 border-b border-white/[0.05]">
+            {['1ra Ronda', 'Cuartos', 'Semi'].map((r, i) => (
+              <p key={r} className={`text-center text-[6px] font-extrabold uppercase tracking-widest py-1 ${
+                i === 1 ? 'text-[#a6ce39]/70' : 'text-slate-600'
+              }`}>{r}</p>
             ))}
           </div>
-
-          {/* ── Col 2: Semifinal ── */}
-          <div className="flex flex-col gap-1.5 flex-[1.05]">
-            <p className="text-[7px] font-extrabold uppercase tracking-widest text-slate-500 text-center mb-0.5">Semifinal</p>
-
-            <Match
-              live
-              players={[
-                { name: 'S. Gómez',  seed: 1, color: 'from-[#a6ce39]/80 to-emerald-600', live: true },
-                { name: 'F. Morales', seed: null, live: true },
-              ]}
-              status="En curso"
-            />
-            <Match
-              players={[
-                { name: 'Por definir', seed: null },
-                { name: 'Por definir', seed: null },
-              ]}
-              status="Programado"
-            />
-          </div>
-
-          {/* ── Connector ── */}
-          <div className="flex flex-col justify-around self-stretch pt-5 opacity-25 shrink-0">
-            <div className="w-1.5 h-px bg-slate-400" />
-          </div>
-
-          {/* ── Col 3: Final ── */}
-          <div className="flex flex-col flex-1">
-            <p className="text-[7px] font-extrabold uppercase tracking-widest text-[#d9b857]/70 text-center mb-0.5">Gran Final</p>
-            <div className="rounded-lg overflow-hidden ring-1 ring-[#d9b857]/25 bg-gradient-to-b from-[#1a1200] to-[#0d0c00] mt-1">
-              <div className="px-1.5 py-2 flex flex-col items-center gap-1">
-                <Trophy className="h-4 w-4 text-[#d9b857]/70" />
-                <span className="text-[7px] font-black text-[#d9b857]/60 uppercase tracking-widest text-center leading-tight">Por<br/>definir</span>
+          {/* Sample bracket rows */}
+          <div className="px-1.5 py-1.5 flex gap-1 items-start">
+            {/* Col 1 */}
+            <div className="flex flex-col gap-1 flex-1">
+              {[['S. Gómez', true], ['F. Ortiz', false], ['F. Morales', true], ['G. Ibarra', false]].map(([name, w], i) => (
+                <div key={i} className={`flex items-center gap-1 rounded px-1.5 py-1 ${
+                  w ? 'bg-[#0e2a46]' : 'bg-[#070d1a]'
+                }`}>
+                  <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 shrink-0" />
+                  <span className={`text-[7px] font-bold truncate ${w ? 'text-slate-200' : 'text-slate-600'}`}>{name}</span>
+                  {w && <span className="ml-auto text-[6px] text-[#a6ce39] font-black">W</span>}
+                </div>
+              ))}
+            </div>
+            {/* Connector */}
+            <div className="opacity-20 flex flex-col gap-2.5 pt-2 shrink-0">
+              <div className="w-1.5 h-px bg-slate-400" />
+              <div className="w-1.5 h-px bg-slate-400" />
+            </div>
+            {/* Col 2 */}
+            <div className="flex flex-col gap-1 flex-1">
+              {[['S. Gómez', false, true], ['F. Morales', false, true]].map(([name, w, live], i) => (
+                <div key={i} className={`flex items-center gap-1 rounded px-1.5 py-1 ${
+                  live ? 'bg-[#0a2010] ring-1 ring-emerald-500/30' : 'bg-[#070d1a]'
+                }`}>
+                  <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                    live ? 'bg-emerald-400 animate-pulse' : 'bg-gradient-to-br from-blue-500 to-indigo-600'
+                  }`} />
+                  <span className={`text-[7px] font-bold truncate ${live ? 'text-emerald-300' : 'text-slate-400'}`}>{name}</span>
+                </div>
+              ))}
+            </div>
+            {/* Connector */}
+            <div className="opacity-20 flex items-center pt-2 shrink-0">
+              <div className="w-1.5 h-px bg-slate-400" />
+            </div>
+            {/* Col 3: Final */}
+            <div className="flex flex-col flex-1">
+              <div className="rounded-lg ring-1 ring-[#d9b857]/30 bg-gradient-to-b from-[#1a1200] to-[#0d0c00] p-1.5 flex flex-col items-center gap-0.5 mt-0.5">
+                <Trophy className="h-3 w-3 text-[#d9b857]/60" />
+                <span className="text-[6px] font-black text-[#d9b857]/50 uppercase text-center leading-none">Gran<br/>Final</span>
               </div>
             </div>
           </div>
-        </div>
-
-        {/* ── Live match banner ── */}
-        <div className="mt-3.5 flex items-center justify-between gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/25 px-3 py-2">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-            <span className="text-[10px] font-black text-emerald-300">Partido en vivo</span>
+          {/* Live banner */}
+          <div className="flex items-center justify-between px-2.5 py-1.5 bg-emerald-900/30 border-t border-emerald-500/20">
+            <div className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[8px] font-black text-emerald-300">Partido en vivo</span>
+            </div>
+            <span className="text-[7px] text-emerald-400/70 font-bold">Cancha 2</span>
           </div>
-          <span className="text-[8px] text-emerald-400/70 font-bold">Cancha 1</span>
         </div>
-
-        {/* ── Round progress pills ── */}
-        <div className="mt-2.5 flex items-center gap-1 justify-center">
-          {['1ra Ronda', 'Octavos', 'Cuartos', 'Semi', 'Final'].map((r, i) => (
-            <div key={r} className={`h-1 rounded-full transition-all ${
-              i < 3 ? 'w-5 bg-[#a6ce39]/60' : i === 3 ? 'w-5 bg-[#a6ce39]/30 animate-pulse' : 'w-3 bg-white/10'
-            }`} />
-          ))}
-        </div>
-        <p className="text-center text-[7px] text-slate-600 font-medium mt-1">Semifinales en curso</p>
-
       </div>
     </div>
   );
 }
 
-// ── Mock Live Match Screen ──────────────────────────────────────────────────────────────────
+// ── Mock Live Match Screen (Dashboard) ─────────────────────────────────────────────────────────
 function MockLiveMatchScreen() {
-  const matches = [
-    {
-      cat: 'Cat. Primera · 24 Jugadores',
-      cancha: 'Cancha 3',
-      p1: { initials: 'LU', name: 'L. Uribe',   label: 'Local' },
-      p2: { initials: 'RD', name: 'R. Delgado', label: 'Local' },
-    },
-    {
-      cat: 'Cat. Primera · 24 Jugadores',
-      cancha: 'Cancha 4',
-      p1: { initials: 'NM', name: 'N. Montoya', label: 'Local' },
-      p2: { initials: 'RO', name: 'R. Ojeda',   label: 'Local' },
-    },
-  ];
-
-  const stats = [
-    { val: '2',   label: 'Partidos En Vivo', bg: 'from-blue-700 to-blue-900',           icon: Zap },
-    { val: '2/4', label: 'Canchas Ocupadas', bg: 'from-slate-700 to-slate-900',          icon: null },
-    { val: '8',   label: 'Torneos Activos',  bg: 'from-amber-700/80 to-amber-900/80',    icon: Trophy },
-  ];
-
   return (
-    <div className="w-full max-w-[280px] mx-auto rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-[#07101e]">
+    <div className="w-full max-w-[280px] mx-auto rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-[#f0f2f5]">
 
       {/* ── Status bar ── */}
-      <div className="flex items-center justify-between px-3.5 py-2 bg-[#040c1a]">
+      <div className="flex items-center justify-between px-3.5 py-2 bg-[#0a0f1e]">
         <span className="text-[10px] text-slate-400 font-black tracking-wide">SetGo</span>
         <div className="flex gap-1">
           <div className="w-3 h-1 rounded-full bg-slate-700" />
@@ -430,86 +436,123 @@ function MockLiveMatchScreen() {
         </div>
       </div>
 
-      {/* ── Club header ── */}
-      <div className="px-3.5 pt-2.5 pb-2 bg-gradient-to-r from-[#0b2340]/80 to-[#091a30]/60 border-b border-white/[0.06]">
-        <p className="text-[7px] font-extrabold uppercase tracking-[0.17em] text-[#a6ce39]">Club Activo</p>
-        <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-          <p className="text-[11px] font-black text-white">
-            Gestionando <span className="text-[#a6ce39]">SetGo Demo</span>
-          </p>
+      {/* ── Club header card ── */}
+      <div className="mx-2.5 mt-2 rounded-2xl overflow-hidden ring-1 ring-white/10">
+        <div className="px-3 pt-2.5 pb-2.5 bg-gradient-to-r from-[#0b2340] to-[#0c2a4a]">
+          <p className="text-[6px] font-extrabold uppercase tracking-[0.18em] text-[#a6ce39] mb-0.5">Club Activo</p>
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <p className="text-[11px] font-black text-white leading-none">
+              Tu club: <span className="text-[#a6ce39]">SetGo Demo</span>
+            </p>
+          </div>
+          <p className="text-[7px] text-slate-400">¡Todo listo para tu próximo set! Revisá la actividad en vivo.</p>
         </div>
-        <p className="text-[7px] text-slate-500 mt-0.5">Panel operativo en tiempo real</p>
+
+        {/* Live match card */}
+        <div className="bg-[#0c1e38] border-t border-white/[0.06]">
+          <div className="flex items-center justify-between px-2.5 py-1 bg-[#0a1a30]">
+            <span className="text-[6px] text-slate-500 font-bold uppercase tracking-wide">Categoría Primera 24 Jug.</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[6px] text-slate-400 font-bold">Cancha 3</span>
+              <span className="flex items-center gap-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 px-1 py-0.5">
+                <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[5px] font-black text-emerald-300">EN VIVO</span>
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center px-2 py-1.5 gap-2">
+            <div className="flex flex-col items-center w-10 shrink-0">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center text-white text-[8px] font-black">LU</div>
+              <p className="text-[7px] font-bold text-slate-300 text-center mt-0.5 leading-tight">L. Uribe</p>
+              <span className="text-[5px] text-slate-600 font-bold border border-white/10 rounded px-1 mt-0.5">LOC</span>
+            </div>
+            <div className="flex-1">
+              <div className="flex items-stretch rounded-lg overflow-hidden ring-1 ring-white/10 bg-[#071628]">
+                <div className="flex-1 py-1 text-center">
+                  <p className="text-[5px] text-slate-600 font-bold uppercase">SETS</p>
+                  <p className="text-[8px] font-black text-slate-500">—</p>
+                </div>
+                <div className="px-2 py-1 bg-[#d9b857]/15 border-x border-[#d9b857]/20 text-center">
+                  <p className="text-[5px] text-[#d9b857]/70 font-bold uppercase">GAME</p>
+                  <p className="text-[13px] font-black text-[#d9b857] leading-none">0-0</p>
+                </div>
+                <div className="flex-1 py-1 text-center">
+                  <p className="text-[5px] text-slate-600 font-bold uppercase">GAMES</p>
+                  <p className="text-[8px] font-black text-slate-500">—</p>
+                </div>
+              </div>
+              <p className="text-[5px] text-slate-600 text-center mt-0.5">Primer Set · 00:00</p>
+            </div>
+            <div className="flex flex-col items-center w-10 shrink-0">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white text-[8px] font-black">RD</div>
+              <p className="text-[7px] font-bold text-slate-300 text-center mt-0.5 leading-tight">R. Delgado</p>
+              <span className="text-[5px] text-slate-600 font-bold border border-white/10 rounded px-1 mt-0.5">LOC</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* ── Live match cards ── */}
-      <div className="px-2.5 pt-2 pb-1 flex flex-col gap-1.5">
-        {matches.map((m) => (
-          <div key={m.cancha} className="rounded-xl bg-[#0c1e38] ring-1 ring-emerald-500/20 overflow-hidden">
-            {/* Card header */}
-            <div className="flex items-center justify-between px-2.5 py-1 bg-[#0a1a30]">
-              <span className="text-[7px] text-slate-500 font-bold uppercase tracking-wide truncate">{m.cat}</span>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-[7px] text-slate-400 font-bold">{m.cancha}</span>
-                <span className="flex items-center gap-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 px-1.5 py-0.5">
-                  <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-[6px] font-black text-emerald-300">EN VIVO</span>
-                </span>
-              </div>
-            </div>
-
-            {/* Scoreboard */}
-            <div className="flex items-center justify-between px-2.5 py-1.5 gap-2">
-              {/* P1 */}
-              <div className="flex flex-col items-center gap-0.5 w-10 shrink-0">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center text-white text-[9px] font-black shadow">
-                  {m.p1.initials}
-                </div>
-                <p className="text-[8px] font-bold text-slate-300 text-center leading-tight">{m.p1.name}</p>
-                <span className="text-[6px] text-slate-600 font-bold border border-white/10 rounded px-1">LOC</span>
-              </div>
-
-              {/* Score */}
-              <div className="flex-1 flex flex-col items-center gap-0.5">
-                <div className="flex items-stretch rounded-lg overflow-hidden ring-1 ring-white/10 bg-[#071628] w-full">
-                  <div className="flex-1 py-1 text-center">
-                    <p className="text-[6px] text-slate-600 font-bold uppercase">SETS</p>
-                    <p className="text-[9px] font-black text-slate-400">—</p>
-                  </div>
-                  <div className="px-2 py-1 bg-[#d9b857]/10 border-x border-[#d9b857]/20 text-center">
-                    <p className="text-[6px] text-[#d9b857]/70 font-bold uppercase">GAME</p>
-                    <p className="text-[14px] font-black text-[#d9b857] leading-none">0-0</p>
-                  </div>
-                  <div className="flex-1 py-1 text-center">
-                    <p className="text-[6px] text-slate-600 font-bold uppercase">GAMES</p>
-                    <p className="text-[9px] font-black text-slate-400">—</p>
-                  </div>
-                </div>
-                <p className="text-[6px] text-slate-600">Primer Set · 00:00</p>
-              </div>
-
-              {/* P2 */}
-              <div className="flex flex-col items-center gap-0.5 w-10 shrink-0">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-500 to-slate-700 flex items-center justify-center text-white text-[9px] font-black shadow">
-                  {m.p2.initials}
-                </div>
-                <p className="text-[8px] font-bold text-slate-300 text-center leading-tight">{m.p2.name}</p>
-                <span className="text-[6px] text-slate-600 font-bold border border-white/10 rounded px-1">LOC</span>
-              </div>
+      {/* ── KPI tiles 2×2 ── */}
+      <div className="grid grid-cols-2 gap-1.5 px-2.5 py-2">
+        {[
+          { val: '2',   label: 'Partidos En Vivo',  bg: 'from-blue-700 to-blue-900',      icon: Zap      },
+          { val: '2/4', label: 'Canchas Ocupadas',  bg: 'from-slate-600 to-slate-800',    icon: null     },
+          { val: '8',   label: 'Torneos Activos',   bg: 'from-amber-600/90 to-amber-900', icon: Trophy   },
+          { val: '--',  label: 'Tu Ranking',         bg: 'from-emerald-700 to-emerald-900',icon: BarChart2 },
+        ].map(({ val, label, bg, icon: Icon }) => (
+          <div key={label} className={`rounded-xl bg-gradient-to-br ${bg} p-2 ring-1 ring-white/[0.07] flex items-center gap-2`}>
+            {Icon && <Icon className="h-3.5 w-3.5 text-white/50 shrink-0" />}
+            <div>
+              <p className="text-[14px] font-black text-white leading-none">{val}</p>
+              <p className="text-[7px] text-white/50 font-bold leading-tight">{label}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* ── Stats strip ── */}
-      <div className="grid grid-cols-3 gap-1.5 px-2.5 py-2">
-        {stats.map(({ val, label, bg, icon: Icon }) => (
-          <div key={label} className={`rounded-xl bg-gradient-to-br ${bg} p-2 text-center ring-1 ring-white/[0.07]`}>
-            {Icon && <Icon className="h-3 w-3 text-white/60 mx-auto mb-0.5" />}
-            <p className="text-[13px] font-black text-white leading-none">{val}</p>
-            <p className="text-[6px] text-white/50 font-bold mt-0.5 leading-tight">{label}</p>
+      {/* ── Noticias Rápidas ── */}
+      <div className="px-2.5 pb-2">
+        <p className="text-[9px] font-black text-slate-800 mb-1.5">Noticias Rápidas</p>
+        <div className="rounded-xl bg-white border border-slate-200 shadow-sm divide-y divide-slate-100">
+          {[
+            { icon: Zap,    color: 'text-emerald-500', msg: '2 partidos en vivo · Cat. Primera',   sub: '4 canchas monitoreadas'   },
+            { icon: Trophy, color: 'text-[#d9b857]',   msg: 'Próximo torneo: Categoría Primera',   sub: 'Jue 19 mar · 21:00'       },
+            { icon: Medal,  color: 'text-blue-400',    msg: 'Posición de ranking actualizándose',  sub: 'Sin racha activa'         },
+          ].map(({ icon: Icon, color, msg, sub }) => (
+            <div key={msg} className="flex items-start gap-2 px-2.5 py-1.5">
+              <Icon className={`h-3 w-3 ${color} shrink-0 mt-0.5`} />
+              <div className="min-w-0">
+                <p className="text-[8px] font-bold text-slate-700 leading-tight truncate">{msg}</p>
+                <p className="text-[7px] text-slate-400">{sub}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Canchas Ahora ── */}
+      <div className="px-2.5 pb-3">
+        <p className="text-[9px] font-black text-slate-800 mb-1.5">Canchas Ahora</p>
+        <div className="rounded-xl bg-white border border-slate-200 shadow-sm p-2.5">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mb-1.5">
+            {[
+              { name: 'Cancha 1', libre: true  },
+              { name: 'Cancha 2', libre: true  },
+              { name: 'Cancha 3', libre: false },
+              { name: 'Cancha 4', libre: false },
+            ].map(({ name, libre }) => (
+              <div key={name} className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${libre ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                <span className="text-[8px] font-bold text-slate-600">{name}</span>
+              </div>
+            ))}
           </div>
-        ))}
+          <div className="flex gap-3 pt-1 border-t border-slate-100">
+            <span className="flex items-center gap-1 text-[7px] text-slate-500"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Disponible</span>
+            <span className="flex items-center gap-1 text-[7px] text-slate-500"><span className="w-1.5 h-1.5 rounded-full bg-red-400" /> Ocupada</span>
+          </div>
+        </div>
       </div>
 
     </div>
