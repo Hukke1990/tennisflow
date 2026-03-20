@@ -1,9 +1,35 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 const API_URL = '';
+
+// ── Caché inteligente (stale-while-revalidate) ──────────────────────────────
+// El cuadro se guarda en localStorage con TTL de 5 min.
+// Al montar: muestra datos cacheados INMEDIATAMENTE (cero pantallas en blanco)
+// y refresca en segundo plano sin interrumpir la vista.
+const CUADRO_CACHE_KEY = 'tennisflow.cuadro.v1';
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+
+const getCachedCuadro = (torneoId) => {
+  try {
+    const raw = localStorage.getItem(`${CUADRO_CACHE_KEY}.${torneoId}`);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > CACHE_TTL_MS) return null;
+    return Array.isArray(data) ? data : null;
+  } catch (_) { return null; }
+};
+
+const setCachedCuadro = (torneoId, data) => {
+  try {
+    localStorage.setItem(
+      `${CUADRO_CACHE_KEY}.${torneoId}`,
+      JSON.stringify({ data, ts: Date.now() })
+    );
+  } catch (_) {}
+};
 
 const extractPartidos = (payload) => {
   if (Array.isArray(payload)) return payload;
@@ -16,22 +42,48 @@ export default function CuadroTorneo({ torneoId }) {
   const [partidos, setPartidos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [stale, setStale] = useState(false); // true = mostrando caché viejo
+  const fetchingRef = useRef(false);
 
   useEffect(() => {
-    if (torneoId) fetchCuadro();
+    if (!torneoId) return;
+
+    // 1) Mostrar caché al instante si existe
+    const cached = getCachedCuadro(torneoId);
+    if (cached) {
+      setPartidos(cached);
+      setLoading(false);
+      setStale(true);
+    }
+
+    // 2) Siempre refrescar en segundo plano
+    fetchCuadro(!!cached);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [torneoId]);
 
-  const fetchCuadro = async () => {
+  const fetchCuadro = async (silent = false) => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+
     try {
-      setLoading(true);
-      setError(null);
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
       const { data } = await axios.get(`${API_URL}/api/torneos/${torneoId}/cuadro`);
-      setPartidos(extractPartidos(data));
+      const fresh = extractPartidos(data);
+      setPartidos(fresh);
+      setError(null);
+      setStale(false);
+      setCachedCuadro(torneoId, fresh);
     } catch (err) {
-      console.error('Error al cargar cuadro:', err);
+      // Si ya hay datos del caché, no mostrar error (el usuario tiene algo que ver)
+      if (partidos.length > 0) {
+        console.warn('[CuadroTorneo] Refresco en background falló; mostrando caché.', err);
+        return;
+      }
       const status = err?.response?.status;
       const backendMsg = err?.response?.data?.error;
-
       if (status === 404) {
         setError('Todavia no existe cuadro para este torneo. Genera el sorteo primero.');
       } else if (status === 500) {
@@ -41,7 +93,8 @@ export default function CuadroTorneo({ torneoId }) {
       }
       setPartidos([]);
     } finally {
-      setLoading(false);
+      fetchingRef.current = false;
+      if (!silent) setLoading(false);
     }
   };
 
@@ -62,7 +115,15 @@ export default function CuadroTorneo({ torneoId }) {
 
   return (
     <div className="w-full overflow-x-auto bg-gray-50 p-6 rounded-2xl border border-gray-200 mt-6">
-      <h3 className="text-2xl font-bold text-gray-800 mb-8 tracking-tight">Cruce de Partidos Generado</h3>
+      <div className="flex items-center justify-between mb-8">
+        <h3 className="text-2xl font-bold text-gray-800 tracking-tight">Cruce de Partidos Generado</h3>
+        {stale && (
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            Actualizando...
+          </span>
+        )}
+      </div>
       
       <div className="flex space-x-12 min-w-max">
         {bracketOrder.map((rondaOrden, colIndex) => {

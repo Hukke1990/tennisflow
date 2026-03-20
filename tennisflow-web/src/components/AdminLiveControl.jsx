@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { buzz } from '../lib/useHaptic';
 
 const API_URL = '';
 const FINAL_FLASH_MS = 18000;
@@ -1365,24 +1366,84 @@ export default function AdminLiveControl({ torneos = [] }) {
     }
   };
 
-  const handleAddPoint = async (partido, winner) => {
+  // ── Optimistic fire-and-forget para anotación de puntos ──────────────────
+  // Actualiza la UI en <16ms; la petición viaja en segundo plano.
+  // Si hay error de red, revierte el estado silenciosamente.
+  const persistScoreBackground = async (partido, nextScore, revertScore) => {
+    const partidoId = getPartidoIdCandidates(partido)[0];
+    if (!partidoId) return;
+
+    const nowIso = new Date().toISOString();
+    const payload = {
+      marcador_en_vivo: nextScore,
+      score: nextScore,
+      resultado: nextScore,
+      estado: 'en_juego',
+      estado_partido: 'en_juego',
+      ultima_actualizacion: nowIso,
+      parcial: true,
+    };
+
+    try {
+      const requestFns = buildPartidoRequestFallbacks({
+        partidoRef: partido,
+        torneoId: selectedTorneoId,
+        payload,
+        suffixes: ['marcador', 'marcador-en-vivo', ''],
+      });
+      await runFallbackRequest(requestFns);
+
+      // Sincronizar pendingStart si el partido fue iniciado explícitamente
+      const existingPending = pendingStartByPartido[String(partidoId)];
+      if (existingPending?.startedExplicitly) {
+        markPendingStart(partidoId, {
+          inicio_real: partido?.inicio_real || existingPending?.inicio_real || nowIso,
+          score: nextScore,
+          ultima_actualizacion: nowIso,
+          startedExplicitly: true,
+        }, selectedTorneoId);
+      }
+
+      broadcastLiveUpdate({ torneoId: selectedTorneoId, partidoId, action: 'score' });
+    } catch (_) {
+      // Error de red → revertir estado silenciosamente
+      setDraftScore(partidoId, revertScore);
+      updatePartidoLocal(partidoId, {
+        marcador_en_vivo: revertScore,
+        score: revertScore,
+      });
+      buzz('undo'); // vibración de advertencia
+      setStatusMessage({ type: 'error', text: 'Sin conexión: punto revertido. Tocar de nuevo cuando haya red.' });
+    }
+  };
+
+  const handleAddPoint = (partido, winner) => {
     if (!ensureCanManageLive()) return;
 
     const partidoId = getPartidoIdCandidates(partido)[0];
     if (!partidoId) return;
+
+    buzz('point'); // ← haptic feedback inmediato
 
     const previousScore = getDraftScore(partido);
     const currentState = parseTennisState(previousScore);
     const nextState = applyTennisPoint(currentState, winner);
     const nextScore = serializeTennisState(nextState);
 
+    // Actualización optimista: UI en <16ms, sin esperar la red
     pushPointHistory(partidoId, previousScore);
     setDraftScore(partidoId, nextScore);
+    updatePartidoLocal(partidoId, {
+      marcador_en_vivo: nextScore,
+      score: nextScore,
+      ultima_actualizacion: new Date().toISOString(),
+    });
 
-    await persistScore(partido, nextScore);
+    // Persistir en segundo plano (sin bloquear UI)
+    persistScoreBackground(partido, nextScore, previousScore);
   };
 
-  const handleUndoPoint = async (partido) => {
+  const handleUndoPoint = (partido) => {
     if (!ensureCanManageLive()) return;
 
     const partidoId = getPartidoIdCandidates(partido)[0];
@@ -1394,8 +1455,17 @@ export default function AdminLiveControl({ torneos = [] }) {
       return;
     }
 
+    buzz('undo'); // ← haptic feedback de deshacer
+
+    const currentScore = getDraftScore(partido);
     setDraftScore(partidoId, restoredScore);
-    await persistScore(partido, restoredScore);
+    updatePartidoLocal(partidoId, {
+      marcador_en_vivo: restoredScore,
+      score: restoredScore,
+    });
+
+    // Persistir en segundo plano con posibilidad de revertir
+    persistScoreBackground(partido, restoredScore, currentScore);
   };
 
   const handleSaveScore = async (partido) => {
@@ -1452,6 +1522,7 @@ export default function AdminLiveControl({ torneos = [] }) {
         return next;
       });
       broadcastLiveUpdate({ torneoId: selectedTorneoId, partidoId, action: 'start' });
+      buzz('start'); // ← haptic de inicio de partido
       setStatusMessage({
         type: 'success',
         text: `${getPartidoLabel(partido)} iniciado en ${canchaCard.cancha.nombre}.`,
@@ -1547,6 +1618,7 @@ export default function AdminLiveControl({ torneos = [] }) {
         return next;
       });
       broadcastLiveUpdate({ torneoId: selectedTorneoId, partidoId, action: 'finish' });
+      buzz('finish'); // ← haptic de victoria/fin de partido
       setStatusMessage({
         type: 'success',
         text: `${getPartidoLabel(partido)} finalizado (${score}). Cuadro actualizado.`,
@@ -1755,8 +1827,8 @@ export default function AdminLiveControl({ torneos = [] }) {
                             <button
                               type="button"
                               onClick={() => handleAddPoint(partido, 'A')}
-                              disabled={busy || !canManageLive}
-                              className="h-9 w-9 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 font-black text-lg disabled:opacity-60"
+                              disabled={!canManageLive}
+                              className="h-9 w-9 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 font-black text-lg disabled:opacity-60 transition-all duration-75 active:scale-90 active:bg-emerald-200 active:shadow-[0_0_10px_3px_rgba(166,206,57,0.55)] select-none"
                             >
                               +
                             </button>
@@ -1778,8 +1850,8 @@ export default function AdminLiveControl({ torneos = [] }) {
                             <button
                               type="button"
                               onClick={() => handleAddPoint(partido, 'B')}
-                              disabled={busy || !canManageLive}
-                              className="h-9 w-9 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 font-black text-lg disabled:opacity-60"
+                              disabled={!canManageLive}
+                              className="h-9 w-9 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 font-black text-lg disabled:opacity-60 transition-all duration-75 active:scale-90 active:bg-emerald-200 active:shadow-[0_0_10px_3px_rgba(166,206,57,0.55)] select-none"
                             >
                               +
                             </button>

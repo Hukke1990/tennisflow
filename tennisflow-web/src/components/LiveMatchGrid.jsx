@@ -1,4 +1,5 @@
 /* eslint-disable react/prop-types */
+import React from 'react';
 const normalizeText = (value) => String(value || '').toLowerCase().trim();
 const normalizeCanchaName = (value) => normalizeText(value).replace(/\s+/g, ' ');
 
@@ -202,56 +203,13 @@ export default function LiveMatchGrid({ liveCenter, nowMs }) {
         <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {canchas.map((cancha) => {
             const partidoEnJuego = getPartidoEnJuegoPorCancha(partidos, cancha);
-            const marcador = partidoEnJuego ? getMarcadorLegible(partidoEnJuego) : null;
-            const jugadorA = partidoEnJuego ? splitTeamLines(getJugadorPartido(partidoEnJuego, 1)) : { line1: '', line2: '' };
-            const jugadorB = partidoEnJuego ? splitTeamLines(getJugadorPartido(partidoEnJuego, 2)) : { line1: '', line2: '' };
-
             return (
-              <article key={cancha.key} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <p className="font-black text-gray-800">{cancha.nombre}</p>
-                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                    {partidoEnJuego?.__torneo_nombre ? (
-                      <span className="inline-flex items-center rounded-full bg-indigo-100 text-indigo-700 px-2 py-0.5 text-[10px] font-bold">
-                        {partidoEnJuego.__torneo_nombre}
-                      </span>
-                    ) : null}
-                    {partidoEnJuego ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 text-red-600 px-2.5 py-1 text-[11px] font-bold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                        EN VIVO
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-500 px-2.5 py-1 text-[11px] font-bold">
-                        SIN PARTIDO EN VIVO
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {partidoEnJuego ? (
-                  <div className="space-y-2">
-                    <div className="text-sm text-gray-700 font-semibold leading-snug">
-                      <p>{jugadorA.line1}</p>
-                      {jugadorA.line2 ? <p className="text-xs text-gray-500 font-semibold">{jugadorA.line2}</p> : null}
-                    </div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-gray-400">vs</p>
-                    <div className="text-sm text-gray-700 font-semibold leading-snug">
-                      <p>{jugadorB.line1}</p>
-                      {jugadorB.line2 ? <p className="text-xs text-gray-500 font-semibold">{jugadorB.line2}</p> : null}
-                    </div>
-                    <p className="text-3xl font-black text-red-600 tracking-tight animate-pulse">{marcador?.main || getMarcadorEnVivo(partidoEnJuego)}</p>
-                    {marcador?.detail && (
-                      <p className="text-xs text-gray-500 font-semibold">{marcador.detail}</p>
-                    )}
-                    <p className="text-xs text-gray-500">
-                      Tiempo transcurrido: <span className="font-bold text-gray-700">{formatTiempoTranscurrido(partidoEnJuego?.inicio_real, nowMs)}</span>
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500">Esta cancha no tiene un partido activo en este momento.</p>
-                )}
-              </article>
+              <MatchCanchaCard
+                key={cancha.key}
+                cancha={cancha}
+                partidoEnJuego={partidoEnJuego}
+                nowMs={nowMs}
+              />
             );
           })}
         </div>
@@ -259,3 +217,68 @@ export default function LiveMatchGrid({ liveCenter, nowMs }) {
     </section>
   );
 }
+
+// ── MatchCanchaCard ───────────────────────────────────────────────────────────
+// Memoizado: sólo se re-renderiza cuando cambia el marcador del partido
+// de ESA cancha, o 'nowMs'. El Header y otras tarjetas no se repintan.
+const MatchCanchaCard = React.memo(function MatchCanchaCard({ cancha, partidoEnJuego, nowMs }) {
+  const marcador = partidoEnJuego ? getMarcadorLegible(partidoEnJuego) : null;
+  const jugadorA = partidoEnJuego ? splitTeamLines(getJugadorPartido(partidoEnJuego, 1)) : { line1: '', line2: '' };
+  const jugadorB = partidoEnJuego ? splitTeamLines(getJugadorPartido(partidoEnJuego, 2)) : { line1: '', line2: '' };
+
+  return (
+    <article className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <p className="font-black text-gray-800">{cancha.nombre}</p>
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+          {partidoEnJuego?.__torneo_nombre ? (
+            <span className="inline-flex items-center rounded-full bg-indigo-100 text-indigo-700 px-2 py-0.5 text-[10px] font-bold">
+              {partidoEnJuego.__torneo_nombre}
+            </span>
+          ) : null}
+          {partidoEnJuego ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 text-red-600 px-2.5 py-1 text-[11px] font-bold">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              EN VIVO
+            </span>
+          ) : (
+            <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-500 px-2.5 py-1 text-[11px] font-bold">
+              SIN PARTIDO EN VIVO
+            </span>
+          )}
+        </div>
+      </div>
+
+      {partidoEnJuego ? (
+        <div className="space-y-2">
+          <div className="text-sm text-gray-700 font-semibold leading-snug">
+            <p>{jugadorA.line1}</p>
+            {jugadorA.line2 ? <p className="text-xs text-gray-500 font-semibold">{jugadorA.line2}</p> : null}
+          </div>
+          <p className="text-xs font-bold uppercase tracking-wide text-gray-400">vs</p>
+          <div className="text-sm text-gray-700 font-semibold leading-snug">
+            <p>{jugadorB.line1}</p>
+            {jugadorB.line2 ? <p className="text-xs text-gray-500 font-semibold">{jugadorB.line2}</p> : null}
+          </div>
+          <p className="text-3xl font-black text-red-600 tracking-tight animate-pulse">{marcador?.main || getMarcadorEnVivo(partidoEnJuego)}</p>
+          {marcador?.detail && (
+            <p className="text-xs text-gray-500 font-semibold">{marcador.detail}</p>
+          )}
+          <p className="text-xs text-gray-500">
+            Tiempo transcurrido: <span className="font-bold text-gray-700">{formatTiempoTranscurrido(partidoEnJuego?.inicio_real, nowMs)}</span>
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-gray-500">Esta cancha no tiene un partido activo en este momento.</p>
+      )}
+    </article>
+  );
+}, (prevProps, nextProps) => {
+  // Solo re-renderizar si cambia el marcador del partido de esta cancha
+  // o si cambia el nowMs (tiempo transcurrido, cada 60s)
+  const prevScore = prevProps.partidoEnJuego?.marcador_en_vivo ?? prevProps.partidoEnJuego?.score ?? '';
+  const nextScore = nextProps.partidoEnJuego?.marcador_en_vivo ?? nextProps.partidoEnJuego?.score ?? '';
+  const prevId = prevProps.partidoEnJuego?.id ?? null;
+  const nextId = nextProps.partidoEnJuego?.id ?? null;
+  return prevScore === nextScore && prevId === nextId && prevProps.nowMs === nextProps.nowMs;
+});
