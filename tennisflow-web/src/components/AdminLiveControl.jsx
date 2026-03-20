@@ -1908,7 +1908,10 @@ export default function AdminLiveControl({ torneos = [] }) {
         )}
       </div>
 
-      {confirmModal.open && (
+      {confirmModal.open && (() => {
+        const modalPartidoId = getPartidoIdCandidates(confirmModal.partido)[0] || '';
+        const modalBusy = Boolean(modalPartidoId && busyByPartido[modalPartidoId]);
+        return (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-xl p-5 space-y-4">
             <h4 className="text-lg font-black text-gray-900">Confirmar finalizacion</h4>
@@ -1924,7 +1927,8 @@ export default function AdminLiveControl({ torneos = [] }) {
                   const normalized = normalizeFinalScoreInput(event.target.value);
                   setConfirmModal((prev) => ({ ...prev, score: normalized }));
                 }}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold"
+                disabled={modalBusy}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold disabled:opacity-60"
                 placeholder="Ej: 6-4 / 6-4"
               />
               <p className="mt-1 text-[11px] text-gray-500">Formato recomendado: set-set / set-set (ej: 6-4 / 6-4).</p>
@@ -1935,7 +1939,8 @@ export default function AdminLiveControl({ torneos = [] }) {
               <select
                 value={confirmModal.ganadorId}
                 onChange={(event) => setConfirmModal((prev) => ({ ...prev, ganadorId: event.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold"
+                disabled={modalBusy}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold disabled:opacity-60"
               >
                 <option value="">Seleccionar...</option>
                 {getWinnerOptions(confirmModal.partido).map((option) => (
@@ -1948,22 +1953,31 @@ export default function AdminLiveControl({ torneos = [] }) {
               <button
                 type="button"
                 onClick={closeFinalizeModal}
-                className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                disabled={modalBusy}
+                className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={handleFinalize}
-                disabled={!canManageLive}
-                className="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-bold hover:bg-black"
+                disabled={!canManageLive || modalBusy}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-bold hover:bg-black disabled:opacity-70"
               >
-                Confirmar final
+                {modalBusy ? (
+                  <>
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin shrink-0" />
+                    Guardando...
+                  </>
+                ) : (
+                  'Confirmar final'
+                )}
               </button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </section>
   );
 }

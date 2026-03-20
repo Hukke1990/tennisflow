@@ -983,61 +983,14 @@ function FeaturesCarousel() {
 export default function LandingPage() {
   const logoVersion = '20260313-1';
   const [slug, setSlug] = useState('');
-  const [isContactOpen, setIsContactOpen] = useState(false);
   const [logoSrc, setLogoSrc] = useState(`/SetGo.png?v=${logoVersion}`);
   const [logoFallbackApplied, setLogoFallbackApplied] = useState(false);
-  const [requestData, setRequestData] = useState({
-    clubName: '',
-    cityCountry: '',
-    contactName: '',
-    phone: '',
-    email: '',
-  });
   const navigate = useNavigate();
-  const contactEmail = 'gastonbordet@gmail.com';
 
   const handleSubmit = (e) => {
     e.preventDefault();
     const normalized = slug.trim().toLowerCase().replace(/\s+/g, '-');
     if (normalized) navigate(`/${normalized}`);
-  };
-
-  const handleRequestFieldChange = (field) => (e) => {
-    setRequestData((prev) => ({
-      ...prev,
-      [field]: e.target.value,
-    }));
-  };
-
-  const isMobileDevice = () =>
-    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-
-  const handleContactSubmit = (e) => {
-    e.preventDefault();
-
-    const subject = `Solicitud de alta de club en SetGo - ${requestData.clubName.trim()}`;
-    const body = [
-      'Hola Gaston, quiero solicitar el alta de mi club en SetGo.',
-      '',
-      `Nombre del club: ${requestData.clubName.trim()}`,
-      `Ciudad/Pais: ${requestData.cityCountry.trim()}`,
-      `Nombre de contacto: ${requestData.contactName.trim()}`,
-      `Telefono de contacto: ${requestData.phone.trim()}`,
-      `Correo de contacto: ${requestData.email.trim()}`,
-      '',
-      'Gracias.',
-    ].join('\n');
-
-    if (isMobileDevice()) {
-      // En móvil abre la app de correo nativa
-      window.location.href = `mailto:${contactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    } else {
-      // En desktop abre Gmail web en pestaña nueva
-      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(contactEmail)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      const opened = window.open(gmailUrl, '_blank', 'noopener,noreferrer');
-      if (!opened) window.location.href = gmailUrl;
-    }
-    setIsContactOpen(false);
   };
 
   return (
@@ -1131,13 +1084,15 @@ export default function LandingPage() {
                 <span>Cada club tiene su propia entrada y su propia identidad visual.</span>
               </li>
             </ul>
-            <button
-              type="button"
-              onClick={() => setIsContactOpen(true)}
-              className="mt-8 inline-flex w-full items-center justify-center rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/20"
+            <a
+              href="https://wa.me/543442608040?text=Hola!%20Me%20interesa%20sumar%20mi%20club%20a%20SetGo%20%F0%9F%8E%BE"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#a6ce39] px-4 py-3 text-sm font-black text-slate-900 transition-colors hover:bg-[#bfe04a]"
             >
-              Solicitar alta de club por correo
-            </button>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M11.99 0C5.371 0 0 5.373 0 11.994c0 2.117.554 4.104 1.522 5.832L0 24l6.335-1.493A11.94 11.94 0 0 0 11.99 24C18.61 24 24 18.626 24 12.005 24 5.375 18.61 0 11.99 0zm0 21.805a9.811 9.811 0 0 1-5.032-1.383l-.36-.214-3.742.882.886-3.658-.235-.375A9.821 9.821 0 0 1 2.19 12c0-5.415 4.388-9.812 9.8-9.812 5.415 0 9.813 4.397 9.813 9.812 0 5.413-4.398 9.805-9.813 9.805z"/></svg>
+              Contactanos por WhatsApp
+            </a>
           </aside>
         </div>
 
@@ -1277,97 +1232,19 @@ export default function LandingPage() {
             El alta es rapida y sin costo.
           </p>
           <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-            <button
-              type="button"
-              onClick={() => setIsContactOpen(true)}
-              className="inline-flex items-center gap-2.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-[#a6ce39] px-8 py-4 text-base font-black text-[#04200f] shadow-[0_0_32px_rgba(166,206,57,0.30)] transition-all duration-200 hover:scale-[1.04] hover:shadow-[0_0_48px_rgba(166,206,57,0.45)] active:scale-[0.98]"
+            <a
+              href="https://wa.me/543442608040?text=Hola!%20Me%20interesa%20sumar%20mi%20club%20a%20SetGo%20%F0%9F%8E%BE"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2.5 rounded-2xl bg-[#a6ce39] px-8 py-4 text-base font-black text-[#04200f] shadow-[0_0_32px_rgba(166,206,57,0.30)] transition-all duration-200 hover:scale-[1.04] hover:bg-[#bfe04a] hover:shadow-[0_0_48px_rgba(166,206,57,0.45)] active:scale-[0.98]"
             >
-              Crea tu cuenta gratis <ArrowRight className="h-5 w-5" />
-            </button>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M11.99 0C5.371 0 0 5.373 0 11.994c0 2.117.554 4.104 1.522 5.832L0 24l6.335-1.493A11.94 11.94 0 0 0 11.99 24C18.61 24 24 18.626 24 12.005 24 5.375 18.61 0 11.99 0zm0 21.805a9.811 9.811 0 0 1-5.032-1.383l-.36-.214-3.742.882.886-3.658-.235-.375A9.821 9.821 0 0 1 2.19 12c0-5.415 4.388-9.812 9.812-9.812 5.415 0 9.813 4.397 9.813 9.812 0 5.413-4.398 9.805-9.813 9.805z"/></svg>
+              Contactanos por WhatsApp
+            </a>
             <p className="text-xs text-slate-500">Sin tarjeta de credito · Sin compromisos</p>
           </div>
         </div>
       </section>
-
-      {isContactOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#010716]/80 px-4 py-8">
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0a1633] p-6 shadow-2xl shadow-black/60 sm:p-7">
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-extrabold text-slate-100">Solicitar alta de club</h3>
-                <p className="mt-1 text-sm text-slate-300">Completa los datos para abrir Gmail con la informacion lista.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsContactOpen(false)}
-                className="rounded-md border border-white/15 px-2 py-1 text-sm text-slate-300 transition-colors hover:bg-white/10"
-                aria-label="Cerrar formulario"
-              >
-                X
-              </button>
-            </div>
-
-            <form onSubmit={handleContactSubmit} className="space-y-3">
-              <input
-                type="text"
-                value={requestData.clubName}
-                onChange={handleRequestFieldChange('clubName')}
-                placeholder="Nombre del club"
-                required
-                className="h-11 w-full rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-slate-500 outline-none transition-colors focus:border-emerald-400"
-              />
-              <input
-                type="text"
-                value={requestData.cityCountry}
-                onChange={handleRequestFieldChange('cityCountry')}
-                placeholder="Ciudad/Pais"
-                required
-                className="h-11 w-full rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-slate-500 outline-none transition-colors focus:border-emerald-400"
-              />
-              <input
-                type="text"
-                value={requestData.contactName}
-                onChange={handleRequestFieldChange('contactName')}
-                placeholder="Nombre de contacto"
-                required
-                className="h-11 w-full rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-slate-500 outline-none transition-colors focus:border-emerald-400"
-              />
-              <input
-                type="tel"
-                value={requestData.phone}
-                onChange={handleRequestFieldChange('phone')}
-                placeholder="Telefono de contacto"
-                required
-                className="h-11 w-full rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-slate-500 outline-none transition-colors focus:border-emerald-400"
-              />
-              <input
-                type="email"
-                value={requestData.email}
-                onChange={handleRequestFieldChange('email')}
-                placeholder="Correo de contacto"
-                required
-                className="h-11 w-full rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-slate-500 outline-none transition-colors focus:border-emerald-400"
-              />
-
-              <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={() => setIsContactOpen(false)}
-                  className="h-11 rounded-xl border border-white/20 px-4 text-sm font-semibold text-slate-200 transition-colors hover:bg-white/10"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="h-11 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-[#05281f] transition-colors hover:bg-emerald-400"
-                >
-                  {isMobileDevice() ? 'Abrir mi correo' : 'Abrir Gmail'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Footer */}
       <footer className="relative border-t border-white/[0.06] py-8">
