@@ -48,7 +48,7 @@ export default function ClubMemberGuard({ children }) {
     // IMPORTANTE: esperar a que signOut complete ANTES de recargar la página.
     // Sin el await, la sesión sigue activa en el recargo y se repite el bucle.
     supabase.auth.signOut().then(() => {
-      window.location.replace(`/${clubSlug}/login`);
+      window.location.replace(`/${clubSlug}/login?error=unauthorized`);
     });
   }, [verdict, clubSlug]);
 

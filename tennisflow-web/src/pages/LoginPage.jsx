@@ -9,7 +9,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const toClubPath = useClubPath();
-  const { clubId } = useClub();
+  const { clubId, loading: clubLoading } = useClub();
   const { user, perfil, loading: authLoading, signIn } = useAuth();
   const [searchParams] = useSearchParams();
   const [form, setForm] = useState({ email: '', password: '' });
@@ -35,6 +35,13 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    // Club aún no cargó (primera visita sin caché). No proceder.
+    if (!clubId) {
+      setError('Espera un momento, cargando datos del club...');
+      return;
+    }
+
     setLoading(true);
     loginInProgressRef.current = true;
 
@@ -104,7 +111,7 @@ export default function LoginPage() {
         </div>
         <button
           type="submit"
-          disabled={loading}
+            disabled={loading || clubLoading}
           className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold rounded-xl hover:from-emerald-400 hover:to-teal-400 transition-all shadow-lg shadow-emerald-900/30 mt-2 disabled:opacity-60 flex justify-center items-center text-center"
         >
           {loading ? 'Ingresando...' : (
