@@ -503,11 +503,17 @@ const ajustarPuntos = async (req, res) => {
   try {
     const { data: current, error: fetchErr } = await supabase
       .from('perfiles')
-      .select(campo)
+      .select(`${campo}, club_id`)
       .eq('id', id)
       .single();
 
     if (fetchErr) return res.status(404).json({ error: 'Jugador no encontrado.' });
+
+    // Un admin solo puede ajustar puntos de jugadores de su propio club.
+    const clubId = resolveClubId(req);
+    if (clubId && String(current?.club_id) !== String(clubId)) {
+      return res.status(403).json({ error: 'No tienes permiso para ajustar puntos de este jugador.' });
+    }
 
     const currentVal = Number(current?.[campo] || 0);
     const newVal = Math.max(0, currentVal + parsed);

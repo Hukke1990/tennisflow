@@ -21,6 +21,7 @@ import ClubNotFoundPage from './pages/ClubNotFoundPage';
 import SuperAdminPage from './pages/SuperAdminPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import SuperAdminRoute from './components/SuperAdminRoute';
+import ClubMemberGuard from './components/ClubMemberGuard';
 import { ClubProvider } from './context/ClubContext';
 import './index.css';
 
@@ -50,7 +51,7 @@ function App() {
           </Route>
 
           {/* Rutas principales con Navbar */}
-          <Route element={<MainLayout />}>
+          <Route element={<ClubMemberGuard><MainLayout /></ClubMemberGuard>}>
             <Route path="inicio" element={<DashboardPage />} />
             <Route path="torneos" element={<TorneosPage />} />
             <Route path="rankings" element={<RankingsPage />} />
