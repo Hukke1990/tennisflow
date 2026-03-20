@@ -8,7 +8,7 @@ CREATE TABLE perfiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     nombre_completo VARCHAR(255) NOT NULL,
     telefono TEXT,
-    ranking_elo INTEGER DEFAULT 1200,
+    ranking_elo INTEGER DEFAULT 0,
     ranking_puntos INTEGER DEFAULT 0,
     ranking_puntos_singles INTEGER DEFAULT 0,
     ranking_puntos_dobles INTEGER DEFAULT 0,
