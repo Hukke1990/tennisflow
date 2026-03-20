@@ -192,6 +192,10 @@ export default function RegistroPage() {
       email: form.email,
       password: form.password,
       options: {
+        // Redirigir al frontend (no al backend) luego de confirmar el email.
+        // window.location.origin apunta al dominio del frontend en cualquier
+        // entorno (localhost:5173 en dev, dominio de producción en prod).
+        emailRedirectTo: `${window.location.origin}/${clubSlugResolved}/inicio`,
         data: {
           nombre_completo: nombreCompleto,
           telefono: telefonoNormalizado,
