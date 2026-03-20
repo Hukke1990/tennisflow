@@ -1,47 +1,70 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { IconAlertTriangle, IconArrowRight } from '../components/icons/UiIcons';
 import { useClubPath } from '../context/ClubContext';
+import { useClub } from '../context/ClubContext';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const toClubPath = useClubPath();
-  const { user, loading: authLoading } = useAuth();
+  const { clubId } = useClub();
+  const { user, perfil, loading: authLoading, signIn } = useAuth();
+  const [searchParams] = useSearchParams();
   const [form, setForm] = useState({ email: '', password: '' });
-  const [error, setError] = useState('');
+  const [error, setError] = useState(
+    location.state?.error ||
+    (searchParams.get('error') === 'unauthorized'
+      ? 'No tienes permiso para acceder a este club. Contactá al administrador.'
+      : '')
+  );
   const [loading, setLoading] = useState(false);
+  const loginInProgressRef = useRef(false);
 
+  // Auto-redirect si el usuario ya está autenticado al llegar a /login.
+  // Solo redirige si el usuario PERTENECE a este club; de lo contrario, el guard
+  // haría un deny y se generaría un bucle infinito.
   useEffect(() => {
-    if (authLoading || !user) return;
+    if (authLoading || loginInProgressRef.current || !user) return;
+    const rol = String(perfil?.rol || '').toLowerCase();
+    if (rol !== 'super_admin' && perfil?.club_id && String(perfil.club_id) !== String(clubId)) return;
     navigate(toClubPath('/inicio'), { replace: true });
-  }, [authLoading, navigate, toClubPath, user]);
+  }, [authLoading, navigate, toClubPath, user, perfil, clubId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+    loginInProgressRef.current = true;
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email: form.email,
-      password: form.password,
-    });
+    try {
+      const { error: signInError } = await signIn(form.email, form.password, clubId);
 
-    setLoading(false);
-
-    if (authError) {
-      if (authError.message.includes('Invalid login credentials')) {
-        setError('Email o contraseña incorrectos. Verificá tus datos.');
-      } else if (authError.message.includes('Email not confirmed')) {
-        setError('Debés confirmar tu email antes de ingresar. Revisá tu bandeja de entrada.');
-      } else {
-        setError(authError.message);
+      if (signInError) {
+        if (signInError.message === 'WRONG_CLUB') {
+          setError('No tienes permiso para acceder a este club.');
+          return;
+        }
+        if (signInError.message?.includes('Invalid login credentials')) {
+          setError('Email o contraseña incorrectos. Verificá tus datos.');
+          return;
+        }
+        if (signInError.message?.includes('Email not confirmed')) {
+          setError('Debés confirmar tu email antes de ingresar. Revisá tu bandeja de entrada.');
+          return;
+        }
+        setError(signInError.message || 'Ocurrió un error al iniciar sesión.');
+        return;
       }
-      return;
-    }
 
-    navigate(toClubPath('/inicio'), { replace: true });
+      // Éxito — navegar al dashboard (ClubMemberGuard verificará membresía).
+      loginInProgressRef.current = false;
+      navigate(toClubPath('/inicio'), { replace: true });
+    } finally {
+      loginInProgressRef.current = false;
+      setLoading(false);
+    }
   };
 
   return (

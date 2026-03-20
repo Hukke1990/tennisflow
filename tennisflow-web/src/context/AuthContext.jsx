@@ -91,25 +91,64 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let active = true;
+    // Cada llamada a syncSession obtiene un ID único. Si una nueva llamada llega
+    // antes de que la anterior termine (ej: SIGNED_IN + SIGNED_OUT en rápida
+    // sucesión), la llamada vieja descarta sus resultados al completar.
+    let currentSyncId = 0;
 
     const syncSession = async (session) => {
       if (!active) return;
 
+      const syncId = ++currentSyncId;
+
       setUser(session?.user ?? null);
+
       await cargarPerfil(session?.user?.id ?? null);
 
-      if (active) {
-        setLoading(false);
-      }
+      // Si llegó una syncSession más reciente mientras esperábamos cargarPerfil,
+      // no pisamos el estado con datos stale.
+      if (!active || syncId !== currentSyncId) return;
+
+      setLoading(false);
     };
 
     // Obtener sesión actual al montar.
     supabase.auth.getSession().then(({ data: { session } }) => {
+      // Si la URL contiene tokens de confirmación de email en el hash, getSession()
+      // puede retornar null porque los tokens aún no fueron procesados por el cliente.
+      // En ese caso mantenemos loading=true y esperamos a que onAuthStateChange
+      // resuelva la sesión real. Si no dispara en 5s (tokens inválidos u otro error),
+      // un timeout de seguridad llama a syncSession(null) para salir del loading.
+      if (!session) {
+        const hasHashTokens =
+          typeof window !== 'undefined' &&
+          window.location.hash.includes('access_token');
+
+        if (hasHashTokens) {
+          const safetyTimer = setTimeout(() => {
+            if (active) syncSession(null);
+          }, 5000);
+          // onAuthStateChange limpiará el loading cuando dispare; si lo hace
+          // antes de que el timer venza, el timer llama syncSession de nuevo pero
+          // de forma idempotente (solo actualiza estado ya resuelto).
+          void safetyTimer;
+          return;
+        }
+      }
+
       syncSession(session);
     });
 
-    // Escuchar cambios de sesión (login, logout, refresh).
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Escuchar cambios de sesión (login, logout, refresh de token, etc.).
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Supabase v2 dispara INITIAL_SESSION con session=null antes de procesar
+      // los hash tokens del link de confirmación de email.
+      if (event === 'INITIAL_SESSION' && !session) {
+        const hasHashTokens =
+          typeof window !== 'undefined' &&
+          window.location.hash.includes('access_token');
+        if (hasHashTokens) return;
+      }
       syncSession(session);
     });
 
@@ -125,6 +164,27 @@ export function AuthProvider({ children }) {
     setPerfil(null);
     setViewAsPlayerPreference(false);
     persistViewAsPlayerPreference(false);
+  };
+
+  const signIn = async (email, password, clubId) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { data: null, error };
+
+    if (clubId) {
+      const { data: profile } = await supabase
+        .from('perfiles')
+        .select('club_id, rol')
+        .eq('id', data.user.id)
+        .maybeSingle();
+
+      const rol = String(profile?.rol || '').toLowerCase();
+      if (rol !== 'super_admin' && profile?.club_id && String(profile.club_id) !== String(clubId)) {
+        await supabase.auth.signOut();
+        return { data: null, error: new Error('WRONG_CLUB') };
+      }
+    }
+
+    return { data, error: null };
   };
 
   const rolReal = resolveUserRole({ perfil, user });
@@ -164,6 +224,7 @@ export function AuthProvider({ children }) {
         perfil,
         loading,
         signOut,
+        signIn,
         refreshPerfil,
         rol,
         rolReal,
