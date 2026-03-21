@@ -630,7 +630,6 @@ export default function MiPerfil() {
             className="absolute inset-0 opacity-20 pointer-events-none"
             style={{ backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,0.16) 0px, rgba(255,255,255,0.16) 1px, transparent 1px, transparent 14px)' }}
           />
-          <div className="absolute -right-8 -top-8 text-[130px] leading-none text-amber-200/10 pointer-events-none">★</div>
 
           <div className="relative z-10 ml-24 sm:ml-52 pr-6">
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-sky-100/80">Mi ficha de jugador</p>
@@ -643,7 +642,7 @@ export default function MiPerfil() {
           </div>
 
           <div className="absolute left-4 sm:left-6 -bottom-11 sm:-bottom-16 z-20">
-            <div className="h-24 w-24 sm:h-40 sm:w-40 rounded-full p-[3px] bg-gradient-to-br from-[#f7e9aa] via-[#d4af37] to-[#8f6a16] shadow-[0_14px_24px_rgba(15,23,42,0.32)]">
+            <div className="h-24 w-24 sm:h-40 sm:w-40 rounded-full p-[3px] bg-gradient-to-br from-[#f7e9aa] via-[#d4af37] to-[#8f6a16] shadow-[0_14px_24px_rgba(15,23,42,0.32)] ring-1 ring-[#A6CE39]/30">
               <div className="h-full w-full rounded-full p-[4px] bg-gradient-to-br from-[#f4e8bf] to-[#d1ac43]">
                 <div className="h-full w-full rounded-full overflow-hidden ring-2 ring-[#f9f0d0] bg-slate-100">
                   {fotoMostrada && !photoLoadFailed ? (

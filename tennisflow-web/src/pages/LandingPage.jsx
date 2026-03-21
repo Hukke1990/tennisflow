@@ -20,10 +20,7 @@ function MockPlayerCard() {
       {/* ── Profile header banner ── */}
       <div className="relative h-[78px] bg-gradient-to-br from-[#0b2a4a] via-[#0e3d6e] to-[#1560a8] overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_75%_25%,rgba(166,206,57,0.10),transparent_55%)]" />
-        <div className="absolute right-3 top-2 opacity-15">
-          <Star className="h-10 w-10 text-[#a6ce39]" fill="currentColor" />
-        </div>
-        <div className="absolute bottom-2 left-[70px]">
+        <div className="absolute inset-y-0 left-[70px] right-3 flex flex-col justify-center">
           <p className="text-[6px] font-extrabold uppercase tracking-[0.18em] text-slate-400">Mi Ficha de Jugador</p>
           <p className="text-[13px] font-black text-white leading-tight">Gastón Ramírez</p>
           <p className="text-[7px] text-blue-300/80">gaston@setgo.app</p>
@@ -33,7 +30,7 @@ function MockPlayerCard() {
       {/* ── Avatar overlapping header ── */}
       <div className="px-3 -mt-7 flex items-end gap-2 mb-1">
         <div className="relative shrink-0">
-          <div className="w-14 h-14 rounded-full ring-[2.5px] ring-white bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-xl">
+          <div className="w-14 h-14 rounded-full ring-[2.5px] ring-white bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-xl" style={{ boxShadow: '0 0 0 2.5px white, 0 0 0 4px rgba(166,206,57,0.30)' }}>
             GR
           </div>
           <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-white" />
