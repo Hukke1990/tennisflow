@@ -2225,6 +2225,34 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
                             const matches = sortPartidosByOrder(rondas[rondaOrden]);
                             return renderBracketCol(rondaOrden, matches, 'mob', isFinal ? 'none' : 'right', { blurMode: !isFinal });
                           })}
+                          {/* Ficha del campeón — mobile: columna al final del cuadro */}
+                          {torneoFinalizado && finalWinnerDisplayName && (
+                            <div className="flex flex-col items-center justify-center shrink-0 pl-4">
+                              {/* Línea horizontal que viene de la final */}
+                              <div className={`self-start mt-auto mb-auto h-px w-8 ${hallOfFameMode ? 'bg-amber-400/60' : 'bg-[#a6ce39]/40'}`} />
+                              <div className="relative rounded-[28px] border border-amber-300/80 bg-white px-7 py-7 text-center shadow-2xl ring-2 ring-amber-200/90 w-64">
+                                <div className="absolute inset-0 rounded-[28px] border-2 border-amber-200/80 shadow-[0_0_26px_rgba(251,191,36,0.45)]" />
+                                <p className="text-[11px] font-black tracking-[0.28em] text-amber-700 [font-family:Georgia,Times,serif]">CAMPEÓN</p>
+                                <div className="relative mt-3 flex justify-center">
+                                  <div className="relative h-24 w-24 rounded-full border-4 border-amber-300 bg-gradient-to-br from-amber-100 to-white overflow-hidden shadow-[0_0_0_6px_rgba(251,191,36,0.24)]">
+                                    {finalWinnerMeta?.photo ? (
+                                      <img src={finalWinnerMeta.photo} alt={finalWinnerMeta.name} className="h-full w-full object-cover" />
+                                    ) : (
+                                      <div className="h-full w-full flex items-center justify-center text-amber-700 font-black text-3xl">{finalWinnerInitials}</div>
+                                    )}
+                                  </div>
+                                </div>
+                                <p className="mt-4 text-2xl font-black text-transparent bg-clip-text bg-gradient-to-b from-[#f6d67e] to-[#b88315] leading-tight [font-family:Georgia,Times,serif]">
+                                  {finalWinnerDisplayName}
+                                </p>
+                                <div className="mt-2 flex justify-center">
+                                  <div className="inline-flex items-center rounded-full border border-amber-200 bg-gradient-to-r from-[#fff1c2] to-[#f7cc60] px-3 py-1 text-xs font-black text-amber-900">
+                                    +{toSafeNonNegativeInt(pointsConfig.puntos_campeon, 0)} pts ELO
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </TransformComponent>
                       {renderZoomControls(zoomIn, zoomOut, resetTransform)}
@@ -2269,7 +2297,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
                         Gran Final
                       </h4>
                       <span className={`mt-2 inline-flex items-center rounded-full border bg-gradient-to-r px-4 py-1.5 text-[11px] font-black tracking-wide ${hallOfFameMode ? 'from-emerald-300/90 via-emerald-200/90 to-emerald-100/90 text-emerald-950 border-emerald-200/80' : 'from-[#a6ce39]/25 to-[#a6ce39]/10 text-[#a6ce39] border-[#a6ce39]/35'}`}>
-                        +{toSafeNonNegativeInt(pointsConfig.puntos_campeon, 0)} pts ELO â€” CampeÃ³n
+                        +{toSafeNonNegativeInt(pointsConfig.puntos_campeon, 0)} pts ELO — Campeón
                       </span>
                     </div>
                     <div className="w-80">
@@ -2277,6 +2305,69 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
                         renderMatchCard(partido, idx, 1, 'none')
                       )}
                     </div>
+
+                    {/* ── FICHA DEL CAMPEÓN — dentro del canvas, sigue zoom/pan ── */}
+                    {torneoFinalizado && finalWinnerDisplayName && (
+                      <div className="mt-10 flex flex-col items-center">
+                        {/* Línea vertical que conecta con la tarjeta de la final */}
+                        <div className={`w-px h-10 ${hallOfFameMode ? 'bg-amber-400/60' : 'bg-[#a6ce39]/40'}`} />
+
+                        <div className="relative flex items-end justify-center">
+                          {/* Trofeo decorativo a la izquierda */}
+                          <div className="flex items-end pb-2 absolute -left-[190px] bottom-[-36px] pointer-events-none">
+                            <img
+                              src={trophyHero}
+                              alt="Trofeo del campeon"
+                              className="h-[320px] w-[234px] object-contain drop-shadow-[0_20px_32px_rgba(251,191,36,0.56)]"
+                            />
+                          </div>
+
+                          <div className="relative rounded-[36px] border border-amber-300/80 bg-white px-11 py-10 text-center shadow-2xl ring-2 ring-amber-200/90 min-w-[450px]">
+                            <div className="absolute inset-0 rounded-[36px] border-2 border-amber-200/80 shadow-[0_0_26px_rgba(251,191,36,0.45)]" />
+
+                            <p className="text-[13px] font-black tracking-[0.28em] text-amber-700 [font-family:Georgia,Times,serif]">CAMPEÓN</p>
+
+                            <div className="relative mt-4 flex justify-center">
+                              <svg viewBox="0 0 260 120" className="absolute top-1/2 -translate-y-1/2 h-[110px] w-[250px] text-amber-300/85" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <path d="M24 104C74 80 90 32 118 16" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
+                                <path d="M42 108C80 88 96 52 118 34" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+                                <path d="M236 104C186 80 170 32 142 16" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
+                                <path d="M218 108C180 88 164 52 142 34" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+                              </svg>
+
+                              <div className="relative h-36 w-36 rounded-full border-4 border-amber-300 bg-gradient-to-br from-amber-100 to-white overflow-hidden shadow-[0_0_0_8px_rgba(251,191,36,0.24)]">
+                                {finalWinnerMeta?.photo ? (
+                                  <img src={finalWinnerMeta.photo} alt={finalWinnerMeta.name} className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="h-full w-full flex items-center justify-center text-amber-700 font-black text-4xl">{finalWinnerInitials}</div>
+                                )}
+                              </div>
+                            </div>
+
+                            <p className="mt-5 text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-[#f6d67e] to-[#b88315] leading-[1.02] [font-family:Georgia,Times,serif]">
+                              {finalWinnerDisplayName}
+                            </p>
+
+                            <div className="mt-3 flex justify-center">
+                              <div className="relative inline-flex items-center rounded-full border border-amber-200 bg-gradient-to-r from-[#fff1c2] to-[#f7cc60] px-4 py-1.5 text-sm font-black text-amber-900 shadow-[0_6px_16px_rgba(245,158,11,0.28)]">
+                                +{toSafeNonNegativeInt(pointsConfig.puntos_campeon, 0)} pts ELO
+                              </div>
+                            </div>
+
+                            <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                              {`Campeón del torneo${finalizacionFechaLabel ? ` - ${finalizacionFechaLabel}` : ''}`}
+                            </p>
+
+                            <div className="mt-3 flex items-center justify-center gap-2 text-xs text-slate-600">
+                              {finalWinnerMeta?.ranking ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-bold">#{finalWinnerMeta.ranking}</span> : null}
+                              {finalWinnerMeta?.location ? <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold">{finalWinnerMeta.location}</span> : null}
+                            </div>
+                          </div>
+                        </div>
+                        {/* Espacio inferior para que la ficha no quede cortada */}
+                        <div className="h-16" />
+                      </div>
+                    )}
                   </div>
 
                   {/* RIGHT HALF: inner â†’ outer, connectors â†’ left */}
@@ -2296,63 +2387,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
                 </TransformWrapper>
               </div>
             </div>
-            {torneoFinalizado && finalWinnerDisplayName && (
-              <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center px-4">
-                <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_center,rgba(255,255,255,0)_0%,rgba(2,6,23,0.16)_72%,rgba(2,6,23,0.32)_100%)]"></div>
 
-                <div className="relative flex items-end justify-center">
-                  <div className="hidden lg:flex items-end pb-2 absolute -left-[190px] bottom-[-36px]">
-                    <img
-                      src={trophyHero}
-                      alt="Trofeo del campeon"
-                      className="h-[390px] w-[285px] object-contain drop-shadow-[0_20px_32px_rgba(251,191,36,0.56)]"
-                    />
-                  </div>
-
-                  <div className="relative rounded-[36px] border border-amber-300/80 bg-white px-11 py-10 text-center shadow-2xl ring-2 ring-amber-200/90 min-w-[450px] max-w-[96vw]">
-                    <div className="absolute inset-0 rounded-[36px] border-2 border-amber-200/80 shadow-[0_0_26px_rgba(251,191,36,0.45)]" />
-
-                    <p className="text-[13px] font-black tracking-[0.28em] text-amber-700 [font-family:Georgia,Times,serif]">CAMPEON</p>
-
-                    <div className="relative mt-4 flex justify-center">
-                      <svg viewBox="0 0 260 120" className="absolute top-1/2 -translate-y-1/2 h-[110px] w-[250px] text-amber-300/85" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <path d="M24 104C74 80 90 32 118 16" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-                        <path d="M42 108C80 88 96 52 118 34" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
-                        <path d="M236 104C186 80 170 32 142 16" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-                        <path d="M218 108C180 88 164 52 142 34" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
-                      </svg>
-
-                      <div className="relative h-36 w-36 rounded-full border-4 border-amber-300 bg-gradient-to-br from-amber-100 to-white overflow-hidden shadow-[0_0_0_8px_rgba(251,191,36,0.24)]">
-                        {finalWinnerMeta?.photo ? (
-                          <img src={finalWinnerMeta.photo} alt={finalWinnerMeta.name} className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center text-amber-700 font-black text-4xl">{finalWinnerInitials}</div>
-                        )}
-                      </div>
-                    </div>
-
-                    <p className="mt-5 text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-[#f6d67e] to-[#b88315] leading-[1.02] [font-family:Georgia,Times,serif]">
-                      {finalWinnerDisplayName}
-                    </p>
-
-                    <div className="mt-3 flex justify-center">
-                      <div className="relative inline-flex items-center rounded-full border border-amber-200 bg-gradient-to-r from-[#fff1c2] to-[#f7cc60] px-4 py-1.5 text-sm font-black text-amber-900 shadow-[0_6px_16px_rgba(245,158,11,0.28)]">
-                        +{toSafeNonNegativeInt(pointsConfig.puntos_campeon, 0)} pts ELO
-                      </div>
-                    </div>
-
-                    <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                      {`Campeon del torneo${finalizacionFechaLabel ? ` - ${finalizacionFechaLabel}` : ''}`}
-                    </p>
-
-                    <div className="mt-3 flex items-center justify-center gap-2 text-xs text-slate-600">
-                      {finalWinnerMeta?.ranking ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-bold">#{finalWinnerMeta.ranking}</span> : null}
-                      {finalWinnerMeta?.location ? <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold">{finalWinnerMeta.location}</span> : null}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}

@@ -34,9 +34,9 @@
    ===================================================================== */
 CREATE OR REPLACE FUNCTION crear_torneo_test(
   p_club_id   UUID,
-  p_rama      TEXT    DEFAULT 'Caballeros',
+  p_rama      TEXT    DEFAULT 'Masculino',
   p_categoria INTEGER DEFAULT 1,
-  p_cupos     INTEGER DEFAULT 32
+  p_cupos     INTEGER DEFAULT 32  -- conservado por compatibilidad, ya no se almacena
 ) RETURNS UUID AS $$
 DECLARE
   v_nombres TEXT[] := ARRAY[
@@ -45,8 +45,9 @@ DECLARE
     'Torneo Ágil',     'Open Rápido',      'Copa Veloz',
     'Torneo Relámpago'
   ];
-  v_titulo TEXT;
-  v_id     UUID;
+  v_titulo    TEXT;
+  v_id        UUID;
+  v_cancha_id UUID;
 BEGIN
   v_titulo :=
     v_nombres[1 + (random() * (array_length(v_nombres, 1) - 1))::int]
@@ -57,7 +58,6 @@ BEGIN
   INSERT INTO torneos (
     id,
     titulo,
-    cupos_max,
     costo,
     rama,
     modalidad,
@@ -67,11 +67,16 @@ BEGIN
     fecha_cierre_inscripcion,
     fecha_inicio,
     fecha_fin,
+    puntos_ronda_32,
+    puntos_ronda_16,
+    puntos_ronda_8,
+    puntos_ronda_4,
+    puntos_ronda_2,
+    puntos_campeon,
     club_id
   ) VALUES (
     gen_random_uuid(),
     v_titulo,
-    p_cupos,
     0.00,
     p_rama,
     'Singles',
@@ -81,10 +86,33 @@ BEGIN
     NOW() + INTERVAL '1 day',
     NOW() + INTERVAL '3 days',
     NOW() + INTERVAL '17 days',
+    5,   -- primera ronda
+    10,  -- octavos
+    25,  -- cuartos
+    50,  -- semifinal
+    80,  -- finalista
+    100, -- campeón
     p_club_id
   ) RETURNING id INTO v_id;
 
-  RAISE NOTICE '[TEST] Torneo creado: % (id=%)', v_titulo, v_id;
+  -- Buscar una cancha disponible del club; si no hay, crear una cancha [TEST]
+  SELECT id INTO v_cancha_id
+    FROM canchas
+   WHERE club_id = p_club_id AND esta_disponible = true
+   LIMIT 1;
+
+  IF v_cancha_id IS NULL THEN
+    INSERT INTO canchas (id, nombre, tipo_superficie, esta_disponible, en_mantenimiento, club_id)
+    VALUES (gen_random_uuid(), 'Cancha Central [TEST]', 'Polvo de ladrillo', true, false, p_club_id)
+    RETURNING id INTO v_cancha_id;
+  END IF;
+
+  -- Vincular la cancha al torneo
+  INSERT INTO torneo_canchas (torneo_id, cancha_id)
+  VALUES (v_id, v_cancha_id)
+  ON CONFLICT DO NOTHING;
+
+  RAISE NOTICE '[TEST] Torneo creado: % (id=%, cancha=%)', v_titulo, v_id, v_cancha_id;
   RETURN v_id;
 END;
 $$ LANGUAGE plpgsql;
@@ -138,7 +166,6 @@ BEGIN
       categoria,
       categoria_singles,
       categoria_dobles,
-      ranking_elo,
       ranking_elo_singles,
       ranking_elo_dobles,
       ranking_puntos,
@@ -152,7 +179,7 @@ BEGIN
       nombres_m[i] || ' [TEST]',
       'Masculino',
       1, 1, 1,
-      0, 0, 0,
+      0, 0,
       0, 0, 0,
       false, 'jugador',
       p_club_id
@@ -168,7 +195,6 @@ BEGIN
       categoria,
       categoria_singles,
       categoria_dobles,
-      ranking_elo,
       ranking_elo_singles,
       ranking_elo_dobles,
       ranking_puntos,
@@ -182,7 +208,7 @@ BEGIN
       nombres_f[i] || ' [TEST]',
       'Femenino',
       1, 1, 1,
-      0, 0, 0,
+      0, 0,
       0, 0, 0,
       false, 'jugador',
       p_club_id
@@ -208,20 +234,15 @@ $$ LANGUAGE plpgsql;
    ===================================================================== */
 CREATE OR REPLACE FUNCTION inscribir_jugadores_test(
   p_torneo_id UUID,
-  p_club_id   UUID
+  p_club_id   UUID,
+  p_limite    INTEGER DEFAULT 32
 ) RETURNS INTEGER AS $$
 DECLARE
-  v_rama       TEXT;
-  v_cupos      INTEGER;
-  v_sexo       TEXT;
-  v_existentes INTEGER := 0;
-  v_faltantes  INTEGER;
-  v_inscritos  INTEGER := 0;
+  v_rama      TEXT;
+  v_sexo      TEXT;
+  v_inscritos INTEGER := 0;
 BEGIN
-  SELECT rama, cupos_max
-    INTO v_rama, v_cupos
-    FROM torneos
-   WHERE id = p_torneo_id;
+  SELECT rama INTO v_rama FROM torneos WHERE id = p_torneo_id;
 
   IF v_rama IS NULL THEN
     RAISE EXCEPTION 'Torneo % no encontrado o sin rama definida', p_torneo_id;
@@ -229,62 +250,35 @@ BEGIN
 
   -- Mapeo rama → sexo del jugador
   v_sexo := CASE
-    WHEN v_rama = 'Caballeros' THEN 'Masculino'
-    WHEN v_rama = 'Damas'      THEN 'Femenino'
+    WHEN lower(v_rama) IN ('masculino', 'male', 'm') THEN 'Masculino'
+    WHEN lower(v_rama) IN ('femenino', 'female', 'f') THEN 'Femenino'
     ELSE NULL   -- Mixto: sin filtro
   END;
-
-  SELECT COUNT(*) INTO v_existentes
-    FROM inscripciones
-   WHERE torneo_id = p_torneo_id;
-
-  v_faltantes := COALESCE(v_cupos, 32) - v_existentes;
-
-  IF v_faltantes <= 0 THEN
-    RAISE NOTICE '[TEST] El torneo % ya está lleno (% inscriptos)', p_torneo_id, v_existentes;
-    RETURN 0;
-  END IF;
 
   WITH candidatos AS (
     SELECT p.id AS jugador_id
       FROM perfiles p
-     WHERE p.club_id              = p_club_id
+     WHERE p.club_id = p_club_id
        AND p.nombre_completo LIKE '%[TEST]%'
        AND (v_sexo IS NULL OR p.sexo::text = v_sexo)
        AND NOT EXISTS (
              SELECT 1 FROM inscripciones i
-              WHERE i.torneo_id  = p_torneo_id
-                AND i.jugador_id = p.id
+              WHERE i.torneo_id = p_torneo_id AND i.jugador_id = p.id
            )
      ORDER BY p.nombre_completo
-     LIMIT v_faltantes
+     LIMIT p_limite
   )
   INSERT INTO inscripciones (
-    id,
-    torneo_id,
-    jugador_id,
-    estado,
-    estado_inscripcion,
-    pago_confirmado,
-    fecha_inscripcion,
-    club_id
+    id, torneo_id, jugador_id, estado, estado_inscripcion,
+    pago_confirmado, fecha_inscripcion, club_id
   )
   SELECT
-    gen_random_uuid(),
-    p_torneo_id,
-    c.jugador_id,
-    'confirmada',
-    'aprobada',
-    true,
-    NOW(),
-    p_club_id
+    gen_random_uuid(), p_torneo_id, c.jugador_id,
+    'confirmada', 'aprobada', true, NOW(), p_club_id
   FROM candidatos c;
 
   GET DIAGNOSTICS v_inscritos = ROW_COUNT;
-
-  RAISE NOTICE '[TEST] % jugadores inscriptos en torneo % (rama: %, cupo: %/%)',
-    v_inscritos, p_torneo_id, v_rama, v_existentes + v_inscritos, v_cupos;
-
+  RAISE NOTICE '[TEST] % jugadores inscriptos en torneo % (rama: %)', v_inscritos, p_torneo_id, v_rama;
   RETURN v_inscritos;
 END;
 $$ LANGUAGE plpgsql;
@@ -310,20 +304,29 @@ CREATE OR REPLACE FUNCTION autocompletar_cuadro_test(
   p_torneo_id UUID
 ) RETURNS TEXT AS $$
 DECLARE
-  v_rondas   INTEGER[];
-  v_ronda    INTEGER;
-  v_ronda_min INTEGER;
-  v_scores   TEXT[] := ARRAY[
+  v_rondas     INTEGER[];
+  v_ronda      INTEGER;
+  v_ronda_prev INTEGER;
+  v_idx        INTEGER;
+  v_ronda_min  INTEGER;
+  v_scores     TEXT[] := ARRAY[
     '6-0 6-0', '6-1 6-2', '6-2 6-1', '6-3 6-0',
     '6-4 6-2', '6-4 6-3', '6-3 7-5', '7-5 6-3',
     '6-4 7-5', '7-5 6-4', '7-6 6-4', '6-4 7-6',
     '6-3 6-4 6-2', '6-4 3-6 6-3', '7-6 3-6 6-4'
   ];
-  v_updated  INTEGER := 0;
-  v_total    INTEGER := 0;
-  v_campeon  TEXT;
+  v_updated    INTEGER := 0;
+  v_total      INTEGER := 0;
+  v_campeon    TEXT;
+  -- Configuración de puntos del torneo
+  v_p32        INTEGER := 0;
+  v_p16        INTEGER := 0;
+  v_p8         INTEGER := 0;
+  v_p4         INTEGER := 0;
+  v_p2         INTEGER := 0;
+  v_pc         INTEGER := 0;
 BEGIN
-  -- Rondas ordenadas de MAYOR a MENOR (Primera Ronda primero, Final al final)
+  -- v_rondas = [32, 16, 8, 4, 2]: mayor ronda_orden = Primera Ronda, menor = Final
   SELECT ARRAY_AGG(ro ORDER BY ro DESC), MIN(ro)
     INTO v_rondas, v_ronda_min
     FROM (
@@ -336,32 +339,35 @@ BEGIN
     RETURN 'Error: no se encontraron partidos. ¿Ejecutaste el sorteo primero?';
   END IF;
 
-  FOREACH v_ronda IN ARRAY v_rondas LOOP
-    -- Paso 1: Propagar ganadores de la ronda origen a esta ronda.
-    --   jugador1_origen_partido_id/jugador2_origen_partido_id apuntan al
-    --   partido de la ronda anterior del que proviene cada jugador.
-    --   Para la Primera Ronda estos campos son NULL → nada que propagar.
-    UPDATE partidos
-       SET jugador1_id = COALESCE(
-             (SELECT ganador_id FROM partidos src
-               WHERE src.id = partidos.jugador1_origen_partido_id),
-             jugador1_id
-           ),
-           jugador2_id = COALESCE(
-             (SELECT ganador_id FROM partidos src
-               WHERE src.id = partidos.jugador2_origen_partido_id),
-             jugador2_id
-           )
-     WHERE torneo_id   = p_torneo_id
-       AND ronda_orden = v_ronda
-       AND (
-         jugador1_origen_partido_id IS NOT NULL
-         OR jugador2_origen_partido_id IS NOT NULL
-       );
+  FOR v_idx IN 1 .. array_length(v_rondas, 1) LOOP
+    v_ronda := v_rondas[v_idx];
 
-    -- Paso 2: Completar partidos con ganador y score aleatorios.
-    --   Se usa random() por fila (función VOLATILE): cada partido
-    --   recibe un ganador y un score independientes.
+    -- Propagar ganadores por orden_en_ronda (el sorteo no guarda jugador_origen_partido_id)
+    IF v_idx > 1 THEN
+      v_ronda_prev := v_rondas[v_idx - 1];
+
+      UPDATE partidos dest
+         SET jugador1_id = (
+               SELECT src.ganador_id
+                 FROM partidos src
+                WHERE src.torneo_id      = p_torneo_id
+                  AND src.ronda_orden    = v_ronda_prev
+                  AND src.orden_en_ronda = dest.orden_en_ronda * 2 - 1
+                LIMIT 1
+             ),
+             jugador2_id = (
+               SELECT src.ganador_id
+                 FROM partidos src
+                WHERE src.torneo_id      = p_torneo_id
+                  AND src.ronda_orden    = v_ronda_prev
+                  AND src.orden_en_ronda = dest.orden_en_ronda * 2
+                LIMIT 1
+             )
+       WHERE dest.torneo_id   = p_torneo_id
+         AND dest.ronda_orden = v_ronda;
+    END IF;
+
+    -- Asignar ganador y score aleatorios a los partidos con ambos jugadores definidos
     UPDATE partidos
        SET ganador_id = CASE
                           WHEN random() > 0.5 THEN jugador1_id
@@ -379,25 +385,95 @@ BEGIN
     v_total := v_total + v_updated;
   END LOOP;
 
-  -- Marcar torneo como finalizado
   UPDATE torneos SET estado = 'finalizado' WHERE id = p_torneo_id;
 
-  -- Obtener el campeón (ganador del partido Final = ronda_orden mínimo)
+  -- ──────────────────────────────────────────────────────────────────
+  -- Otorgar puntos de ranking
+  -- ──────────────────────────────────────────────────────────────────
+
+  -- Leer configuración de puntos del torneo
+  SELECT
+    COALESCE(puntos_ronda_32, 0),
+    COALESCE(puntos_ronda_16, 0),
+    COALESCE(puntos_ronda_8,  0),
+    COALESCE(puntos_ronda_4,  0),
+    COALESCE(puntos_ronda_2,  0),
+    COALESCE(puntos_campeon,  0)
+  INTO v_p32, v_p16, v_p8, v_p4, v_p2, v_pc
+  FROM torneos
+  WHERE id = p_torneo_id;
+
+  -- Actualizar metadatos de puntos en los partidos (espejo del controller de Node):
+  --   ranking_puntos_otorgados   = puntos que alcanza el ganador (ronda siguiente o campeón)
+  --   ranking_puntos_perdedor_…  = puntos del perdedor por su ronda
+  UPDATE partidos
+     SET ranking_puntos_jugador_id           = ganador_id,
+         ranking_puntos_modalidad            = 'Singles',
+         ranking_puntos_otorgados            = CASE ronda_orden
+                                                 WHEN 2  THEN v_pc
+                                                 WHEN 4  THEN v_p2
+                                                 WHEN 8  THEN v_p4
+                                                 WHEN 16 THEN v_p8
+                                                 WHEN 32 THEN v_p16
+                                                 ELSE 0
+                                               END,
+         ranking_puntos_perdedor_jugador_id  = CASE
+                                                 WHEN ganador_id = jugador1_id THEN jugador2_id
+                                                 ELSE jugador1_id
+                                               END,
+         ranking_puntos_perdedor_modalidad   = 'Singles',
+         ranking_puntos_perdedor_otorgados   = CASE ronda_orden
+                                                 WHEN 2  THEN v_p2
+                                                 WHEN 4  THEN v_p4
+                                                 WHEN 8  THEN v_p8
+                                                 WHEN 16 THEN v_p16
+                                                 WHEN 32 THEN v_p32
+                                                 ELSE 0
+                                               END
+   WHERE torneo_id = p_torneo_id AND ganador_id IS NOT NULL;
+
+  -- Actualizar ranking_puntos_singles:
+  -- Perdedores → reciben los puntos de la ronda en que cayeron
+  UPDATE perfiles pr
+     SET ranking_puntos_singles = COALESCE(pr.ranking_puntos_singles, 0) + pts.puntos
+    FROM (
+           SELECT
+             CASE WHEN ganador_id = jugador1_id THEN jugador2_id ELSE jugador1_id END AS jugador_id,
+             CASE ronda_orden
+               WHEN 2  THEN v_p2
+               WHEN 4  THEN v_p4
+               WHEN 8  THEN v_p8
+               WHEN 16 THEN v_p16
+               WHEN 32 THEN v_p32
+               ELSE 0
+             END AS puntos
+           FROM partidos
+          WHERE torneo_id = p_torneo_id AND ganador_id IS NOT NULL
+         ) pts
+   WHERE pr.id = pts.jugador_id;
+
+  -- Campeón (nunca cae como perdedor) → recibe puntos_campeon
+  UPDATE perfiles pr
+     SET ranking_puntos_singles = COALESCE(pr.ranking_puntos_singles, 0) + v_pc
+    FROM partidos pa
+   WHERE pa.torneo_id   = p_torneo_id
+     AND pa.ronda_orden = v_ronda_min
+     AND pa.ganador_id  IS NOT NULL
+     AND pr.id          = pa.ganador_id;
+
+  -- Obtener nombre del campeón
   SELECT p.nombre_completo INTO v_campeon
     FROM partidos pa
     JOIN perfiles  p ON p.id = pa.ganador_id
-   WHERE pa.torneo_id  = p_torneo_id
+   WHERE pa.torneo_id   = p_torneo_id
      AND pa.ronda_orden = v_ronda_min
    LIMIT 1;
 
   IF v_campeon IS NULL THEN
-    RETURN format(
-      'OK: %s partidos completados. Campeón no determinado (¿cuadro vacío o sin jugadores?).',
-      v_total
-    );
+    RETURN format('OK: %s partidos completados. Campeón no determinado.', v_total);
   END IF;
 
-  RETURN format('OK: %s partidos completados. Campeón: %s', v_total, v_campeon);
+  RETURN format('OK: %s partidos completados. 🏆 Campeón: %s', v_total, v_campeon);
 END;
 $$ LANGUAGE plpgsql;
 
@@ -418,6 +494,7 @@ CREATE OR REPLACE FUNCTION limpiar_test(
 DECLARE
   v_torneos   INTEGER := 0;
   v_jugadores INTEGER := 0;
+  v_canchas   INTEGER := 0;
 BEGIN
   -- 1) Partidos de torneos [TEST] del club
   DELETE FROM partidos
@@ -443,22 +520,35 @@ BEGIN
         AND nombre_completo LIKE '%[TEST]%'
    );
 
-  -- 4) Torneos [TEST]
+  -- 4) Vinculos cancha-torneo [TEST]
+  DELETE FROM torneo_canchas
+   WHERE torneo_id IN (
+     SELECT id FROM torneos
+      WHERE club_id = p_club_id
+        AND titulo LIKE '%[TEST]%'
+   );
+
+  -- 5) Torneos [TEST]
   DELETE FROM torneos
    WHERE club_id = p_club_id
      AND titulo LIKE '%[TEST]%';
   GET DIAGNOSTICS v_torneos = ROW_COUNT;
 
-  -- 5) Perfiles [TEST]
-  --    Se hace después de borrar los partidos que los referenciaban
+  -- 6) Perfiles [TEST]
   DELETE FROM perfiles
    WHERE club_id = p_club_id
      AND nombre_completo LIKE '%[TEST]%';
   GET DIAGNOSTICS v_jugadores = ROW_COUNT;
 
+  -- 7) Canchas [TEST] (solo las que se crearon por falta de canchas reales)
+  DELETE FROM canchas
+   WHERE club_id = p_club_id
+     AND nombre LIKE '%[TEST]%';
+  GET DIAGNOSTICS v_canchas = ROW_COUNT;
+
   RETURN format(
-    'Limpieza completada: %s torneos [TEST] y %s jugadores [TEST] eliminados del club %s.',
-    v_torneos, v_jugadores, p_club_id
+    'Limpieza completada: %s torneos, %s jugadores y %s canchas [TEST] eliminados del club %s.',
+    v_torneos, v_jugadores, v_canchas, p_club_id
   );
 END;
 $$ LANGUAGE plpgsql;

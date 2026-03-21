@@ -29,11 +29,80 @@ function StepIcon({ status }) {
   return <span className="h-5 w-5 shrink-0" />;
 }
 
+const COLORS = {
+  amber: {
+    btn: 'border-amber-400/50 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 hover:border-amber-400/80',
+    spin: 'border-amber-400',
+  },
+  blue: {
+    btn: 'border-blue-400/50 bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 hover:border-blue-400/80',
+    spin: 'border-blue-400',
+  },
+};
+
+function ScenarioCard({ title, description, steps, runningSteps, onRun, loading, disabled, btnLabel, btnColor = 'amber' }) {
+  const c = COLORS[btnColor] || COLORS.amber;
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#0d1d35] p-6 space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-start gap-5">
+        <div className="flex-1 space-y-1">
+          <p className="text-white font-black text-base">{title}</p>
+          <p className="text-white/50 text-sm">{description}</p>
+          <ol className="mt-2 space-y-0.5 text-xs text-white/40 list-decimal list-inside">
+            {steps.map((s) => (
+              <li key={s.code}>
+                <code className="text-amber-300/70">{s.code}</code>{' — '}{s.desc}
+              </li>
+            ))}
+          </ol>
+        </div>
+        <button
+          type="button"
+          onClick={onRun}
+          disabled={loading || disabled}
+          className={`shrink-0 self-start flex items-center gap-2 rounded-xl border px-5 py-3 text-sm font-black
+            disabled:cursor-not-allowed disabled:opacity-40 transition-all duration-150 ${c.btn}`}
+        >
+          {loading ? (
+            <>
+              <span className={`h-4 w-4 animate-spin rounded-full border-2 border-t-transparent ${c.spin}`} />
+              Generando…
+            </>
+          ) : (
+            <><span aria-hidden="true">⚡</span>{btnLabel}</>
+          )}
+        </button>
+      </div>
+      {runningSteps.length > 0 && (
+        <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2.5">
+          {runningSteps.map((step, i) => (
+            // eslint-disable-next-line react/no-array-index-key
+            <div key={i} className="flex items-start gap-3">
+              <StepIcon status={step.status} />
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-semibold ${
+                  step.status === 'done'    ? 'text-emerald-300' :
+                  step.status === 'error'   ? 'text-red-300'     :
+                  step.status === 'loading' ? 'text-amber-300'   : 'text-white/50'
+                }`}>{step.label}</p>
+                {step.note && <p className="text-xs text-white/40 mt-0.5 truncate">{step.note}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DevToolsPanel() {
   const { rolReal } = useAuth();
   const { clubId } = useClub();
   const [loading, setLoading] = useState(false);
+  const [loadingManual, setLoadingManual] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
   const [steps, setSteps] = useState([]);
+  const [stepsManual, setStepsManual] = useState([]);
   const [toast, setToast] = useState(null);
 
   // Seguridad estricta: solo super_admin
@@ -58,6 +127,80 @@ export default function DevToolsPanel() {
     });
   };
 
+  const handleLimpiar = async () => {
+    const confirmed = window.confirm(
+      '¿Eliminar TODOS los datos [TEST] de este club? (torneos, jugadores y canchas de prueba)',
+    );
+    if (!confirmed) return;
+    if (!clubId) { showToast('No se pudo obtener el club actual.', 'error'); return; }
+
+    setCleaning(true);
+    try {
+      const { data, error } = await supabase.rpc('limpiar_test', { p_club_id: clubId });
+      if (error) throw new Error(error.message);
+      setSteps([]);
+      showToast(data || 'Datos de prueba eliminados.', 'ok');
+    } catch (err) {
+      showToast(err.message || 'Error al limpiar.', 'error');
+    } finally {
+      setCleaning(false);
+    }
+  };
+
+  const handleGenerarTorneoManual = async () => {
+    const confirmed = window.confirm(
+      '¿Estás seguro? Esto cargará 64 jugadores y un torneo abierto listo para completar manualmente.',
+    );
+    if (!confirmed) return;
+    if (!clubId) { showToast('No se pudo obtener el club actual.', 'error'); return; }
+
+    setLoadingManual(true);
+    setStepsManual([]);
+
+    const appendManual = (label) =>
+      setStepsManual((prev) => [...prev, { label, status: 'loading', note: '' }]);
+    const markManual = (status, note = '') =>
+      setStepsManual((prev) => {
+        const copy = [...prev];
+        if (copy.length > 0) copy[copy.length - 1] = { ...copy[copy.length - 1], status, note };
+        return copy;
+      });
+
+    try {
+      appendManual('Creando torneo de prueba...');
+      const { data: torneoId, error: e1 } = await supabase.rpc('crear_torneo_test', {
+        p_club_id: clubId, p_rama: 'Masculino', p_categoria: 1, p_cupos: 32,
+      });
+      if (e1) throw new Error(`Error al crear torneo: ${e1.message}`);
+      markManual('done', `ID: ${String(torneoId).slice(0, 8)}…`);
+
+      appendManual('Generando 64 jugadores con nombres reales...');
+      const { error: e2 } = await supabase.rpc('generar_jugadores_test', {
+        p_club_id: clubId, p_cantidad: 32,
+      });
+      if (e2) throw new Error(`Error al generar jugadores: ${e2.message}`);
+      markManual('done', '32 masculinos + 32 femeninos');
+
+      appendManual('Inscribiendo jugadores en el torneo...');
+      const { data: inscriptos, error: e3 } = await supabase.rpc('inscribir_jugadores_test', {
+        p_torneo_id: torneoId, p_club_id: clubId,
+      });
+      if (e3) throw new Error(`Error al inscribir jugadores: ${e3.message}`);
+      markManual('done', `${inscriptos} jugadores inscriptos`);
+
+      appendManual('Ejecutando sorteo automático...');
+      await axios.post(`/api/torneos/${torneoId}/sorteo`);
+      markManual('done', 'Cuadro generado — listo para completar manualmente');
+
+      showToast('¡Torneo listo para prueba manual!', 'ok');
+    } catch (err) {
+      markManual('error', err.message || 'Error desconocido');
+      showToast(err.message || 'Error desconocido', 'error');
+    } finally {
+      setLoadingManual(false);
+    }
+  };
+
   const handleGenerarTorneoCompleto = async () => {
     const confirmed = window.confirm(
       '¿Estás seguro? Esto cargará 64 jugadores y un torneo completo en este club.',
@@ -77,7 +220,7 @@ export default function DevToolsPanel() {
       appendStep('Creando torneo de prueba...');
       const { data: torneoId, error: e1 } = await supabase.rpc('crear_torneo_test', {
         p_club_id: clubId,
-        p_rama: 'Caballeros',
+        p_rama: 'Masculino',
         p_categoria: 1,
         p_cupos: 32,
       });
@@ -141,89 +284,64 @@ export default function DevToolsPanel() {
         </p>
       </div>
 
-      {/* Tarjeta principal */}
-      <div className="rounded-2xl border border-white/10 bg-[#0d1d35] p-6 space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-start gap-5">
-          {/* Descripción */}
-          <div className="flex-1 space-y-1">
-            <p className="text-white font-black text-base">
-              Generar Torneo de Prueba Completo (64 Jugadores)
-            </p>
-            <p className="text-white/50 text-sm">
-              Ejecuta en secuencia las funciones SQL de automatización:
-            </p>
-            <ol className="mt-2 space-y-0.5 text-xs text-white/40 list-decimal list-inside">
-              <li>
-                <code className="text-amber-300/70">crear_torneo_test</code>
-                {' — '}torneo Singles Caballeros Cat.1 (32 cupos)
-              </li>
-              <li>
-                <code className="text-amber-300/70">generar_jugadores_test</code>
-                {' — '}32 masculinos + 32 femeninos con nombres reales
-              </li>
-              <li>
-                <code className="text-amber-300/70">inscribir_jugadores_test</code>
-                {' — '}inscribe los jugadores al torneo creado
-              </li>
-              <li>
-                <span className="text-amber-300/70">POST /api/torneos/:id/sorteo</span>
-                {' — '}genera el cuadro oficial
-              </li>
-              <li>
-                <code className="text-amber-300/70">autocompletar_cuadro_test</code>
-                {' — '}simula resultados aleatorios hasta el campeón
-              </li>
-            </ol>
-          </div>
+      {/* Tarjeta: prueba manual */}
+      <ScenarioCard
+        title="Torneo Abierto para Prueba Manual (64 Jugadores)"
+        description="Crea el torneo, genera jugadores, los inscribe y sortea el cuadro. No completa resultados — podés jugarlos manualmente desde la app."
+        steps={[
+          { code: 'crear_torneo_test', desc: 'torneo Singles Caballeros Cat.1' },
+          { code: 'generar_jugadores_test', desc: '32 masculinos + 32 femeninos' },
+          { code: 'inscribir_jugadores_test', desc: 'inscribe al torneo' },
+          { code: 'POST /api/torneos/:id/sorteo', desc: 'genera el cuadro — sin autocompletar' },
+        ]}
+        runningSteps={stepsManual}
+        onRun={handleGenerarTorneoManual}
+        loading={loadingManual}
+        disabled={loading || cleaning || !clubId}
+        btnLabel="Generar Torneo Manual (64 Jugadores)"
+        btnColor="blue"
+      />
 
-          {/* Botón */}
-          <button
-            type="button"
-            onClick={handleGenerarTorneoCompleto}
-            disabled={loading || !clubId}
-            className="shrink-0 flex items-center gap-2 rounded-xl border border-amber-400/50
-              bg-amber-500/20 px-5 py-3 text-sm font-black text-amber-300
-              hover:bg-amber-500/30 hover:border-amber-400/80
-              disabled:cursor-not-allowed disabled:opacity-40
-              transition-all duration-150 self-start"
-          >
-            {loading ? (
-              <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
-                Generando…
-              </>
-            ) : (
-              <>
-                <span aria-hidden="true">⚡</span>
-                Generar Torneo de Prueba Completo (64 Jugadores)
-              </>
-            )}
-          </button>
-        </div>
+      {/* Tarjeta: torneo completo */}
+      <ScenarioCard
+        title="Torneo Completo con Resultados Simulados (64 Jugadores)"
+        description="Ejecuta todo el flujo automáticamente: crea torneo, genera jugadores, sortea el cuadro y simula resultados hasta el campeón."
+        steps={[
+          { code: 'crear_torneo_test', desc: 'torneo Singles Caballeros Cat.1' },
+          { code: 'generar_jugadores_test', desc: '32 masculinos + 32 femeninos' },
+          { code: 'inscribir_jugadores_test', desc: 'inscribe al torneo' },
+          { code: 'POST /api/torneos/:id/sorteo', desc: 'genera el cuadro oficial' },
+          { code: 'autocompletar_cuadro_test', desc: 'simula resultados hasta el campeón' },
+        ]}
+        runningSteps={steps}
+        onRun={handleGenerarTorneoCompleto}
+        loading={loading}
+        disabled={loadingManual || cleaning || !clubId}
+        btnLabel="Generar Torneo Completo (64 Jugadores)"
+        btnColor="amber"
+      />
 
-        {/* Progreso paso a paso */}
-        {steps.length > 0 && (
-          <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2.5">
-            {steps.map((step, i) => (
-              // eslint-disable-next-line react/no-array-index-key
-              <div key={i} className="flex items-start gap-3">
-                <StepIcon status={step.status} />
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-semibold ${
-                    step.status === 'done'    ? 'text-emerald-300' :
-                    step.status === 'error'   ? 'text-red-300'     :
-                    step.status === 'loading' ? 'text-amber-300'   : 'text-white/50'
-                  }`}>
-                    {step.label}
-                  </p>
-                  {step.note && (
-                    <p className="text-xs text-white/40 mt-0.5 truncate">{step.note}</p>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+      {/* Botón limpiar */}
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={handleLimpiar}
+          disabled={loading || loadingManual || cleaning || !clubId}
+          className="flex items-center gap-2 rounded-xl border border-red-500/40
+            bg-red-500/10 px-5 py-3 text-sm font-black text-red-400
+            hover:bg-red-500/20 hover:border-red-500/60
+            disabled:cursor-not-allowed disabled:opacity-40
+            transition-all duration-150"
+        >
+          {cleaning ? (
+            <>
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />
+              Limpiando…
+            </>
+          ) : (
+            <><span aria-hidden="true">🗑️</span> Eliminar Datos de Prueba [TEST]</>
+          )}
+        </button>
       </div>
 
       {/* Toast de notificación */}
