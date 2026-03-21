@@ -94,6 +94,8 @@ export default function RegistroPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -222,32 +224,32 @@ export default function RegistroPage() {
   };
 
   return (
-    <div>
-      <h2 className="text-2xl font-black text-white mb-1">Crear Cuenta</h2>
-      <p className="text-gray-400 text-sm mb-8">Únete a SetGo y participá en torneos</p>
+    <div className="w-full">
+      <h2 className="text-xl font-black text-white mb-1">Crear Cuenta</h2>
+      <p className="text-slate-400 text-sm mb-6">Únete a SetGo y participá en torneos</p>
 
       {clubLoading ? (
-        <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-gray-300 inline-flex items-center gap-2">
-          <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-          Resolviendo club invitante...
+        <div className="mb-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4 flex items-center gap-2.5">
+          <div className="w-4 h-4 border-2 border-[#A6CE39]/40 border-t-[#A6CE39] rounded-full animate-spin flex-shrink-0" />
+          <span className="text-sm text-slate-400">Resolviendo club invitante...</span>
         </div>
       ) : (
-        <div className="mb-6 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-emerald-300 mb-2">Invitación</p>
-          <div className="inline-flex items-center gap-3">
+        <div className="mb-6 rounded-2xl border border-[#A6CE39]/20 bg-[#A6CE39]/[0.06] p-4">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] mb-2.5" style={{ color: 'rgba(166,206,57,0.7)' }}>Invitación</p>
+          <div className="flex items-center gap-3">
             {clubInvitante?.logo_url ? (
               <img
                 src={clubInvitante.logo_url}
                 alt={`Logo ${clubInvitante.nombre}`}
-                className="w-10 h-10 rounded-full object-cover ring-2 ring-emerald-300/40"
+                className="w-9 h-9 rounded-full object-cover ring-2 ring-[#A6CE39]/30"
               />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-white font-black text-xs inline-flex items-center justify-center ring-2 ring-emerald-300/40">
+              <div className="w-9 h-9 rounded-full bg-[#A6CE39]/20 font-black text-xs flex items-center justify-center ring-2 ring-[#A6CE39]/20" style={{ color: '#A6CE39' }}>
                 {clubInitials}
               </div>
             )}
-            <p className="text-sm text-emerald-100">
-              Estás registrándote en <span className="font-black">{clubInvitante?.nombre}</span>
+            <p className="text-sm text-white/80">
+              Registrándote en <span className="font-black text-white">{clubInvitante?.nombre}</span>
             </p>
           </div>
         </div>
@@ -256,55 +258,50 @@ export default function RegistroPage() {
       {!clubLoading && (
         <>
           {error && (
-            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-xl inline-flex items-start gap-2">
-              <IconAlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-              <span>{error}</span>
+            <div className="mb-5 p-3.5 rounded-2xl bg-red-500/10 border border-red-500/25 flex items-start gap-2.5">
+              <IconAlertTriangle className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
+              <span className="text-red-300 text-sm leading-snug">{error}</span>
             </div>
           )}
           {success && (
-            <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm rounded-xl inline-flex items-start gap-2">
-              <IconCheckCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-              <span>{success}</span>
+            <div className="mb-5 p-3.5 rounded-2xl bg-[#A6CE39]/10 border border-[#A6CE39]/25 flex items-start gap-2.5">
+              <IconCheckCircle className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: '#A6CE39' }} />
+              <span className="text-sm leading-snug" style={{ color: 'rgba(166,206,57,0.9)' }}>{success}</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Nombre</label>
+                <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 mb-1.5">Nombre</label>
                 <input type="text" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})}
                   placeholder="Roger" required
-                  className="w-full bg-white/5 border border-white/10 text-white placeholder-gray-600 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all" />
+                  className="w-full bg-white/[0.05] border border-white/10 text-white placeholder-slate-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#A6CE39]/50 focus:ring-2 focus:ring-[#A6CE39]/15 transition-all" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Apellido</label>
+                <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 mb-1.5">Apellido</label>
                 <input type="text" value={form.apellido} onChange={e => setForm({...form, apellido: e.target.value})}
                   placeholder="Federer" required
-                  className="w-full bg-white/5 border border-white/10 text-white placeholder-gray-600 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all" />
+                  className="w-full bg-white/[0.05] border border-white/10 text-white placeholder-slate-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#A6CE39]/50 focus:ring-2 focus:ring-[#A6CE39]/15 transition-all" />
               </div>
             </div>
+
             <div>
-              <label className="block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Teléfono / WhatsApp</label>
+              <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 mb-1.5">Teléfono / WhatsApp</label>
               <div className="flex gap-2">
-                {/* Selector de prefijo de país */}
                 <div ref={dialRef} className="relative flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => { setDialOpen((o) => !o); setDialSearch(''); }}
-                    className="h-12 flex items-center gap-1.5 px-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                    className="h-[46px] flex items-center gap-1.5 px-3 bg-white/[0.05] border border-white/10 rounded-xl text-white text-sm hover:bg-white/10 transition-colors focus:outline-none focus:border-[#A6CE39]/50 focus:ring-2 focus:ring-[#A6CE39]/15"
                   >
-                    <img
-                      src={flagUrl(dialCountry.code)}
-                      alt={dialCountry.name}
-                      className="w-6 h-auto rounded-sm object-cover"
-                    />
-                    <span className="font-mono text-emerald-300">{dialCountry.dial}</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 text-gray-400 transition-transform ${dialOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    <img src={flagUrl(dialCountry.code)} alt={dialCountry.name} className="w-6 h-auto rounded-sm object-cover" />
+                    <span className="font-mono text-[0.8rem]" style={{ color: '#A6CE39' }}>{dialCountry.dial}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 text-slate-500 transition-transform ${dialOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                   </button>
 
                   {dialOpen && (
-                    <div className="absolute z-50 top-full mt-1 left-0 w-64 rounded-xl bg-[#0d1b35] border border-white/10 shadow-2xl shadow-black/60 overflow-hidden">
-                      {/* Buscador */}
+                    <div className="absolute z-50 top-full mt-1 left-0 w-64 rounded-2xl bg-[#0a1628] border border-white/10 shadow-2xl shadow-black/70 overflow-hidden">
                       <div className="p-2 border-b border-white/10">
                         <input
                           type="text"
@@ -312,10 +309,9 @@ export default function RegistroPage() {
                           value={dialSearch}
                           onChange={(e) => setDialSearch(e.target.value)}
                           placeholder="Buscar país..."
-                          className="w-full bg-white/5 border border-white/10 text-white placeholder-gray-500 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-emerald-500/50"
+                          className="w-full bg-white/[0.05] border border-white/10 text-white placeholder-slate-500 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-[#A6CE39]/40"
                         />
                       </div>
-                      {/* Lista de países */}
                       <ul className="max-h-48 overflow-y-auto py-1">
                         {COUNTRY_DIAL_CODES
                           .filter((c) => {
@@ -328,16 +324,13 @@ export default function RegistroPage() {
                                 type="button"
                                 onClick={() => { setDialCountry(c); setDialOpen(false); setDialSearch(''); }}
                                 className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-white/10 transition-colors ${
-                                  c.name === dialCountry.name ? 'text-emerald-300 bg-emerald-500/10' : 'text-white'
+                                  c.name === dialCountry.name ? 'bg-[#A6CE39]/10' : ''
                                 }`}
+                                style={c.name === dialCountry.name ? { color: '#A6CE39' } : { color: 'white' }}
                               >
-                                <img
-                                  src={flagUrl(c.code)}
-                                  alt={c.name}
-                                  className="w-6 h-auto rounded-sm object-cover flex-shrink-0"
-                                />
+                                <img src={flagUrl(c.code)} alt={c.name} className="w-6 h-auto rounded-sm object-cover flex-shrink-0" />
                                 <span className="flex-1 truncate">{c.name}</span>
-                                <span className="font-mono text-gray-400 text-xs">{c.dial}</span>
+                                <span className="font-mono text-slate-400 text-xs">{c.dial}</span>
                               </button>
                             </li>
                           ))
@@ -347,7 +340,6 @@ export default function RegistroPage() {
                   )}
                 </div>
 
-                {/* Campo de número local */}
                 <input
                   type="tel"
                   value={localNumber}
@@ -355,45 +347,93 @@ export default function RegistroPage() {
                   placeholder="1122334455"
                   required
                   inputMode="numeric"
-                  className="flex-1 min-w-0 bg-white/5 border border-white/10 text-white placeholder-gray-600 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
+                  className="flex-1 min-w-0 bg-white/[0.05] border border-white/10 text-white placeholder-slate-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#A6CE39]/50 focus:ring-2 focus:ring-[#A6CE39]/15 transition-all"
                 />
               </div>
-              <p className="mt-1.5 text-[11px] text-gray-500">Solo dígitos, sin el 0 o el 15 inicial. Ej: para Argentina 11 2233 4455 → <span className="text-gray-400">1122334455</span></p>
+              <p className="mt-1.5 text-[11px] text-slate-600">Sin el 0 o el 15 inicial. Ej: Argentina 11 2233 4455 → <span className="text-slate-500">1122334455</span></p>
             </div>
+
             <div>
-              <label className="block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Email</label>
+              <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 mb-1.5">Email</label>
               <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})}
                 placeholder="usuario@email.com" required
-                className="w-full bg-white/5 border border-white/10 text-white placeholder-gray-600 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all" />
+                className="w-full bg-white/[0.05] border border-white/10 text-white placeholder-slate-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#A6CE39]/50 focus:ring-2 focus:ring-[#A6CE39]/15 transition-all" />
             </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Contraseña</label>
-                <input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})}
-                  placeholder="••••••••" required
-                  className="w-full bg-white/5 border border-white/10 text-white placeholder-gray-600 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all" />
+                <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 mb-1.5">Contraseña</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={form.password}
+                    onChange={e => setForm({...form, password: e.target.value})}
+                    placeholder="••••••••"
+                    required
+                    className="w-full bg-white/[0.05] border border-white/10 text-white placeholder-slate-600 rounded-xl px-4 py-3 pr-10 text-sm focus:outline-none focus:border-[#A6CE39]/50 focus:ring-2 focus:ring-[#A6CE39]/15 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(v => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1"
+                    tabIndex={-1}
+                    aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  >
+                    {showPassword ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 4.411m0 0L21 21" /></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                    )}
+                  </button>
+                </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Confirmar</label>
-                <input type="password" value={form.confirmar} onChange={e => setForm({...form, confirmar: e.target.value})}
-                  placeholder="••••••••" required
-                  className="w-full bg-white/5 border border-white/10 text-white placeholder-gray-600 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all" />
+                <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 mb-1.5">Confirmar</label>
+                <div className="relative">
+                  <input
+                    type={showConfirm ? 'text' : 'password'}
+                    value={form.confirmar}
+                    onChange={e => setForm({...form, confirmar: e.target.value})}
+                    placeholder="••••••••"
+                    required
+                    className="w-full bg-white/[0.05] border border-white/10 text-white placeholder-slate-600 rounded-xl px-4 py-3 pr-10 text-sm focus:outline-none focus:border-[#A6CE39]/50 focus:ring-2 focus:ring-[#A6CE39]/15 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(v => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1"
+                    tabIndex={-1}
+                    aria-label={showConfirm ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  >
+                    {showConfirm ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 4.411m0 0L21 21" /></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
-            <button type="submit" disabled={loading}
-              className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold rounded-xl hover:from-emerald-400 hover:to-teal-400 transition-all shadow-lg shadow-emerald-900/30 mt-2 disabled:opacity-60">
-              {loading ? 'Creando cuenta...' : (
-                <span className="inline-flex items-center gap-1.5">
-                  Crear Cuenta
-                  <IconTennisBall className="h-4 w-4" />
-                </span>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 rounded-xl font-bold text-sm text-[#040e1c] mt-2 disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+              style={{ background: loading ? '#6b8c2a' : '#A6CE39', boxShadow: '0 4px 24px rgba(166,206,57,0.25)' }}
+            >
+              {loading ? (
+                <><div className="h-4 w-4 rounded-full border-2 border-[#040e1c]/40 border-t-[#040e1c] animate-spin" />Creando cuenta...</>
+              ) : (
+                <>Crear Cuenta <IconTennisBall className="h-4 w-4" /></>
               )}
             </button>
           </form>
 
-          <p className="text-center text-gray-500 text-sm mt-6">
+          <p className="text-slate-500 text-sm mt-6">
             ¿Ya tenés cuenta?{' '}
-            <Link to={toClubPath('/login')} className="text-emerald-400 hover:text-emerald-300 font-semibold">Iniciá sesión</Link>
+            <Link to={toClubPath('/login')} className="font-semibold hover:text-white transition-colors" style={{ color: '#A6CE39' }}>
+              Iniciá sesión
+            </Link>
           </p>
         </>
       )}
