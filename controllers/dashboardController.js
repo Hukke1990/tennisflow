@@ -59,6 +59,10 @@ const fetchPerfilCompat = async (jugadorId, clubId) => {
 
 const fetchRankingCompat = async (clubId) => {
   const selectOptions = [
+    'id, nombre_completo, ranking_elo, ranking_elo_singles, ranking_elo_dobles, categoria, foto_url, rol, es_admin',
+    'id, nombre_completo, ranking_elo_singles, ranking_elo_dobles, categoria, foto_url, rol, es_admin',
+    'id, nombre_completo, ranking_elo, ranking_elo_singles, ranking_elo_dobles, categoria, foto_url, rol',
+    'id, nombre_completo, ranking_elo_singles, ranking_elo_dobles, categoria, foto_url, rol',
     'id, nombre_completo, ranking_elo, ranking_elo_singles, ranking_elo_dobles, categoria, foto_url',
     'id, nombre_completo, ranking_elo_singles, ranking_elo_dobles, categoria, foto_url',
     'id, nombre_completo, ranking_elo, categoria, foto_url',
@@ -77,6 +81,7 @@ const fetchRankingCompat = async (clubId) => {
       .from('perfiles')
       .select(columns)
       .eq('club_id', clubId)
+      .not('rol', 'in', '("admin","super_admin")')
       .limit(200);
 
     if (!error) {
@@ -85,8 +90,26 @@ const fetchRankingCompat = async (clubId) => {
 
     lastError = error;
     if (!isMissingColumnError(error)) {
+      // Si el error NO es de columna faltante (ej: la columna rol no existe aun),
+      // intentar sin filtro de rol como fallback de último recurso.
       break;
     }
+  }
+
+  // Fallback sin filtro de rol en DB
+  for (const columns of selectOptions.slice(-4)) {
+    const { data, error } = await supabase
+      .from('perfiles')
+      .select(columns)
+      .eq('club_id', clubId)
+      .limit(200);
+
+    if (!error) {
+      return { data: data || [], error: null };
+    }
+
+    lastError = error;
+    if (!isMissingColumnError(error)) break;
   }
 
   return { data: [], error: lastError };
@@ -353,7 +376,14 @@ const getDashboard = async (req, res) => {
     }
 
     const rankingOrdenado = [...(rankingData || [])]
-      .filter((j) => !adminIds.has(String(j?.id || '').trim()))
+      .filter((j) => {
+        // Doble capa: adminIds (segunda query) + rol/es_admin (del select si se incluyó)
+        if (adminIds.has(String(j?.id || '').trim())) return false;
+        const rol = normalizeRole(j?.rol);
+        if (ADMIN_ROLES.has(rol)) return false;
+        if (j?.es_admin === true) return false;
+        return true;
+      })
       .sort((a, b) => resolveRankingValue(b) - resolveRankingValue(a))
       .slice(0, 5);
 

@@ -126,6 +126,8 @@ const fetchTournamentWinsByPlayers = async (playerIds = [], clubTournamentIds = 
 
 const fetchRankingsCompat = async ({ sexo, categoriaField, categoria, clubId }) => {
   const selectOptions = [
+    'id, nombre_completo, foto_url, sexo, categoria, categoria_singles, categoria_dobles, ranking_puntos, ranking_puntos_singles, ranking_puntos_dobles, ranking_elo_singles, ranking_elo_dobles, rol, es_admin',
+    'id, nombre_completo, foto_url, sexo, categoria, categoria_singles, categoria_dobles, ranking_puntos, ranking_puntos_singles, ranking_puntos_dobles, ranking_elo_singles, ranking_elo_dobles, rol',
     'id, nombre_completo, foto_url, sexo, categoria, categoria_singles, categoria_dobles, ranking_puntos, ranking_puntos_singles, ranking_puntos_dobles, ranking_elo_singles, ranking_elo_dobles',
     'id, nombre_completo, foto_url, sexo, categoria, categoria_singles, categoria_dobles, ranking_puntos, ranking_puntos_singles, ranking_puntos_dobles',
     'id, nombre_completo, foto_url, sexo, categoria, categoria_singles, categoria_dobles',
@@ -133,6 +135,25 @@ const fetchRankingsCompat = async ({ sexo, categoriaField, categoria, clubId }) 
 
   let lastError = null;
   for (const columns of selectOptions) {
+    const { data, error } = await supabase
+      .from('perfiles')
+      .select(columns)
+      .eq('club_id', clubId)
+      .eq('sexo', sexo)
+      .eq(categoriaField, categoria)
+      .not('nombre_completo', 'is', null)
+      .not('rol', 'in', '("admin","super_admin")');
+
+    if (!error) {
+      return { data: data || [], error: null };
+    }
+
+    lastError = error;
+    if (!isMissingColumnError(error)) break;
+  }
+
+  // Fallback sin filtro de rol en DB (columna puede no existir en instancias antiguas)
+  for (const columns of selectOptions.slice(-2)) {
     const { data, error } = await supabase
       .from('perfiles')
       .select(columns)
@@ -287,6 +308,10 @@ const getRankings = async (req, res) => {
     }
 
     const rows = Array.isArray(data) ? data : [];
+
+    // Filtro de admins: doble capa
+    // 1) Si `rol` vino en la query (select options con rol), filtramos directamente en JS
+    // 2) Además, hacemos la segunda query como respaldo para cubrir es_admin=true
     let adminIds = new Set();
     if (rows.length > 0) {
       const { adminIds: resolvedAdminIds, error: adminFilterError } = await fetchAdminProfileIdsCompat(clubId);
@@ -297,7 +322,14 @@ const getRankings = async (req, res) => {
     }
 
     const sortedRows = rows
-      .filter((jugador) => !adminIds.has(String(jugador?.id || '').trim()))
+      .filter((jugador) => {
+        if (adminIds.has(String(jugador?.id || '').trim())) return false;
+        // Filtro JS por rol (disponible si la query lo incluyó)
+        const rol = normalizeRole(jugador?.rol);
+        if (ADMIN_ROLES.has(rol)) return false;
+        if (jugador?.es_admin === true) return false;
+        return true;
+      })
       .sort((a, b) => {
         const aPoints = resolvePointsByModalidad(a, modalidad);
         const bPoints = resolvePointsByModalidad(b, modalidad);
