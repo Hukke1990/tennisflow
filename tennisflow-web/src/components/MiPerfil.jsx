@@ -420,44 +420,54 @@ export default function MiPerfil() {
 
   useEffect(() => {
     if (!user?.id) return;
-    axios.get(`${API_URL}/api/perfil/${user.id}`)
-      .then(async ({ data }) => {
-        setForm({
-          nombre_completo: data.nombre_completo || '',
-          apellido: data.apellido || '',
-          telefono: data.telefono || '',
-          localidad: data.localidad || '',
-          // Inicializar selector de bandera a partir del teléfono guardado
-          // (se aplica fuera del form para no mezclar estados)
-          foto_url: data.foto_url || '',
-          sexo: data.sexo || 'Masculino',
-          mano_dominante: data.mano_dominante || 'Diestro',
-          estilo_reves: data.estilo_reves || '1 mano',
-          altura: data.altura || '',
-          peso: data.peso || '',
-          categoria_singles: (data.categoria_singles ?? data.categoria ?? 3).toString(),
-          categoria_dobles: (data.categoria_dobles ?? 3).toString(),
-        });
-        setSelectedPhoto(null);
-        setPhotoLoadFailed(false);
-        // Parsear teléfono guardado para iniciar selector de bandera
-        const parsed = parseStoredPhone(data.telefono || '');
-        setDialCountry(parsed.country);
-        setLocalNumber(parsed.local);
-        const resolved = await resolveProfilePhotoUrl(data.foto_url || '');
-        setPhotoDisplayUrl(resolved);
-        setPhotoPreviewUrl((prev) => {
-          safeRevokeObjectUrl(prev);
-          return '';
-        });
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+
+    const loadPerfil = async () => {
+      const { data } = await supabase
+        .from('perfiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (!data) { setLoading(false); return; }
+
+      setForm({
+        nombre_completo: data.nombre_completo || '',
+        apellido: data.apellido || '',
+        telefono: data.telefono || '',
+        localidad: data.localidad || '',
+        foto_url: data.foto_url || '',
+        sexo: data.sexo || 'Masculino',
+        mano_dominante: data.mano_dominante || 'Diestro',
+        estilo_reves: data.estilo_reves || '1 mano',
+        altura: data.altura || '',
+        peso: data.peso || '',
+        categoria_singles: (data.categoria_singles ?? data.categoria ?? 3).toString(),
+        categoria_dobles: (data.categoria_dobles ?? 3).toString(),
+      });
+      setSelectedPhoto(null);
+      setPhotoLoadFailed(false);
+      const parsed = parseStoredPhone(data.telefono || '');
+      setDialCountry(parsed.country);
+      setLocalNumber(parsed.local);
+      const resolved = await resolveProfilePhotoUrl(data.foto_url || '');
+      setPhotoDisplayUrl(resolved);
+      setPhotoPreviewUrl((prev) => { safeRevokeObjectUrl(prev); return ''; });
+      setLoading(false);
+    };
+
+    loadPerfil().catch(() => setLoading(false));
   }, [user]);
 
   useEffect(() => () => {
     safeRevokeObjectUrl(photoPreviewUrl);
   }, [photoPreviewUrl]);
+
+  // Resetear el flag de error cuando llega una URL firmada válida
+  useEffect(() => {
+    if (photoDisplayUrl || perfilCtx?.foto_url_resolved) {
+      setPhotoLoadFailed(false);
+    }
+  }, [photoDisplayUrl, perfilCtx?.foto_url_resolved]);
 
   useEffect(() => {
     if (!user?.id || loading) return;
@@ -560,14 +570,18 @@ export default function MiPerfil() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Si el usuario llenó el campo de número, validar y construir; si no, conservar el guardado
     const digits = localNumber.replace(/\D/g, '');
-    const telefonoNormalizado = `${dialCountry.dial}${digits}`;
-    if (!INTERNATIONAL_PHONE_REGEX.test(telefonoNormalizado)) {
-      setStatus({
-        type: 'error',
-        msg: 'Ingresa un número de teléfono válido (mínimo 7 dígitos sin el prefijo de país).',
-      });
-      return;
+    let telefonoNormalizado = form.telefono || '';
+    if (digits) {
+      telefonoNormalizado = `${dialCountry.dial}${digits}`;
+      if (!INTERNATIONAL_PHONE_REGEX.test(telefonoNormalizado)) {
+        setStatus({
+          type: 'error',
+          msg: 'Ingresa un número de teléfono válido (mínimo 7 dígitos sin el prefijo de país).',
+        });
+        return;
+      }
     }
 
     setSaving(true); setStatus(null);
@@ -599,7 +613,12 @@ export default function MiPerfil() {
         payload.categoria_dobles = parseInt(categoriaDoblesForm, 10);
       }
 
-      await axios.put(`${API_URL}/api/perfil/${user.id}`, payload);
+      const { error: saveError } = await supabase
+        .from('perfiles')
+        .update(payload)
+        .eq('id', user.id);
+
+      if (saveError) throw new Error(saveError.message);
 
       await refreshPerfil?.();
 
@@ -690,7 +709,8 @@ export default function MiPerfil() {
     ? form.nombre_completo.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     : '?';
 
-  const fotoMostrada = photoPreviewUrl || photoDisplayUrl || form.foto_url || perfilCtx?.foto_url_resolved || '';
+  // Usar solo URLs firmadas/blob; form.foto_url es URL pública que puede dar 403
+  const fotoMostrada = photoPreviewUrl || photoDisplayUrl || perfilCtx?.foto_url_resolved || '';
 
   const canEditCategorias = isAdminReal && !viewAsJugador;
   const categoriaSingles = toSafeInt(form.categoria_singles, 0);
@@ -955,7 +975,6 @@ export default function MiPerfil() {
                       value={localNumber}
                       onChange={(e) => setLocalNumber(e.target.value.replace(/\D/g, ''))}
                       placeholder="1122334455"
-                      required
                       inputMode="numeric"
                       className="flex-1 min-w-0 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-400 transition-all text-gray-800 bg-white text-sm"
                     />
