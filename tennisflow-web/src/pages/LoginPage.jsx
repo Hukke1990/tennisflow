@@ -23,10 +23,13 @@ export default function LoginPage() {
   const loginInProgressRef = useRef(false);
 
   // Auto-redirect si el usuario ya está autenticado al llegar a /login.
-  // Solo redirige si el usuario PERTENECE a este club; de lo contrario, el guard
-  // haría un deny y se generaría un bucle infinito.
+  // Guards:
+  // - loginInProgressRef: previene redirect mientras handleSubmit está corriendo
+  // - !perfil || perfil.id !== user.id: espera que perfil del usuario ACTUAL cargue
+  //   (evita race condition donde perfil=null o perfil es stale de otro usuario)
   useEffect(() => {
     if (authLoading || loginInProgressRef.current || !user) return;
+    if (!perfil || perfil.id !== user.id) return; // Esperar perfil del usuario actual
     const rol = String(perfil?.rol || '').toLowerCase();
     if (rol !== 'super_admin' && perfil?.club_id && String(perfil.club_id) !== String(clubId)) return;
     navigate(toClubPath('/inicio'), { replace: true });

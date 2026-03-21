@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useClub } from '../context/ClubContext';
@@ -43,16 +44,19 @@ export default function ClubMemberGuard({ children }) {
   }
 
   // Efecto de lado — solo actúa cuando hay mismatch confirmado (cambio manual de URL)
+  // o cuando un usuario de otro club logró pasar el login (race condition).
+  // No necesitamos redirect aquí: <Navigate> ya lo maneja de forma inmediata.
   useEffect(() => {
     if (verdict !== 'deny') return;
-    // IMPORTANTE: esperar a que signOut complete ANTES de recargar la página.
-    // Sin el await, la sesión sigue activa en el recargo y se repite el bucle.
-    supabase.auth.signOut().then(() => {
-      window.location.replace(`/${clubSlug}/login?error=unauthorized`);
-    });
-  }, [verdict, clubSlug]);
+    supabase.auth.signOut(); // signOut en background; la navegación ya ocurrió vía <Navigate>
+  }, [verdict]);
 
-  if (verdict === 'loading' || verdict === 'deny') return <Spinner />;
+  if (verdict === 'loading') return <Spinner />;
+
+  // Redirigir sin mostrar spinner ni recargar la página, pasando el error por state
+  if (verdict === 'deny') {
+    return <Navigate to={`/${clubSlug}/login`} replace state={{ error: 'No tenés permiso para acceder a este club. Contactá al administrador.' }} />;
+  }
 
   return children;
 }

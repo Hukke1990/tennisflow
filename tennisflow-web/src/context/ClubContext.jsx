@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -31,6 +32,9 @@ export const buildClubPath = (clubSlug, path = '') => {
 export function ClubProvider({ children }) {
   const { clubSlug } = useParams();
   const navigate = useNavigate();
+  // navigateRef evita que navigate (inestable en RR v7) cause re-runs del effect
+  const navigateRef = useRef(navigate);
+  useEffect(() => { navigateRef.current = navigate; });
 
   // Pre-seed desde localStorage para que clubId sea disponible de inmediato
   // en la primera renderización, evitando el spinner bloqueante.
@@ -85,7 +89,7 @@ export function ClubProvider({ children }) {
         }
         setClub(null);
         setLoading(false);
-        navigate('/club-no-encontrado', {
+        navigateRef.current('/club-no-encontrado', {
           replace: true,
           state: { clubSlug: slug },
         });
@@ -103,7 +107,7 @@ export function ClubProvider({ children }) {
         }
         setClub(null);
         setLoading(false);
-        navigate('/club-no-encontrado', {
+        navigateRef.current('/club-no-encontrado', {
           replace: true,
           state: { clubSlug: slug },
         });
@@ -128,7 +132,8 @@ export function ClubProvider({ children }) {
     return () => {
       active = false;
     };
-  }, [clubSlug, navigate]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clubSlug]);
 
   const value = useMemo(() => ({
     club,
