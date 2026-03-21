@@ -373,6 +373,7 @@ const TABS = [
 export default function MiPerfil() {
   const {
     user,
+    perfil: perfilCtx,
     refreshPerfil,
     isAdminReal,
     viewAsJugador,
@@ -689,7 +690,8 @@ export default function MiPerfil() {
     ? form.nombre_completo.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     : '?';
 
-  const fotoMostrada = photoPreviewUrl || photoDisplayUrl || form.foto_url;
+  const fotoMostrada = photoPreviewUrl || photoDisplayUrl || form.foto_url || perfilCtx?.foto_url_resolved || '';
+
   const canEditCategorias = isAdminReal && !viewAsJugador;
   const categoriaSingles = toSafeInt(form.categoria_singles, 0);
   const categoriaDobles = toSafeInt(form.categoria_dobles, 0);
