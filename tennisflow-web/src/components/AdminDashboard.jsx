@@ -4,6 +4,7 @@ import { io } from 'socket.io-client';
 import TournamentBracket from './TournamentBracket';
 import AdminLiveControl from './AdminLiveControl';
 import AdminControlPanel from './AdminControlPanel';
+import DevToolsPanel from './DevToolsPanel';
 import { useAuth } from '../context/AuthContext';
 
 const DEFAULT_POINTS_BY_ROUND = {
@@ -626,6 +627,7 @@ export default function AdminDashboard() {
     { id: 'cuadros', label: 'Cuadros y Cronogramas' },
     { id: 'live-control', label: 'Control en Vivo' },
     ...(isAdminOrSuperAdmin ? [{ id: 'panel-control', label: '⚙ Panel de Control' }] : []),
+    ...(isSuperAdmin ? [{ id: 'dev-tools', label: '🛠️ Dev Tools' }] : []),
   ];
 
   return (
@@ -1335,6 +1337,10 @@ export default function AdminDashboard() {
 
       {activeTab === 'panel-control' && isAdminOrSuperAdmin && (
         <AdminControlPanel />
+      )}
+
+      {activeTab === 'dev-tools' && isSuperAdmin && (
+        <DevToolsPanel />
       )}
 
     </div>
