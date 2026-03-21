@@ -100,6 +100,17 @@ const Navbar = memo(function Navbar() {
           <div className="flex items-center gap-3">
             {user ? (
               <>
+                {/* Mis Clubes — visible cuando el usuario pertenece a más de un club */}
+                {(perfil?.clubIds?.length ?? 0) > 1 && (
+                  <Link to={toClubPath('/mis-clubes')}
+                    className="hidden lg:block text-xs font-bold px-3 py-1.5 rounded-lg border transition-all duration-200"
+                    style={{ borderColor: 'rgba(166,206,57,0.35)', color: '#A6CE39' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(166,206,57,0.10)'; e.currentTarget.style.borderColor = 'rgba(166,206,57,0.6)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.borderColor = 'rgba(166,206,57,0.35)'; }}
+                  >
+                    Mis Clubes
+                  </Link>
+                )}
                 {isAdmin && (
                   <Link to={toClubPath('/admin')}
                     className="hidden lg:block text-xs font-bold px-3 py-1.5 rounded-lg border border-emerald-400/45 text-emerald-300 bg-transparent hover:bg-emerald-500/16 hover:text-emerald-100 hover:border-emerald-300/70 transition-all duration-200">

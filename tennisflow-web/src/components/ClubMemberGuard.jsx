@@ -36,11 +36,15 @@ export default function ClubMemberGuard({ children }) {
     verdict = 'allow';
   } else {
     const rol = String(perfil.rol || '').toLowerCase();
-    if (rol === 'super_admin' || !perfil.club_id || String(perfil.club_id) === String(clubId)) {
-      verdict = 'allow';
-    } else {
-      verdict = 'deny';
-    }
+    const clubIds = perfil.clubIds || [];
+    // Multi-tenancy: verificar club primario Y tabla de membresías
+    const esDelClub = (
+      rol === 'super_admin' ||
+      !perfil.club_id ||          // legacy: sin club asignado
+      String(perfil.club_id) === String(clubId) ||
+      clubIds.includes(String(clubId))
+    );
+    verdict = esDelClub ? 'allow' : 'deny';
   }
 
   // Efecto de lado — solo actúa cuando hay mismatch confirmado (cambio manual de URL)

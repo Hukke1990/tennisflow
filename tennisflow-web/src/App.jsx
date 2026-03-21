@@ -19,6 +19,7 @@ import RankingsPage from './pages/RankingsPage';
 import BracketPage from './pages/BracketPage';
 import ClubNotFoundPage from './pages/ClubNotFoundPage';
 import SuperAdminPage from './pages/SuperAdminPage';
+import MisClubesPage from './pages/MisClubesPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import SuperAdminRoute from './components/SuperAdminRoute';
 import ClubMemberGuard from './components/ClubMemberGuard';
@@ -49,6 +50,9 @@ function App() {
             <Route path="login" element={<LoginPage />} />
             <Route path="registro" element={<RegistroPage />} />
           </Route>
+
+          {/* Selector de club — accesible para usuarios autenticados; fuera del guard */}
+          <Route path="mis-clubes" element={<MisClubesPage />} />
 
           {/* Rutas principales con Navbar */}
           <Route element={<ClubMemberGuard><MainLayout /></ClubMemberGuard>}>

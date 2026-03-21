@@ -194,9 +194,6 @@ export default function RegistroPage() {
       email: form.email,
       password: form.password,
       options: {
-        // Redirigir al frontend (no al backend) luego de confirmar el email.
-        // window.location.origin apunta al dominio del frontend en cualquier
-        // entorno (localhost:5173 en dev, dominio de producción en prod).
         emailRedirectTo: `${window.location.origin}/${clubSlugResolved}/inicio`,
         data: {
           nombre_completo: nombreCompleto,
@@ -210,7 +207,40 @@ export default function RegistroPage() {
     setLoading(false);
 
     if (authError) {
+      const msg = String(authError.message || '').toLowerCase();
+
+      // Usuario ya existe en Auth → vincular al nuevo club en lugar de re-crear
+      if (msg.includes('already registered') || msg.includes('user already registered')) {
+        const { data: vincData, error: vincError } = await supabase.rpc(
+          'vincular_usuario_a_club',
+          { p_email: form.email.toLowerCase().trim(), p_club_id: clubId }
+        );
+
+        if (vincError || !vincData?.ok) {
+          // RPC no disponible aún o error inesperado
+          setError('No pudimos vincularte al club. Intentá iniciar sesión directamente.');
+        } else {
+          setSuccess('Cuenta detectada. Te hemos vinculado al nuevo club, ya podés iniciar sesión.');
+        }
+        return;
+      }
+
       setError(toSignupErrorMessage(authError.message));
+      return;
+    }
+
+    // Supabase no devuelve error para emails ya existentes cuando "confirm email" está activo
+    // pero sí retorna identities:[] — esto indica que el usuario ya estaba registrado.
+    if (data?.user && (data.user.identities?.length ?? 1) === 0) {
+      const { data: vincData, error: vincError } = await supabase.rpc(
+        'vincular_usuario_a_club',
+        { p_email: form.email.toLowerCase().trim(), p_club_id: clubId }
+      );
+      if (vincError || !vincData?.ok) {
+        setError('No pudimos vincularte al club. Intentá iniciar sesión directamente.');
+      } else {
+        setSuccess('Cuenta detectada. Te hemos vinculado al nuevo club, ya podés iniciar sesión.');
+      }
       return;
     }
 

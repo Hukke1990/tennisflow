@@ -66,21 +66,32 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [viewAsPlayerPreference, setViewAsPlayerPreference] = useState(() => readViewAsPlayerPreference());
 
-  // Cargar perfil extendido desde la tabla perfiles.
+  // Cargar perfil extendido desde la tabla perfiles + membresías multi-club.
   const cargarPerfil = async (userId) => {
     if (!userId) {
       setPerfil(null);
       return null;
     }
 
-    const { data } = await supabase.from('perfiles').select('*').eq('id', userId).single();
+    const [{ data }, { data: clubes }] = await Promise.all([
+      supabase.from('perfiles').select('*').eq('id', userId).single(),
+      supabase.from('usuario_clubes').select('club_id').eq('user_id', userId),
+    ]);
+
     if (!data) {
       setPerfil(null);
       return null;
     }
 
     const foto_url_resolved = await resolveProfilePhotoUrl(data.foto_url || '');
-    const nextPerfil = { ...data, foto_url_resolved };
+
+    // Construir lista unificada de club IDs (primario + multi-tenancy)
+    const clubIds = (clubes || []).map(c => String(c.club_id));
+    if (data.club_id && !clubIds.includes(String(data.club_id))) {
+      clubIds.push(String(data.club_id));
+    }
+
+    const nextPerfil = { ...data, foto_url_resolved, clubIds };
     setPerfil(nextPerfil);
     return nextPerfil;
   };
@@ -171,14 +182,17 @@ export function AuthProvider({ children }) {
     if (error) return { data: null, error };
 
     if (clubId) {
-      const { data: profile } = await supabase
-        .from('perfiles')
-        .select('club_id, rol')
-        .eq('id', data.user.id)
-        .maybeSingle();
+      const [{ data: profile }, { data: membership }] = await Promise.all([
+        supabase.from('perfiles').select('club_id, rol').eq('id', data.user.id).maybeSingle(),
+        supabase.from('usuario_clubes').select('club_id')
+          .eq('user_id', data.user.id).eq('club_id', clubId).maybeSingle(),
+      ]);
 
       const rol = String(profile?.rol || '').toLowerCase();
-      if (rol !== 'super_admin' && profile?.club_id && String(profile.club_id) !== String(clubId)) {
+      // Multi-tenancy: verificar tanto club primario como tabla de membresías
+      const esDelClub = membership?.club_id || String(profile?.club_id || '') === String(clubId);
+
+      if (rol !== 'super_admin' && !esDelClub) {
         await supabase.auth.signOut();
         return { data: null, error: new Error('WRONG_CLUB') };
       }
