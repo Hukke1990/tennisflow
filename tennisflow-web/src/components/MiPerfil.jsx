@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -28,6 +28,57 @@ const MAX_PROFILE_PHOTO_SIZE_MB = 5;
 const PROFILE_UPDATED_EVENT = 'tennisflow:profile-updated';
 const PROFILE_UPDATED_STORAGE_KEY = 'tennisflow:profile-updated';
 const INTERNATIONAL_PHONE_REGEX = /^\+[1-9]\d{7,14}$/;
+
+const COUNTRY_DIAL_CODES = [
+  { code: 'ar', name: 'Argentina',        dial: '+54'   },
+  { code: 'bo', name: 'Bolivia',           dial: '+591'  },
+  { code: 'br', name: 'Brasil',            dial: '+55'   },
+  { code: 'cl', name: 'Chile',             dial: '+56'   },
+  { code: 'co', name: 'Colombia',          dial: '+57'   },
+  { code: 'cr', name: 'Costa Rica',        dial: '+506'  },
+  { code: 'cu', name: 'Cuba',              dial: '+53'   },
+  { code: 'do', name: 'Rep. Dominicana',   dial: '+1809' },
+  { code: 'ec', name: 'Ecuador',           dial: '+593'  },
+  { code: 'sv', name: 'El Salvador',       dial: '+503'  },
+  { code: 'gt', name: 'Guatemala',         dial: '+502'  },
+  { code: 'hn', name: 'Honduras',          dial: '+504'  },
+  { code: 'mx', name: 'México',            dial: '+52'   },
+  { code: 'ni', name: 'Nicaragua',         dial: '+505'  },
+  { code: 'pa', name: 'Panamá',            dial: '+507'  },
+  { code: 'py', name: 'Paraguay',          dial: '+595'  },
+  { code: 'pe', name: 'Perú',              dial: '+51'   },
+  { code: 'pr', name: 'Puerto Rico',       dial: '+1787' },
+  { code: 'uy', name: 'Uruguay',           dial: '+598'  },
+  { code: 've', name: 'Venezuela',         dial: '+58'   },
+  { code: 'es', name: 'España',            dial: '+34'   },
+  { code: 'us', name: 'Estados Unidos',    dial: '+1'    },
+  { code: 'ca', name: 'Canadá',            dial: '+1'    },
+  { code: 'gb', name: 'Reino Unido',       dial: '+44'   },
+  { code: 'fr', name: 'Francia',           dial: '+33'   },
+  { code: 'de', name: 'Alemania',          dial: '+49'   },
+  { code: 'it', name: 'Italia',            dial: '+39'   },
+  { code: 'pt', name: 'Portugal',          dial: '+351'  },
+  { code: 'au', name: 'Australia',         dial: '+61'   },
+  { code: 'il', name: 'Israel',            dial: '+972'  },
+];
+
+const flagUrl = (code) => `https://flagcdn.com/24x18/${code}.png`;
+
+// Descompone un teléfono guardado (+5491122334455) en { country, local }.
+const parseStoredPhone = (stored = '') => {
+  const s = String(stored || '').trim();
+  if (!s.startsWith('+')) {
+    return { country: COUNTRY_DIAL_CODES[0], local: s.replace(/\D/g, '') };
+  }
+  // Ordenar por longitud de prefijo descendente para evitar falsos match (+1 vs +1787)
+  const sorted = [...COUNTRY_DIAL_CODES].sort((a, b) => b.dial.length - a.dial.length);
+  for (const c of sorted) {
+    if (s.startsWith(c.dial)) {
+      return { country: c, local: s.slice(c.dial.length) };
+    }
+  }
+  return { country: COUNTRY_DIAL_CODES[0], local: s.slice(1) };
+};
 
 const normalizePhoneInput = (rawValue = '') => {
   const text = String(rawValue || '');
@@ -347,6 +398,24 @@ export default function MiPerfil() {
   const [passwordForm, setPasswordForm] = useState({ nueva: '', confirmar: '' });
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordStatus, setPasswordStatus] = useState(null);
+  const [dialCountry, setDialCountry] = useState(COUNTRY_DIAL_CODES[0]);
+  const [localNumber, setLocalNumber] = useState('');
+  const [dialOpen, setDialOpen] = useState(false);
+  const [dialSearch, setDialSearch] = useState('');
+  const dialRef = useRef(null);
+
+  // Cerrar dropdown al hacer click fuera
+  useEffect(() => {
+    if (!dialOpen) return;
+    const handleOutside = (e) => {
+      if (dialRef.current && !dialRef.current.contains(e.target)) {
+        setDialOpen(false);
+        setDialSearch('');
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [dialOpen]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -357,6 +426,8 @@ export default function MiPerfil() {
           apellido: data.apellido || '',
           telefono: data.telefono || '',
           localidad: data.localidad || '',
+          // Inicializar selector de bandera a partir del teléfono guardado
+          // (se aplica fuera del form para no mezclar estados)
           foto_url: data.foto_url || '',
           sexo: data.sexo || 'Masculino',
           mano_dominante: data.mano_dominante || 'Diestro',
@@ -368,6 +439,10 @@ export default function MiPerfil() {
         });
         setSelectedPhoto(null);
         setPhotoLoadFailed(false);
+        // Parsear teléfono guardado para iniciar selector de bandera
+        const parsed = parseStoredPhone(data.telefono || '');
+        setDialCountry(parsed.country);
+        setLocalNumber(parsed.local);
         const resolved = await resolveProfilePhotoUrl(data.foto_url || '');
         setPhotoDisplayUrl(resolved);
         setPhotoPreviewUrl((prev) => {
@@ -484,11 +559,12 @@ export default function MiPerfil() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const telefonoNormalizado = normalizePhoneInput(form.telefono);
+    const digits = localNumber.replace(/\D/g, '');
+    const telefonoNormalizado = `${dialCountry.dial}${digits}`;
     if (!INTERNATIONAL_PHONE_REGEX.test(telefonoNormalizado)) {
       setStatus({
         type: 'error',
-        msg: 'Ingresa un teléfono en formato internacional. Ejemplo: +5491122334455',
+        msg: 'Ingresa un número de teléfono válido (mínimo 7 dígitos sin el prefijo de país).',
       });
       return;
     }
@@ -819,19 +895,70 @@ export default function MiPerfil() {
                 <InputField label="Nombre" id="nombre_completo" value={form.nombre_completo} onChange={handleChange('nombre_completo')} placeholder="Roger" />
                 <InputField label="Apellido" id="apellido" value={form.apellido} onChange={handleChange('apellido')} placeholder="Federer" />
                 <div>
-                  <InputField
-                    label="Telefono / WhatsApp"
-                    id="telefono"
-                    type="tel"
-                    value={form.telefono}
-                    onChange={(e) => setForm((prev) => ({ ...prev, telefono: normalizePhoneInput(e.target.value) }))}
-                    placeholder="+5491122334455"
-                    required
-                    inputMode="tel"
-                    pattern="^\+[1-9]\d{7,14}$"
-                    title="Usa formato internacional con + y solo numeros. Ej: +5491122334455"
-                  />
-                  <p className="mt-1 text-[11px] text-slate-500">Formato requerido: +codigo_pais + numero (solo digitos). Ejemplo: +5491122334455</p>
+                  <label htmlFor="telefono" className="block text-sm font-semibold text-gray-700 mb-1">Teléfono / WhatsApp</label>
+                  <div className="flex gap-2">
+                    <div ref={dialRef} className="relative flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => { setDialOpen((o) => !o); setDialSearch(''); }}
+                        className="h-[42px] flex items-center gap-1.5 px-3 bg-white border border-gray-200 rounded-xl text-gray-800 text-sm hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-400"
+                      >
+                        <img src={flagUrl(dialCountry.code)} alt={dialCountry.name} className="w-6 h-auto rounded-sm object-cover" />
+                        <span className="font-mono text-[0.8rem] text-emerald-600 font-bold">{dialCountry.dial}</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 text-gray-400 transition-transform ${dialOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </button>
+
+                      {dialOpen && (
+                        <div className="absolute z-50 top-full mt-1 left-0 w-64 rounded-2xl bg-white border border-gray-200 shadow-2xl overflow-hidden">
+                          <div className="p-2 border-b border-gray-100">
+                            <input
+                              type="text"
+                              autoFocus
+                              value={dialSearch}
+                              onChange={(e) => setDialSearch(e.target.value)}
+                              placeholder="Buscar país..."
+                              className="w-full bg-gray-50 border border-gray-200 text-gray-800 placeholder-gray-400 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-emerald-400"
+                            />
+                          </div>
+                          <ul className="max-h-48 overflow-y-auto py-1">
+                            {COUNTRY_DIAL_CODES
+                              .filter((c) => {
+                                const q = dialSearch.trim().toLowerCase();
+                                return !q || c.name.toLowerCase().includes(q) || c.dial.includes(q);
+                              })
+                              .map((c) => (
+                                <li key={`${c.dial}-${c.name}`}>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setDialCountry(c); setDialOpen(false); setDialSearch(''); }}
+                                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors ${
+                                      c.name === dialCountry.name ? 'bg-emerald-50 text-emerald-700' : 'text-gray-800'
+                                    }`}
+                                  >
+                                    <img src={flagUrl(c.code)} alt={c.name} className="w-6 h-auto rounded-sm object-cover flex-shrink-0" />
+                                    <span className="flex-1 truncate">{c.name}</span>
+                                    <span className="font-mono text-gray-400 text-xs">{c.dial}</span>
+                                  </button>
+                                </li>
+                              ))
+                            }
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
+                    <input
+                      id="telefono"
+                      type="tel"
+                      value={localNumber}
+                      onChange={(e) => setLocalNumber(e.target.value.replace(/\D/g, ''))}
+                      placeholder="1122334455"
+                      required
+                      inputMode="numeric"
+                      className="flex-1 min-w-0 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-400 transition-all text-gray-800 bg-white text-sm"
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-500">Sin el 0 o el 15 inicial. Ej: Argentina 11 2233 4455 → <span className="text-slate-400">1122334455</span></p>
                 </div>
                 <SelectField label="Sexo" id="sexo" value={form.sexo} onChange={handleChange('sexo')}
                   options={[{ value: 'Masculino', label: 'Caballeros' }, { value: 'Femenino', label: 'Damas' }]} />
