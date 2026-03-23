@@ -5,6 +5,8 @@ import axios from 'axios';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { io } from 'socket.io-client';
+import { jsPDF } from 'jspdf';
+import { FileDown } from 'lucide-react';
 import CronogramaTorneo from './CronogramaTorneo';
 import { IconAlertTriangle, IconCheckCircle } from './icons/UiIcons';
 import { resolveProfilePhotoUrl } from '../lib/profilePhoto';
@@ -548,7 +550,7 @@ const payloadMatchesTournament = (payload, torneoId) => {
 };
 
 export default function TournamentBracket({ torneoId, adminMode = false }) {
-  const { clubId: contextClubId } = useClub();
+  const { clubId: contextClubId, club } = useClub();
   const [partidos, setPartidos] = useState([]);
   const [canchas, setCanchas] = useState([]);
   const [torneoEstado, setTorneoEstado] = useState('');
@@ -576,6 +578,8 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     ganadorId: '',
     score: '',
   });
+  const [torneoTitulo, setTorneoTitulo] = useState('');
+  const [exportingBracket, setExportingBracket] = useState(false);
   const cachedScoreRef = useRef({});
   const bracketContainerRef = useRef(null);
 
@@ -634,6 +638,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
         if (!torneo) {
           setPointsConfig(DEFAULT_POINTS_CONFIG);
           setTorneoEstado('');
+          setTorneoTitulo('');
           setTorneoClubId(String(contextClubId || '').trim() || null);
           setTorneoSexo(null);
           setTorneoModalidad(null);
@@ -643,6 +648,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
 
         setPointsConfig(normalizePointsConfig(torneo));
         setTorneoEstado(String(torneo?.estado || ''));
+        setTorneoTitulo(String(torneo?.titulo || torneo?.nombre || ''));
         setTorneoClubId(String(torneo?.club_id || contextClubId || '').trim() || null);
         const rawSexo = String(torneo?.rama || torneo?.sexo || '').trim();
         setTorneoSexo(['Masculino', 'Femenino'].includes(rawSexo) ? rawSexo : null);
@@ -653,6 +659,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
         if (!cancelled) {
           setPointsConfig(DEFAULT_POINTS_CONFIG);
           setTorneoEstado('');
+          setTorneoTitulo('');
           setTorneoClubId(String(contextClubId || '').trim() || null);
           setTorneoSexo(null);
           setTorneoModalidad(null);
@@ -1353,6 +1360,282 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
 
     return pathIds;
   }, [torneoFinalizado, finalWinnerId, finalPartido, partidos, jugadoresPorPartido]);
+
+  // ── exportBracketsToPDF — pure jsPDF vector drawing ─────────────────────
+  // Defined here so bracketOrder, rondas, jugadoresPorPartido, finalWinnerDisplayName
+  // are all in scope (they are defined earlier in the component body above this point).
+  // eslint-disable-next-line no-shadow
+  const exportBracketsToPDF = useCallback(() => {
+    if (exportingBracket || !partidos.length || !bracketOrder.length) return;
+    setExportingBracket(true);
+    try {
+      const today = format(new Date(), 'dd/MM/yyyy', { locale: es });
+      const numCols = bracketOrder.length;
+      const pageFormat = numCols > 4 ? 'a3' : 'a4';
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: pageFormat });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+
+      // Palette
+      const BLACK   = [10,  10,  10];
+      const DARK    = [55,  55,  55];
+      const GRAY    = [120, 120, 120];
+      const LGRAY   = [200, 200, 200];
+      const VLGRAY  = [240, 240, 240];
+      const WIN_BG  = [240, 250, 215];
+      const CHAMP_BG = [253, 248, 228];
+      const CHAMP_G  = [175, 135,  35];
+      const WHITE   = [255, 255, 255];
+
+      pdf.setFillColor(...WHITE);
+      pdf.rect(0, 0, pageW, pageH, 'F');
+
+      // ── Header ────────────────────────────────────────────────────────
+      const mX = 12;
+      let hY = 8;
+
+      if (club?.nombre) {
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        pdf.setTextColor(...GRAY);
+        pdf.text(club.nombre.toUpperCase(), pageW / 2, hY, { align: 'center' });
+        hY += 5;
+      }
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(14);
+      pdf.setTextColor(...BLACK);
+      pdf.text(torneoTitulo || 'Cuadro del Torneo', pageW / 2, hY, { align: 'center' });
+      hY += 5.5;
+
+      const p0 = partidos[0];
+      const catLabel = [
+        p0?.categoria || p0?.torneo_categoria || p0?.categoria_nombre || '',
+        p0?.rama || p0?.sexo || '',
+      ].filter(Boolean).join(' · ');
+      if (catLabel) {
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        pdf.setTextColor(...GRAY);
+        pdf.text(catLabel, pageW / 2, hY, { align: 'center' });
+        hY += 5;
+      }
+
+      pdf.setDrawColor(...LGRAY);
+      pdf.setLineWidth(0.3);
+      pdf.line(mX, hY, pageW - mX, hY);
+      hY += 3;
+
+      // ── Footer ────────────────────────────────────────────────────────
+      const footerY = pageH - 5;
+      pdf.setFont('helvetica', 'italic');
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(...GRAY);
+      pdf.text(`Generado por SetGo · ${today}`, pageW / 2, footerY, { align: 'center' });
+
+      // ── Bracket geometry ──────────────────────────────────────────────
+      const bTop = hY;
+      const bH   = footerY - 3 - bTop;
+      const bW   = pageW - mX * 2;
+      const hasChamp   = Boolean(finalWinnerDisplayName);
+      const champRatio = hasChamp ? 0.85 : 0;
+      const colW  = bW / (numCols + champRatio);
+      const padX  = 2.5;
+      const boxW2 = colW - padX * 2;
+
+      // ── Round labels ──────────────────────────────────────────────────
+      for (let ci = 0; ci < numCols; ci++) {
+        const rKey   = bracketOrder[ci];
+        const m0     = (rondas[rKey] || [])[0];
+        const label  = (m0?.ronda || `Ronda ${ci + 1}`).toUpperCase();
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(6);
+        pdf.setTextColor(...GRAY);
+        pdf.text(label, mX + ci * colW + colW / 2, bTop - 1.5, { align: 'center' });
+      }
+
+      // ── Vertical center positions (computed left-to-right) ────────────
+      const firstRndMatches = sortPartidosByOrder(rondas[bracketOrder[0]] || []);
+      const N0    = Math.max(1, firstRndMatches.length);
+      const slotH = bH / N0;
+
+      const allCY = [];
+      allCY[0] = firstRndMatches.map((_, i) => bTop + (i + 0.5) * slotH);
+      for (let ci = 1; ci < numCols; ci++) {
+        const prev   = allCY[ci - 1];
+        const cmList = sortPartidosByOrder(rondas[bracketOrder[ci]] || []);
+        allCY[ci] = cmList.map((_, i) => {
+          const a = prev[i * 2];
+          const b = prev[i * 2 + 1];
+          if (a !== undefined && b !== undefined) return (a + b) / 2;
+          return a ?? b ?? (bTop + (i + 0.5) * slotH);
+        });
+      }
+
+      // ── Card dimensions ───────────────────────────────────────────────
+      const rowH  = Math.max(4, Math.min(5.5, slotH * 0.23));
+      const sRowH = 2.5;
+      const cardH = rowH * 2 + sRowH;
+
+      // ── Draw cards ────────────────────────────────────────────────────
+      const edges = [];
+
+      for (let ci = 0; ci < numCols; ci++) {
+        const rKey   = bracketOrder[ci];
+        const matches = sortPartidosByOrder(rondas[rKey] || []);
+        const cardX  = mX + ci * colW + padX;
+        edges[ci] = [];
+
+        matches.forEach((partido, mi) => {
+          const cy      = allCY[ci]?.[mi] ?? (bTop + (mi + 0.5) * slotH);
+          const cardTop = cy - cardH / 2;
+          const pId     = String(partido?.id || '').trim();
+          const res     = jugadoresPorPartido[pId] || {};
+          const j1      = String(res.j1Name || 'Por definir');
+          const j2      = String(res.j2Name || 'Por definir');
+          const score   = getScore(partido);
+          const wId     = String(partido?.ganador_id || '').trim();
+          const j1Win   = Boolean(wId && res.j1Id && res.j1Id === wId);
+          const j2Win   = Boolean(wId && res.j2Id && res.j2Id === wId);
+
+          // Frame
+          pdf.setFillColor(...WHITE);
+          pdf.setDrawColor(...LGRAY);
+          pdf.setLineWidth(0.18);
+          pdf.rect(cardX, cardTop, boxW2, cardH, 'FD');
+
+          // Player 1
+          if (j1Win) {
+            pdf.setFillColor(...WIN_BG);
+            pdf.rect(cardX + 0.2, cardTop + 0.1, boxW2 - 0.4, rowH - 0.1, 'F');
+          }
+          pdf.setFont('helvetica', j1Win ? 'bold' : 'normal');
+          pdf.setFontSize(j1Win ? 6.5 : 6);
+          pdf.setTextColor(...(j1Win ? BLACK : DARK));
+          pdf.text(j1.length > 32 ? `${j1.slice(0, 32)}\u2026` : j1, cardX + 1.5, cardTop + rowH - 1.3);
+
+          // Divider
+          pdf.setDrawColor(...VLGRAY);
+          pdf.setLineWidth(0.08);
+          pdf.line(cardX, cardTop + rowH, cardX + boxW2, cardTop + rowH);
+
+          // Player 2
+          const p2Top = cardTop + rowH;
+          if (j2Win) {
+            pdf.setFillColor(...WIN_BG);
+            pdf.rect(cardX + 0.2, p2Top + 0.1, boxW2 - 0.4, rowH - 0.1, 'F');
+          }
+          pdf.setFont('helvetica', j2Win ? 'bold' : 'normal');
+          pdf.setFontSize(j2Win ? 6.5 : 6);
+          pdf.setTextColor(...(j2Win ? BLACK : DARK));
+          pdf.text(j2.length > 32 ? `${j2.slice(0, 32)}\u2026` : j2, cardX + 1.5, p2Top + rowH - 1.3);
+
+          // Score row
+          if (score) {
+            const sTop = cardTop + rowH * 2;
+            pdf.setFillColor(...VLGRAY);
+            pdf.rect(cardX, sTop, boxW2, sRowH, 'F');
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(5.5);
+            pdf.setTextColor(...GRAY);
+            pdf.text(score, cardX + boxW2 / 2, sTop + sRowH - 0.6, { align: 'center' });
+          }
+
+          edges[ci][mi] = { lx: cardX, rx: cardX + boxW2, cy };
+        });
+      }
+
+      // ── Connectors ────────────────────────────────────────────────────
+      pdf.setDrawColor(...DARK);
+      pdf.setLineWidth(0.25);
+
+      for (let ci = 0; ci < numCols - 1; ci++) {
+        const cur = edges[ci];
+        const nxt = edges[ci + 1];
+        if (!cur || !nxt) continue;
+
+        nxt.forEach((nextEdge, ni) => {
+          if (!nextEdge) return;
+          const m0 = cur[ni * 2];
+          const m1 = cur[ni * 2 + 1];
+          const refEdge = m0 ?? m1;
+          if (!refEdge) return;
+          const gapMidX = nextEdge.lx - (nextEdge.lx - refEdge.rx) / 2;
+          const connY   = m0 && m1 ? (m0.cy + m1.cy) / 2 : refEdge.cy;
+          if (m0) pdf.line(m0.rx, m0.cy, gapMidX, m0.cy);
+          if (m1) pdf.line(m1.rx, m1.cy, gapMidX, m1.cy);
+          if (m0 && m1) pdf.line(gapMidX, m0.cy, gapMidX, m1.cy);
+          pdf.line(gapMidX, connY, nextEdge.lx, connY);
+        });
+      }
+
+      // ── Champion card ─────────────────────────────────────────────────
+      if (hasChamp) {
+        const fe = edges[numCols - 1]?.[0];
+        if (fe) {
+          const cX   = fe.rx + 4;
+          const cW   = colW * champRatio - 6;
+          const cH   = 18;
+          const cTop = fe.cy - cH / 2;
+
+          if (cX + cW <= pageW - mX + 1) {
+            // Gold connector
+            pdf.setDrawColor(...CHAMP_G);
+            pdf.setLineWidth(0.4);
+            pdf.line(fe.rx, fe.cy, cX, fe.cy);
+
+            // Drop shadow
+            pdf.setFillColor(210, 205, 185);
+            pdf.rect(cX + 1, cTop + 1, cW, cH, 'F');
+
+            // Card body
+            pdf.setFillColor(...CHAMP_BG);
+            pdf.setDrawColor(...CHAMP_G);
+            pdf.setLineWidth(0.5);
+            pdf.rect(cX, cTop, cW, cH, 'FD');
+
+            // Inner border (double effect)
+            pdf.setLineWidth(0.18);
+            pdf.rect(cX + 1.5, cTop + 1.5, cW - 3, cH - 3, 'D');
+
+            // Label
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(7);
+            pdf.setTextColor(...CHAMP_G);
+            pdf.text('CAMPE\u00D3N', cX + cW / 2, cTop + 6, { align: 'center' });
+
+            // Separator
+            pdf.setDrawColor(...CHAMP_G);
+            pdf.setLineWidth(0.2);
+            pdf.line(cX + 3, cTop + 7.5, cX + cW - 3, cTop + 7.5);
+
+            // Winner name
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(8);
+            pdf.setTextColor(...BLACK);
+            const champLines = pdf.splitTextToSize(finalWinnerDisplayName, cW - 4);
+            pdf.text(champLines.slice(0, 2), cX + cW / 2, cTop + 12, {
+              align: 'center',
+              lineHeightFactor: 1.3,
+            });
+          }
+        }
+      }
+
+      const safeName = (torneoTitulo || 'cuadro-torneo')
+        .replace(/\s+/g, '-')
+        .toLowerCase();
+      pdf.save(`${safeName}.pdf`);
+
+    } catch (err) {
+      console.error('[exportBracketsToPDF]', err);
+    } finally {
+      setExportingBracket(false);
+    }
+  }, [
+    bracketOrder, rondas, jugadoresPorPartido, partidos,
+    exportingBracket, torneoTitulo, finalWinnerDisplayName, club,
+  ]);
 
   const mutateProgramacion = async (partidoId, slotData, mode) => {
     setMutationBusy(true);
@@ -2123,16 +2406,29 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
           </p>
         </div>
 
-        <button
-          onClick={fetchCuadro}
-          className={`text-sm font-semibold px-4 py-2 rounded-lg border transition-colors ${
-            hallOfFameMode
-              ? 'text-amber-100 hover:text-white bg-amber-500/20 border-amber-300/45'
-              : 'text-white/80 hover:text-white bg-white/10 border-white/15 hover:bg-white/15'
-          }`}
-        >
-          Refrescar
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={fetchCuadro}
+            className={`text-sm font-semibold px-4 py-2 rounded-lg border transition-colors ${
+              hallOfFameMode
+                ? 'text-amber-100 hover:text-white bg-amber-500/20 border-amber-300/45'
+                : 'text-white/80 hover:text-white bg-white/10 border-white/15 hover:bg-white/15'
+            }`}
+          >
+            Refrescar
+          </button>
+          {activeView === 'bracket' && adminMode && (
+            <button
+              type="button"
+              onClick={exportBracketsToPDF}
+              disabled={exportingBracket}
+              className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-lg border border-white/15 bg-white/10 text-white/80 hover:text-white hover:bg-white/15 disabled:opacity-50 transition-colors"
+            >
+              <FileDown className="h-4 w-4" />
+              {exportingBracket ? 'Generando…' : 'Exportar PDF'}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-2 mb-5">
@@ -2187,6 +2483,8 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
           onPublicarCronograma={handlePublicarCronograma}
           publishing={publishing}
           actionBusy={mutationBusy}
+          torneoTitulo={torneoTitulo}
+          clubLogoUrl={club?.logo_url || ''}
         />
       ) : (
         <div ref={bracketContainerRef} className={`relative${isFullscreen ? ' bg-[#0d2740] p-4' : ''}`}>

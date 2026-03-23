@@ -1,9 +1,12 @@
 /* eslint-disable react/prop-types */
 import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {
   Clock, MapPin, Play, Check, Plus, RefreshCcw, X,
-  ChevronLeft, ChevronRight, AlertTriangle,
+  ChevronLeft, ChevronRight, AlertTriangle, FileText,
 } from 'lucide-react';
 
 const DAY_OPTIONS = [
@@ -319,6 +322,8 @@ export default function CronogramaTorneo({
   onPublicarCronograma,
   publishing = false,
   actionBusy = false,
+  torneoTitulo = '',
+  clubLogoUrl = '',
 }) {
   const [selectedDay, setSelectedDay] = useState('viernes');
   const [slotModal, setSlotModal] = useState({ open: false, canchaId: null, canchaKey: '', time: '' });
@@ -330,6 +335,7 @@ export default function CronogramaTorneo({
   const [liveScoreByPartido, setLiveScoreByPartido] = useState({});
   const [mobileCanchaIdx, setMobileCanchaIdx] = useState(0);
   const [canchaFilter, setCanchaFilter] = useState('');
+  const [exportingSchedule, setExportingSchedule] = useState(false);
 
   const referenceDateByDay = useMemo(() => {
     const referenceMap = {};
@@ -478,6 +484,162 @@ export default function CronogramaTorneo({
       })
       .sort((a, b) => Number(a.id) - Number(b.id));
   }, [partidos]);
+
+  const exportScheduleToPDF = async () => {
+    if (exportingSchedule) return;
+    setExportingSchedule(true);
+    try {
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageW  = pdf.internal.pageSize.getWidth();
+      const mL     = 12;
+      const mR     = 12;
+      const today  = format(new Date(), 'dd/MM/yyyy HH:mm');
+
+      // ── Helpers ──────────────────────────────────────────────────────
+      const drawPageHeader = (fechaLabel, catLabel) => {
+        let y = 12;
+
+        // Club name
+        if (clubLogoUrl === '' && !torneoTitulo) {
+          // nothing
+        }
+        if (torneoTitulo) {
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(8);
+          pdf.setTextColor(120, 120, 120);
+          pdf.text((torneoTitulo).toUpperCase(), pageW / 2, y, { align: 'center' });
+          y += 5;
+        }
+
+        // Big date header
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(14);
+        pdf.setTextColor(10, 22, 40);
+        pdf.text(`HOJA DE PARTIDOS — ${fechaLabel.toUpperCase()}`, pageW / 2, y, { align: 'center' });
+        y += 5.5;
+
+        // Category sub-header
+        if (catLabel) {
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(8.5);
+          pdf.setTextColor(60, 60, 60);
+          pdf.text(catLabel, pageW / 2, y, { align: 'center' });
+          y += 4.5;
+        }
+
+        // Rule line
+        pdf.setDrawColor(180, 180, 180);
+        pdf.setLineWidth(0.3);
+        pdf.line(mL, y, pageW - mR, y);
+        y += 4;
+
+        return y;
+      };
+
+      const drawFooter = () => {
+        const pageH = pdf.internal.pageSize.getHeight();
+        pdf.setFont('helvetica', 'italic');
+        pdf.setFontSize(6.5);
+        pdf.setTextColor(160, 160, 160);
+        pdf.text(
+          `Generado por SetGo · ${today}  ·  Hoja ${pdf.internal.getNumberOfPages()}`,
+          pageW / 2,
+          pageH - 5,
+          { align: 'center' },
+        );
+      };
+
+      // ── Agrupar partidos por día del torneo (igual que las pestañas del cronograma) ─
+      const sorted = [...partidos]
+        .filter((p) => p?.fecha_hora && getDayKeyFromDate(p.fecha_hora) !== null)
+        .sort((a, b) => new Date(a.fecha_hora) - new Date(b.fecha_hora));
+
+      // Detectar categoría global (del primer partido disponible)
+      const p0        = sorted[0];
+      const globalCat = [
+        p0?.categoria || p0?.torneo_categoria || p0?.categoria_nombre || '',
+        p0?.rama || p0?.sexo || '',
+      ].filter(Boolean).join(' · ');
+
+      // Map: dayKey ('viernes'/'sabado'/'domingo') → partidos[] - respeta orden de DAY_OPTIONS
+      const byDay = new Map();
+      DAY_OPTIONS.forEach(({ key }) => byDay.set(key, []));
+      sorted.forEach((p) => {
+        const key = getDayKeyFromDate(p.fecha_hora);
+        if (byDay.has(key)) byDay.get(key).push(p);
+      });
+
+      // Solo incluir días que tienen partidos, en el orden de DAY_OPTIONS
+      const days = [...byDay.entries()].filter(([, ps]) => ps.length > 0);
+
+      days.forEach(([, dayPartidos], dayIdx) => {
+        if (dayIdx > 0) pdf.addPage();
+
+        // Obtener la fecha real del primer partido de ese día para el encabezado
+        const fechaLabel = format(new Date(dayPartidos[0].fecha_hora), "EEEE d 'de' MMMM 'de' yyyy", { locale: es });
+        const startY     = drawPageHeader(fechaLabel, globalCat);
+
+        const rows = dayPartidos.map((p) => {
+          const hora   = format(new Date(p.fecha_hora), 'HH:mm');
+          const cancha = getCanchaNameFromPartido(p) || String(getCanchaId(p) || '') || '-';
+          const j1     = getJugadorLabel(p, 1) || 'Por definir';
+          const j2     = getJugadorLabel(p, 2) || 'Por definir';
+          return [hora, cancha, `${j1}  vs  ${j2}`, ''];
+        });
+
+        autoTable(pdf, {
+          startY,
+          head: [['HORA', 'CANCHA', 'PARTIDO', 'RESULTADO / SCORE']],
+          body: rows,
+          styles: {
+            fontSize: 10,
+            cellPadding: { top: 3.5, bottom: 3.5, left: 2.5, right: 2.5 },
+            lineColor: [180, 180, 180],
+            lineWidth: 0.2,
+            valign: 'middle',
+          },
+          headStyles: {
+            fillColor: [10, 22, 40],
+            textColor: 255,
+            fontStyle: 'bold',
+            fontSize: 9,
+            halign: 'center',
+          },
+          alternateRowStyles: { fillColor: [247, 249, 252] },
+          columnStyles: {
+            0: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
+            1: { cellWidth: 30 },
+            2: { cellWidth: 'auto' },
+            3: { cellWidth: 42, halign: 'center', textColor: [180, 180, 180] },
+          },
+          // Celda de resultado: texto punteado como guía para escribir a mano
+          didParseCell: (data) => {
+            if (data.section === 'body' && data.column.index === 3 && data.cell.raw === '') {
+              data.cell.text = ['· · · · · · · · · · · ·'];
+            }
+          },
+          margin: { left: mL, right: mR },
+        });
+
+        drawFooter();
+      });
+
+      // Si no había partidos con fecha
+      if (days.length === 0) {
+        drawPageHeader('SIN FECHA ASIGNADA', globalCat);
+        drawFooter();
+      }
+
+      const fileName = torneoTitulo
+        ? `cronograma-${torneoTitulo.replace(/\s+/g, '-').toLowerCase()}.pdf`
+        : 'cronograma-torneo.pdf';
+      pdf.save(fileName);
+    } catch (err) {
+      console.error('[exportScheduleToPDF]', err);
+    } finally {
+      setExportingSchedule(false);
+    }
+  };
 
   const openManualModal = ({ canchaId, canchaKey, time }) => {
     if (!adminMode) return;
@@ -805,7 +967,7 @@ export default function CronogramaTorneo({
               : `${dayLabel} · Horarios y canchas del torneo`}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           <button
             type="button"
             onClick={onRefresh}
@@ -814,6 +976,18 @@ export default function CronogramaTorneo({
           >
             <RefreshCcw className="h-4 w-4" />
           </button>
+          {adminMode && (
+            <button
+              type="button"
+              onClick={exportScheduleToPDF}
+              disabled={exportingSchedule}
+              title="Exportar cronograma a PDF"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white/60 text-xs font-bold hover:text-white hover:border-white/20 disabled:opacity-50 transition-colors"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              {exportingSchedule ? 'Generando…' : 'Exportar PDF'}
+            </button>
+          )}
           {adminMode && (
             <button
               type="button"
