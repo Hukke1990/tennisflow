@@ -205,7 +205,7 @@ const getPlanes = (_req, res) => {
  * El club y el email se resuelven desde el usuario autenticado.
  */
 const PLAN_PRICES_MP = {
-  pro:     { amount: 50, reason: 'SetGo Pro — Suscripción mensual' },
+  pro:     { amount: 50, reason: 'SetGo Pro — Suscripción mensual', amount_ars_override: 100 }, // TEST: revertir a null antes de producción real
   premium: { amount: 70, reason: 'SetGo Grand Slam — Suscripción mensual' },
 };
 
@@ -258,7 +258,7 @@ const iniciar = async (req, res) => {
     // Cotización del dólar oficial y cálculo en ARS
     const cotizacion = await fetchCotizacion();
     const monto_usd  = planPrice.amount;
-    const monto_ars  = Math.round(monto_usd * cotizacion);
+    const monto_ars  = planPrice.amount_ars_override ?? Math.round(monto_usd * cotizacion);
 
     const webhookUrl = (process.env.MP_WEBHOOK_URL || '').trim();
 
