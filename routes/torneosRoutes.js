@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const torneosController = require('../controllers/torneosController');
+const { checkPlanLimit } = require('../middlewares/checkPlanLimit');
 const partidosController = require('../controllers/partidosController');
 const {
 	requireAuth,
@@ -44,7 +45,7 @@ router.patch('/inscripciones/:inscripcionId/baja', requireAuth, torneosControlle
 router.get('/inscripciones/mis/:id', requireAuth, requireSelfOrRole({ paramName: 'id' }), torneosController.obtenerInscripcionesPorJugador);
 
 // POST /api/torneos
-router.post('/', requireAuth, requireAdmin, torneosController.crearTorneo);
+router.post('/', requireAuth, requireAdmin, checkPlanLimit('torneo'), torneosController.crearTorneo);
 
 // PUT /api/torneos/:id
 router.put('/:id', requireAuth, requireAdmin, torneosController.actualizarTorneoCompat);

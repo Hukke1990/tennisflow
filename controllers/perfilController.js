@@ -173,4 +173,23 @@ const actualizarPerfil = async (req, res) => {
   }
 };
 
-module.exports = { obtenerPerfil, actualizarPerfil };
+const contarJugadoresPorClub = async (req, res) => {
+  try {
+    const { clubId, error: clubError } = resolveClubIdFromRequestOptional(req);
+    if (clubError) return res.status(400).json({ error: clubError });
+    if (!clubId) return res.status(400).json({ error: 'club_id requerido' });
+
+    const { count, error } = await supabase
+      .from('perfiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('club_id', clubId);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({ count: count ?? 0 });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+module.exports = { obtenerPerfil, actualizarPerfil, contarJugadoresPorClub };

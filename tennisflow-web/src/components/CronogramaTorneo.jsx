@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { useClub } from '../context/ClubContext';
 import {
   Clock, MapPin, Play, Check, Plus, RefreshCcw, X,
   ChevronLeft, ChevronRight, AlertTriangle, FileText,
@@ -326,6 +327,7 @@ export default function CronogramaTorneo({
   clubLogoUrl = '',
 }) {
   const [selectedDay, setSelectedDay] = useState('viernes');
+  const { clubPlan = 'basico', club } = useClub();
   const [slotModal, setSlotModal] = useState({ open: false, canchaId: null, canchaKey: '', time: '' });
   const [selectedPartidoId, setSelectedPartidoId] = useState('');
   const [savingManual, setSavingManual] = useState(false);
@@ -495,15 +497,33 @@ export default function CronogramaTorneo({
       const mR     = 12;
       const today  = format(new Date(), 'dd/MM/yyyy HH:mm');
 
+      // Cargar logo para planes Pro y Premium
+      const isPro = clubPlan === 'pro' || clubPlan === 'premium';
+      let logoDataUrl = null;
+      if (isPro && club?.logo_url) {
+        try {
+          const resp = await fetch(club.logo_url);
+          const blob = await resp.blob();
+          logoDataUrl = await new Promise((res, rej) => {
+            const fr = new FileReader();
+            fr.onload = () => res(fr.result);
+            fr.onerror = rej;
+            fr.readAsDataURL(blob);
+          });
+        } catch { logoDataUrl = null; }
+      }
+
       // ── Helpers ──────────────────────────────────────────────────────
       const drawPageHeader = (fechaLabel, catLabel) => {
-        let y = 12;
+        let y = 10;
 
-        // Club name
-        if (clubLogoUrl === '' && !torneoTitulo) {
-          // nothing
-        }
-        if (torneoTitulo) {
+        // Logo (Pro+) o nombre del torneo
+        if (logoDataUrl) {
+          const logoSize = 12;
+          const logoX = pageW / 2 - logoSize / 2;
+          try { pdf.addImage(logoDataUrl, 'auto', logoX, y - 2, logoSize, logoSize); } catch { /* ignorar */ }
+          y += logoSize + 1;
+        } else if (torneoTitulo) {
           pdf.setFont('helvetica', 'normal');
           pdf.setFontSize(8);
           pdf.setTextColor(120, 120, 120);
@@ -541,12 +561,10 @@ export default function CronogramaTorneo({
         pdf.setFont('helvetica', 'italic');
         pdf.setFontSize(6.5);
         pdf.setTextColor(160, 160, 160);
-        pdf.text(
-          `Generado por SetGo · ${today}  ·  Hoja ${pdf.internal.getNumberOfPages()}`,
-          pageW / 2,
-          pageH - 5,
-          { align: 'center' },
-        );
+        const footerBrand = clubPlan === 'basico'
+          ? `Generado por SetGo · ${today}  ·  Hoja ${pdf.internal.getNumberOfPages()}`
+          : `${club?.nombre || ''} · ${today}  ·  Hoja ${pdf.internal.getNumberOfPages()}`;
+        pdf.text(footerBrand, pageW / 2, pageH - 5, { align: 'center' });
       };
 
       // ── Agrupar partidos por día del torneo (igual que las pestañas del cronograma) ─

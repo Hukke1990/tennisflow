@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -53,6 +54,16 @@ export function ClubProvider({ children }) {
     return null;
   });
   const [loading, setLoading] = useState(true);
+  const realtimeChannelRef = useRef(null);
+
+  // Actualiza el plan del club en el estado local sin refetch completo.
+  // Llamado por el hook useClubPlanRealtime cuando llega un evento de Supabase Realtime.
+  const updateClubPlan = useCallback((newPlan) => {
+    setClub((prev) => {
+      if (!prev || prev.plan === newPlan) return prev;
+      return { ...prev, plan: newPlan };
+    });
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -71,7 +82,7 @@ export function ClubProvider({ children }) {
 
       const { data, error } = await supabase
         .from('clubes')
-        .select('id, nombre, slug, logo_url, config_visual')
+        .select('id, nombre, slug, logo_url, config_visual, plan, white_label')
         .eq('slug', slug)
         .maybeSingle();
 
@@ -135,12 +146,55 @@ export function ClubProvider({ children }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clubSlug]);
 
+  // ── Supabase Realtime: escuchar cambios de plan en la tabla clubes ──────────
+  // Cuando el webhook de MP actualiza clubes.plan, el evento llega aquí en
+  // tiempo real y updateClubPlan actualiza el contexto sin reload de página.
+  useEffect(() => {
+    const id = club?.id;
+    if (!id) return;
+
+    // Si ya hay un canal activo para este club no crear otro
+    if (realtimeChannelRef.current) {
+      supabase.removeChannel(realtimeChannelRef.current);
+    }
+
+    const channel = supabase
+      .channel(`club-plan-${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event:  'UPDATE',
+          schema: 'public',
+          table:  'clubes',
+          filter: `id=eq.${id}`,
+        },
+        (payload) => {
+          const newPlan = payload.new?.plan;
+          if (newPlan) {
+            console.log(`[Realtime] Plan del club actualizado: ${newPlan}`);
+            updateClubPlan(newPlan);
+          }
+        },
+      )
+      .subscribe();
+
+    realtimeChannelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      realtimeChannelRef.current = null;
+    };
+  }, [club?.id, updateClubPlan]);
+
   const value = useMemo(() => ({
     club,
     clubId: club?.id || null,
     clubSlug: club?.slug || clubSlug || null,
+    clubPlan: club?.plan || 'basico',
+    clubWhiteLabel: club?.white_label || false,
     loading,
-  }), [club, clubSlug, loading]);
+    updateClubPlan,
+  }), [club, clubSlug, loading, updateClubPlan]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
