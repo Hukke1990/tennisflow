@@ -15,8 +15,8 @@ const PLAN_PRICES_ACTIVACION = {
   basico:  { amount: 30, reason: 'SetGo Básico — Suscripción mensual' },
   pro:     { amount: 50, reason: 'SetGo Pro — Suscripción mensual' },
   premium: { amount: 70, reason: 'SetGo Grand Slam — Suscripción mensual' },
-  // ⚠️  Plan temporal de pruebas — 1 ARS fijo
-  test:    { amount: 0,  reason: 'SetGo Test — Plan de prueba', amount_ars_override: 1 },
+  // ⚠️  Plan temporal de pruebas — 2 ARS fijo (MP mínimo de suscripción)
+  test:    { amount: 0,  reason: 'SetGo Test — Plan de prueba', amount_ars_override: 2 },
 };
 
 const DOLAR_FALLBACK = 1200;

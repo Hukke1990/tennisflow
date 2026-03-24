@@ -80,7 +80,7 @@ export default function ActivarClubPage() {
         body: JSON.stringify({ plan_type: planSel }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al iniciar el pago');
+      if (!res.ok) throw new Error([data.error, data.detail].filter(Boolean).join(' | ')|| 'Error al iniciar el pago');
       if (data.init_point) window.location.href = data.init_point;
     } catch (e) {
       setPayError(e.message);
