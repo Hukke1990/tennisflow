@@ -176,6 +176,17 @@ export default function SuperAdminPage() {
                 />
               </div>
 
+              <div>
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-300">Email del Admin del Club</label>
+                <input
+                  type="email"
+                  value={form.adminEmail}
+                  onChange={(event) => updateField('adminEmail', event.target.value)}
+                  placeholder="admin@ceibostenis.com"
+                  required
+                  className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                />
+              </div>
             </div>
 
             <div>
