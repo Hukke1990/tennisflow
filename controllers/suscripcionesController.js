@@ -47,7 +47,7 @@ const getEstado = async (req, res) => {
 
     const { data, error } = await supabase
       .from('suscripciones')
-      .select('id, plan_id, status, next_payment_date, payer_email, created_at, updated_at')
+      .select('id, plan_id, status, next_payment_date, payer_email, pending_plan_change, created_at, updated_at')
       .eq('club_id', clubId)
       .maybeSingle();
 
@@ -83,6 +83,7 @@ const getEstado = async (req, res) => {
       price_display: formatPrice(planCfg.monthly_price_usd),
       tax_disclaimer: 'Impuestos no incluidos',
       activa,
+      pending_plan_change: data.pending_plan_change ?? null,
     });
   } catch (err) {
     console.error('Error inesperado en getEstado:', err);
@@ -183,24 +184,92 @@ const cancelar = async (req, res) => {
       });
     }
 
-    // Actualizar DB: suscripcion → cancelled + plan_id a basico + preapproval_id real si cambió
-    await Promise.all([
-      supabase
-        .from('suscripciones')
-        .update({ status: 'cancelled', plan_id: 'basico', preapproval_id: realPreapprovalId })
-        .eq('club_id', clubId),
-      supabase
-        .from('clubes')
-        .update({ plan: 'basico' })
-        .eq('id', clubId),
-    ]);
+    // Cancelar en MP fue exitoso.
+    // NO degradamos el plan inmediatamente: el usuario ya pagó el periodo actual.
+    // Guardamos pending_plan_change='basico' y dejamos clubes.plan intacto.
+    // El cron (apply_expired_plan_changes) degradará cuando venza next_payment_date.
+    await supabase
+      .from('suscripciones')
+      .update({
+        status:              'cancelled',
+        plan_id:             'basico',
+        preapproval_id:      realPreapprovalId,
+        pending_plan_change: 'basico',
+      })
+      .eq('club_id', clubId);
 
     return res.status(200).json({
-      message: 'Suscripción cancelada correctamente. El club volvió al plan Básico.',
-      plan: 'basico',
+      message: 'Suscripción cancelada. Seguirás con tu plan actual hasta que venza el período pagado.',
+      pending_plan_change: 'basico',
     });
   } catch (err) {
     console.error('Error inesperado en cancelar:', err);
+    return res.status(500).json({ error: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * POST /api/suscripciones/anular-cambio-pendiente
+ *
+ * Cancela un cambio de plan pendiente.
+ * Si la suscripción en MP estaba cancelada, intenta reactivarla.
+ */
+const anularCambioPendiente = async (req, res) => {
+  try {
+    const clubId = resolveClubId(req);
+    if (!clubId) return res.status(400).json({ error: 'No se pudo determinar el club.' });
+
+    const { data: suscripcion, error: fetchError } = await supabase
+      .from('suscripciones')
+      .select('id, status, preapproval_id, plan_id, pending_plan_change')
+      .eq('club_id', clubId)
+      .maybeSingle();
+
+    if (fetchError || !suscripcion) {
+      return res.status(404).json({ error: 'No hay suscripción registrada.' });
+    }
+
+    if (!suscripcion.pending_plan_change) {
+      return res.status(409).json({ error: 'No hay ningún cambio pendiente para anular.' });
+    }
+
+    const mpAccessToken = process.env.MP_ACCESS_TOKEN;
+
+    // Si la suscripción está cancelada en MP, intentar reactivarla
+    if (suscripcion.status === 'cancelled' && suscripcion.preapproval_id && mpAccessToken) {
+      try {
+        const mpRes = await fetch(
+          `https://api.mercadopago.com/preapproval/${suscripcion.preapproval_id}`,
+          {
+            method:  'PUT',
+            headers: { Authorization: `Bearer ${mpAccessToken}`, 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ status: 'authorized' }),
+          },
+        );
+        if (mpRes.ok) {
+          // Reactivación exitosa en MP → restaurar estado
+          await Promise.all([
+            supabase.from('suscripciones').update({ status: 'authorized', pending_plan_change: null }).eq('club_id', clubId),
+            supabase.from('clubes').update({ plan: suscripcion.plan_id }).eq('id', clubId),
+          ]);
+          return res.status(200).json({ message: 'Cambio pendiente anulado. Tu suscripción sigue activa.', reactivada: true });
+        }
+        // MP no permite reactivar (ej: suscripción muy antigua) → solo limpiar pending
+        console.warn('[anularCambioPendiente] MP no permitió reactivar:', await mpRes.text());
+      } catch (err) {
+        console.error('[anularCambioPendiente] Error al reactivar en MP:', err.message);
+      }
+    }
+
+    // Solo limpiar el pending_plan_change (sin reactivar MP)
+    await supabase.from('suscripciones').update({ pending_plan_change: null }).eq('club_id', clubId);
+
+    return res.status(200).json({
+      message: 'Cambio pendiente anulado. Nota: la suscripción en Mercado Pago ya no está activa; deberás suscribirte nuevamente al vencer el período.',
+      reactivada: false,
+    });
+  } catch (err) {
+    console.error('Error inesperado en anularCambioPendiente:', err);
     return res.status(500).json({ error: 'Error interno del servidor.' });
   }
 };
@@ -391,4 +460,4 @@ const getCotizacion = async (_req, res) => {
   });
 };
 
-module.exports = { getEstado, cancelar, getPlanes, iniciar, getCotizacion };
+module.exports = { getEstado, cancelar, anularCambioPendiente, getPlanes, iniciar, getCotizacion };

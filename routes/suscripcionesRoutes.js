@@ -15,7 +15,10 @@ router.get('/estado', requireAuth, requireAdmin, suscripcionesController.getEsta
 // POST /api/suscripciones/iniciar — crea el preapproval en MP y devuelve init_point
 router.post('/iniciar', requireAuth, requireAdmin, suscripcionesController.iniciar);
 
-// POST /api/suscripciones/cancelar — cancela la suscripción activa
+// POST /api/suscripciones/cancelar — cancela la suscripción activa (downgrade diferido)
 router.post('/cancelar', requireAuth, requireAdmin, suscripcionesController.cancelar);
+
+// POST /api/suscripciones/anular-cambio-pendiente — anula un downgrade/cancelación pendiente
+router.post('/anular-cambio-pendiente', requireAuth, requireAdmin, suscripcionesController.anularCambioPendiente);
 
 module.exports = router;

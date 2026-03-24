@@ -115,10 +115,15 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
   const [suscripcionActiva, setSuscripcionActiva] = useState(false);
   const [suscripcionLoading, setSuscripcionLoading] = useState(false);
   const [suscripcionError, setSuscripcionError] = useState(null);
+  const [pendingPlanChange, setPendingPlanChange] = useState(null); // plan al que cambiará
 
   // Estados del flujo de upgrade
   const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [upgradeError, setUpgradeError] = useState(null);
+
+  // Estado del flujo de anular cambio pendiente
+  const [anularLoading, setAnularLoading] = useState(false);
+  const [anularError, setAnularError] = useState(null);
 
   // Modal de cancelación
   const [cancelModal, setCancelModal] = useState(false);
@@ -146,6 +151,7 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
       .then(({ data }) => {
         setSuscripcion(data.suscripcion);
         setSuscripcionActiva(data.activa);
+        setPendingPlanChange(data.pending_plan_change ?? null);
       })
       .catch(() => setSuscripcionError('No se pudo cargar el estado de la suscripción.'))
       .finally(() => setSuscripcionLoading(false));
@@ -169,14 +175,32 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
     setCancelLoading(true);
     setCancelError(null);
     try {
-      await axios.post('/api/suscripciones/cancelar');
+      const { data } = await axios.post('/api/suscripciones/cancelar');
       setCancelModal(false);
-      setSuscripcion(null);
-      setSuscripcionActiva(false);
+      // No limpiamos suscripcionActiva porque el plan sigue activo hasta el vencimiento
+      setPendingPlanChange(data.pending_plan_change ?? 'basico');
     } catch (err) {
       setCancelError(err.response?.data?.error || 'Error al cancelar la suscripción.');
     } finally {
       setCancelLoading(false);
+    }
+  };
+
+  const handleAnularCambioPendiente = async () => {
+    setAnularLoading(true);
+    setAnularError(null);
+    try {
+      await axios.post('/api/suscripciones/anular-cambio-pendiente');
+      setPendingPlanChange(null);
+      // Refrescar estado completo
+      const { data } = await axios.get('/api/suscripciones/estado');
+      setSuscripcion(data.suscripcion);
+      setSuscripcionActiva(data.activa);
+      setPendingPlanChange(data.pending_plan_change ?? null);
+    } catch (err) {
+      setAnularError(err.response?.data?.error || 'No se pudo anular el cambio pendiente.');
+    } finally {
+      setAnularLoading(false);
     }
   };
 
@@ -188,7 +212,7 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
 
   return (
     <div className="max-w-2xl mx-auto py-6 px-4 space-y-5">
-      {/* Plan badge */}
+      {/* Badge de plan */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className={`px-4 py-1.5 rounded-full border text-sm font-bold tracking-wide ${colors.badge}`}>
           ⭐ Plan {planLabel}
@@ -202,6 +226,38 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
           </span>
         )}
       </div>
+
+      {/* Banner de cambio de plan pendiente */}
+      {pendingPlanChange && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
+          <div className="flex items-start gap-2">
+            <span className="text-lg">🔔</span>
+            <div className="flex-1">
+              <p className="text-amber-800 font-semibold text-sm">Cambio de plan programado</p>
+              <p className="text-amber-700 text-sm mt-0.5">
+                Tu plan cambiará a{' '}
+                <strong>{PLAN_LABELS[pendingPlanChange] || pendingPlanChange}</strong>
+                {suscripcion?.next_payment_date && (
+                  <> el día <strong>{new Date(suscripcion.next_payment_date).toLocaleDateString('es-AR')}</strong></>
+                )}
+                . Seguirás disfrutando del{' '}
+                <strong>Plan {planLabel}</strong> hasta entonces.
+              </p>
+            </div>
+          </div>
+          {anularError && (
+            <p className="text-red-600 text-xs bg-red-50 border border-red-100 rounded-lg px-3 py-2">{anularError}</p>
+          )}
+          <button
+            type="button"
+            onClick={handleAnularCambioPendiente}
+            disabled={anularLoading}
+            className="w-full mt-1 py-2 border border-amber-300 hover:border-amber-400 bg-white hover:bg-amber-50 text-amber-700 font-semibold text-sm rounded-xl transition-colors disabled:opacity-60"
+          >
+            {anularLoading ? 'Procesando…' : '↩ Anular cambio pendiente'}
+          </button>
+        </div>
+      )}
 
       {/* Usage card */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
@@ -382,8 +438,10 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
             <p className="text-3xl">⚠️</p>
             <h3 className="text-lg font-bold text-gray-900">¿Cancelar la suscripción?</h3>
             <p className="text-gray-500 text-sm leading-relaxed">
-              Tu plan pasará a <strong>Básico</strong> al finalizar el período actual.
-              Perderás el acceso a las funciones avanzadas.
+              Tu plan pasará a <strong>Básico</strong> al finalizar el período actual
+              {suscripcion?.next_payment_date && (
+                <> (<strong>{new Date(suscripcion.next_payment_date).toLocaleDateString('es-AR')}</strong>)</>
+              )}. Seguirás disfrutando de todas las funciones hasta esa fecha.
             </p>
             {cancelError && (
               <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg py-2 px-3">{cancelError}</p>
