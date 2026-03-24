@@ -36,6 +36,17 @@ const PLAN_MAP = {
   premium: 'premium',
 };
 
+/**
+ * Deriva el plan_id desde el campo `reason` de MP, que contiene el nombre del plan.
+ * Usado como fuente de verdad cuando la fila de suscripciones no tiene el plan correcto.
+ */
+const derivePlanFromReason = (reason = '') => {
+  const r = reason.toLowerCase();
+  if (r.includes('grand slam')) return 'premium';
+  if (r.includes('pro'))        return 'pro';
+  return null;
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
@@ -240,10 +251,11 @@ const mercadopago = async (req, res) => {
 
     planAnterior = clubRow?.plan ?? null;
 
-    // Obtener plan_id de la suscripción activa
-    // Primero buscar por preapproval_id (suscripción ya conocida).
-    // Si no se encuentra (caso preapproval_plan: el ID del plan template ≠ ID de instancia),
-    // hacer fallback por club_id para obtener el plan_id correcto.
+    // Obtener plan_id de la suscripción activa.
+    // Estrategia en cascada:
+    //   1. Buscar por preapproval_id de instancia (ya conocida)
+    //   2. Buscar por preapproval_plan_id = template ID que `iniciar` guardó
+    //   3. Fallback por club_id
     const { data: subRowByPreapproval } = await supabase
       .from('suscripciones')
       .select('id, plan_id')
@@ -252,6 +264,17 @@ const mercadopago = async (req, res) => {
 
     let subRow = subRowByPreapproval;
 
+    // Fallback 2: buscar por el template ID (preapproval_plan_id en la respuesta de MP)
+    if (!subRow && mpData.preapproval_plan_id) {
+      const { data: subRowByTemplate } = await supabase
+        .from('suscripciones')
+        .select('id, plan_id')
+        .eq('preapproval_id', mpData.preapproval_plan_id)
+        .maybeSingle();
+      subRow = subRowByTemplate;
+    }
+
+    // Fallback 3: buscar por club_id
     if (!subRow && clubId) {
       const { data: subRowByClub } = await supabase
         .from('suscripciones')
@@ -261,6 +284,10 @@ const mercadopago = async (req, res) => {
       subRow = subRowByClub;
     }
 
+    // Determinar plan_id: prioridad → reason de MP > subRow en DB > basico
+    const planFromReason = derivePlanFromReason(mpData.reason);
+    const resolvedPlanId = planFromReason ?? subRow?.plan_id ?? 'basico';
+
     // ── Actualizar estado de la suscripción ─────────────────────────────────
     const nextPaymentDate =
       mpData.summarized?.next_payment_date ??
@@ -269,7 +296,7 @@ const mercadopago = async (req, res) => {
 
     const upsertPayload = {
       club_id:          clubId,
-      plan_id:          subRow?.plan_id ?? 'basico',
+      plan_id:          resolvedPlanId,
       preapproval_id:   resourceId,   // actualiza al ID real de la instancia de suscripción
       status:           newSubscriptionStatus,
       next_payment_date: nextPaymentDate,
@@ -285,7 +312,7 @@ const mercadopago = async (req, res) => {
 
     // ── Actualizar plan en clubes + disparar Realtime ────────────────────────
     if (newSubscriptionStatus === 'authorized') {
-      const targetPlan = PLAN_MAP[subRow?.plan_id] ?? null;
+      const targetPlan = PLAN_MAP[resolvedPlanId] ?? null;
       if (targetPlan) {
         const { error: clubError } = await supabase
           .from('clubes')
@@ -305,7 +332,7 @@ const mercadopago = async (req, res) => {
       // Registrar en pagos_historial si no viene pago individual
       if (subRow?.id) {
         const planAmounts = { basico: 30, pro: 50, premium: 70 };
-        const amt = planAmounts[subRow.plan_id] ?? 0;
+        const amt = planAmounts[resolvedPlanId] ?? 0;
         await supabase.from('pagos_historial').insert({
           club_id:        clubId,
           suscripcion_id: subRow.id,
