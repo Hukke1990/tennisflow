@@ -200,7 +200,7 @@ const mercadopago = async (req, res) => {
       const newPlan = suscripcionRow.pending_plan_id;
       console.log(`[webhook] Aplicando pending_plan_id: ${suscripcionRow.plan_id} → ${newPlan} (club ${clubId})`);
       await Promise.all([
-        supabase.from('clubes').update({ plan: newPlan }).eq('id', clubId),
+        supabase.from('clubes').update({ plan: newPlan, is_active: true }).eq('id', clubId),
         supabase.from('suscripciones').update({ pending_plan_id: null, plan_id: newPlan }).eq('id', suscripcionRow.id),
       ]);
     }
@@ -337,7 +337,7 @@ const mercadopago = async (req, res) => {
       if (targetPlan) {
         const { error: clubError } = await supabase
           .from('clubes')
-          .update({ plan: targetPlan })
+          .update({ plan: targetPlan, is_active: true })
           .eq('id', clubId);
 
         if (!clubError) {

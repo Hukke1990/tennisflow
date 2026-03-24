@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   crearClubConAdmin,
+  listarClubes,
   listarTorneos,
   editarTorneo,
   softDeleteTorneo,
@@ -19,6 +20,7 @@ const SA = [requireAuth, requireRole(['super_admin'])];
 const CA = [requireAuth, requireRole(['admin', 'super_admin'])];
 
 router.post('/clubes', ...SA, crearClubConAdmin);
+router.get('/clubes', ...SA, listarClubes);
 
 // Torneos
 router.get('/torneos', ...CA, listarTorneos);

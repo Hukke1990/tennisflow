@@ -21,9 +21,11 @@ import ClubNotFoundPage from './pages/ClubNotFoundPage';
 import SuperAdminPage from './pages/SuperAdminPage';
 import MisClubesPage from './pages/MisClubesPage';
 import SuscripcionExitoPage from './pages/SuscripcionExitoPage';
+import ActivarClubPage from './pages/ActivarClubPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import SuperAdminRoute from './components/SuperAdminRoute';
 import ClubMemberGuard from './components/ClubMemberGuard';
+import ClubActiveGuard from './components/ClubActiveGuard';
 import { ClubProvider } from './context/ClubContext';
 import './index.css';
 
@@ -42,8 +44,9 @@ function App() {
         />
         <Route path="/club-no-encontrado" element={<ClubNotFoundPage />} />
         <Route path="/suscripcion/exito" element={<SuscripcionExitoPage />} />
+        <Route path="/activar/:clubId" element={<ActivarClubPage />} />
 
-        <Route path="/:clubSlug" element={<ClubProvider><Outlet /></ClubProvider>}>
+        <Route path="/:clubSlug" element={<ClubProvider><ClubActiveGuard><Outlet /></ClubActiveGuard></ClubProvider>}>
           {/* Index: muestra login o redirige a inicio segun autenticacion */}
           <Route index element={<ClubEntryPage />} />
 

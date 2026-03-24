@@ -1,15 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { DEFAULT_CLUB_SLUG, buildClubPath } from '../context/ClubContext';
 
 const API_URL = '';
-
-const PLAN_OPTIONS = [
-  { value: 'basico', label: 'Basico' },
-  { value: 'pro', label: 'Pro' },
-  { value: 'premium', label: 'Premium' },
-];
 
 const slugify = (value = '') => String(value || '')
   .trim()
@@ -29,7 +23,6 @@ export default function SuperAdminPage() {
   const [form, setForm] = useState({
     nombreClub: '',
     slug: '',
-    plan: 'basico',
     adminEmail: '',
     temporaryPassword: '',
   });
@@ -37,6 +30,17 @@ export default function SuperAdminPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const [clubs, setClubs] = useState([]);
+  const [clubsCopied, setClubsCopied] = useState(null);
+
+  const fetchClubs = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API_URL}/api/super-admin/clubes`);
+      setClubs(data || []);
+    } catch (_) { /* silent */ }
+  }, []);
+
+  useEffect(() => { fetchClubs(); }, [fetchClubs]);
 
   const createdPaths = useMemo(() => {
     if (!result?.access) return null;
@@ -74,7 +78,6 @@ export default function SuperAdminPage() {
     const payload = {
       nombreClub: form.nombreClub.trim(),
       slug: slugify(form.slug),
-      plan: String(form.plan || '').trim().toLowerCase(),
       adminEmail: form.adminEmail.trim().toLowerCase(),
       temporaryPassword: String(form.temporaryPassword || '').trim(),
     };
@@ -104,8 +107,9 @@ export default function SuperAdminPage() {
     try {
       const { data } = await axios.post(`${API_URL}/api/super-admin/clubes`, payload);
       setResult(data);
-      setForm({ nombreClub: '', slug: '', plan: 'basico', adminEmail: '', temporaryPassword: '' });
+      setForm({ nombreClub: '', slug: '', adminEmail: '', temporaryPassword: '' });
       setSlugEdited(false);
+      fetchClubs();
     } catch (requestError) {
       const apiError = requestError?.response?.data?.error;
       const apiDetail = requestError?.response?.data?.detail;
@@ -172,30 +176,6 @@ export default function SuperAdminPage() {
                 />
               </div>
 
-              <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-300">Plan</label>
-                <select
-                  value={form.plan}
-                  onChange={(event) => updateField('plan', event.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                >
-                  {PLAN_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-300">Email del Admin del Club</label>
-              <input
-                type="email"
-                value={form.adminEmail}
-                onChange={(event) => updateField('adminEmail', event.target.value)}
-                placeholder="admin@ceibostenis.com"
-                required
-                className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-              />
             </div>
 
             <div>
@@ -219,26 +199,90 @@ export default function SuperAdminPage() {
             </button>
           </form>
 
-          {result?.club && (
-            <div className="mt-6 rounded-xl border border-white/10 bg-slate-900/50 p-4">
-              <h2 className="text-sm font-black uppercase tracking-wider text-emerald-300">Resultado</h2>
-              <p className="mt-2 text-sm text-slate-200">Club: <span className="font-bold">{result.club.nombre}</span></p>
-              <p className="mt-1 text-sm text-slate-300">Slug: {result.club.slug}</p>
-              <p className="mt-1 text-sm text-slate-300">Plan: {result.club.plan}</p>
-              <p className="mt-1 text-sm text-slate-300">Admin: {result.admin?.email}</p>
+              {result?.club && (
+            <div className="mt-6 rounded-xl border border-white/10 bg-slate-900/50 p-4 space-y-2">
+              <h2 className="text-sm font-black uppercase tracking-wider text-emerald-300">Club creado</h2>
+              <p className="text-sm text-slate-200">Club: <span className="font-bold">{result.club.nombre}</span></p>
+              <p className="text-sm text-slate-300">Slug: {result.club.slug}</p>
+              <p className="text-sm text-slate-300">Admin: {result.admin?.email}</p>
               {result.admin?.temporary_password && (
-                <p className="mt-1 text-sm text-slate-200">Password temporal: <span className="font-mono font-bold text-amber-300">{result.admin.temporary_password}</span></p>
+                <p className="text-sm text-slate-200">Password temporal: <span className="font-mono font-bold text-amber-300">{result.admin.temporary_password}</span></p>
               )}
+
+              {result.access?.activation_link && (
+                <div className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-300 mb-2">Link de activación — enviáselo al cliente</p>
+                  <p className="text-sm text-amber-100 break-all font-mono mb-2">{result.access.activation_link}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(result.access.activation_link);
+                    }}
+                    className="text-xs bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 py-1 px-3 rounded-lg transition-colors"
+                  >
+                    Copiar link
+                  </button>
+                </div>
+              )}
+
               {createdPaths && (
                 <>
-                  <p className="mt-3 text-xs uppercase tracking-wider text-slate-400">Accesos</p>
-                  <a className="mt-1 block text-sm text-emerald-300 hover:text-emerald-200" href={createdPaths.loginUrl}>{createdPaths.loginUrl}</a>
-                  <a className="mt-1 block text-sm text-emerald-300 hover:text-emerald-200" href={createdPaths.appUrl}>{createdPaths.appUrl}</a>
+                  <p className="text-xs uppercase tracking-wider text-slate-400 mt-3">Accesos</p>
+                  <a className="block text-sm text-emerald-300 hover:text-emerald-200" href={createdPaths.loginUrl}>{createdPaths.loginUrl}</a>
+                  <a className="block text-sm text-emerald-300 hover:text-emerald-200" href={createdPaths.appUrl}>{createdPaths.appUrl}</a>
                 </>
               )}
             </div>
           )}
         </div>
+
+        {clubs.length > 0 && (
+          <div className="mt-10">
+            <h2 className="text-lg font-bold text-white mb-4">Clubes registrados</h2>
+            <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-slate-400">
+                    <th className="px-4 py-3 text-left">Nombre</th>
+                    <th className="px-4 py-3 text-left">Slug</th>
+                    <th className="px-4 py-3 text-left">Plan</th>
+                    <th className="px-4 py-3 text-left">Estado</th>
+                    <th className="px-4 py-3 text-left">Link de pago</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clubs.map((c) => (
+                    <tr key={c.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      <td className="px-4 py-3 text-white font-medium">{c.nombre}</td>
+                      <td className="px-4 py-3 text-slate-400 font-mono">{c.slug}</td>
+                      <td className="px-4 py-3 text-slate-400 capitalize">{c.plan ?? '—'}</td>
+                      <td className="px-4 py-3">
+                        {c.is_active
+                          ? <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-300">Activo</span>
+                          : <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/15 text-amber-300">Pago pendiente</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        {c.activation_link ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(c.activation_link);
+                              setClubsCopied(c.id);
+                              setTimeout(() => setClubsCopied(null), 2000);
+                            }}
+                            className="text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 py-1 px-3 rounded-lg transition-colors"
+                          >
+                            {clubsCopied === c.id ? '¡Copiado!' : 'Copiar link'}
+                          </button>
+                        ) : <span className="text-slate-600">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

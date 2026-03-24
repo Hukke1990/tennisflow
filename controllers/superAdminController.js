@@ -28,6 +28,12 @@ const isMissingPlanColumnError = (error) => {
   return code === '42703' && message.includes('plan');
 };
 
+const isIsActiveColumnError = (error) => {
+  const code = pickErrorCode(error);
+  const message = String(error?.message || '').toLowerCase();
+  return code === '42703' && message.includes('is_active');
+};
+
 const mapCreateUserErrorMessage = (error) => {
   const message = String(error?.message || '').toLowerCase();
   const status = Number(error?.status || 0);
@@ -86,45 +92,47 @@ const generateTemporaryPassword = (length = 12) => {
 
 const normalizeTemporaryPassword = (value) => String(value || '').trim();
 
-const insertClub = async ({ nombre, slug, plan }) => {
-  const payload = {
-    nombre,
-    slug,
-    plan,
-  };
-
-  const withPlan = await supabase
+const insertClub = async ({ nombre, slug }) => {
+  // Intento 1: esquema completo con migration_v39 (is_active)
+  const attempt1 = await supabase
     .from('clubes')
-    .insert(payload)
-    .select('id, nombre, slug, plan')
+    .insert({ nombre, slug, plan: 'basico', is_active: false })
+    .select('id, nombre, slug, plan, is_active')
     .single();
 
-  if (!withPlan.error) {
-    return withPlan;
+  if (!attempt1.error) return attempt1;
+
+  // Backward compat: migration_v39 no aplicada (columna is_active inexistente)
+  if (isIsActiveColumnError(attempt1.error)) {
+    const attempt2 = await supabase
+      .from('clubes')
+      .insert({ nombre, slug, plan: 'basico' })
+      .select('id, nombre, slug, plan')
+      .single();
+    if (!attempt2.error) return { data: { ...attempt2.data, is_active: false }, error: null };
+    if (!isMissingPlanColumnError(attempt2.error)) return attempt2;
+    // plan también inexistente
+    const attempt3 = await supabase
+      .from('clubes')
+      .insert({ nombre, slug })
+      .select('id, nombre, slug')
+      .single();
+    if (attempt3.error) return attempt3;
+    return { data: { ...attempt3.data, plan: 'basico', is_active: false }, error: null };
   }
 
-  // Backward compatibility for environments where migration_v27 was not applied yet.
-  if (!isMissingPlanColumnError(withPlan.error)) {
-    return withPlan;
+  // Backward compat: migration_v27 no aplicada (columna plan inexistente)
+  if (isMissingPlanColumnError(attempt1.error)) {
+    const attempt2 = await supabase
+      .from('clubes')
+      .insert({ nombre, slug })
+      .select('id, nombre, slug')
+      .single();
+    if (attempt2.error) return attempt2;
+    return { data: { ...attempt2.data, plan: 'basico', is_active: false }, error: null };
   }
 
-  const fallback = await supabase
-    .from('clubes')
-    .insert({ nombre, slug })
-    .select('id, nombre, slug')
-    .single();
-
-  if (fallback.error) {
-    return fallback;
-  }
-
-  return {
-    data: {
-      ...fallback.data,
-      plan,
-    },
-    error: null,
-  };
+  return attempt1;
 };
 
 const markProfileAsAdmin = async ({ userId, clubId }) => {
@@ -172,7 +180,6 @@ const crearClubConAdmin = async (req, res) => {
   try {
     const nombreClub = String(req.body?.nombreClub || '').trim();
     const slugRaw = String(req.body?.slug || '').trim();
-    const plan = normalizePlan(req.body?.plan);
     const adminEmail = String(req.body?.adminEmail || '').trim().toLowerCase();
     const temporaryPasswordInput = normalizeTemporaryPassword(req.body?.temporaryPassword);
 
@@ -183,10 +190,6 @@ const crearClubConAdmin = async (req, res) => {
     const slug = normalizeSlug(slugRaw);
     if (!slug || !SLUG_REGEX.test(slug)) {
       return res.status(400).json({ error: 'El slug debe usar solo letras minusculas, numeros y guiones.' });
-    }
-
-    if (!ALLOWED_PLANS.has(plan)) {
-      return res.status(400).json({ error: 'El plan debe ser basico, pro o premium.' });
     }
 
     if (!EMAIL_REGEX.test(adminEmail)) {
@@ -203,7 +206,6 @@ const crearClubConAdmin = async (req, res) => {
     const { data: club, error: insertClubError } = await insertClub({
       nombre: nombreClub,
       slug,
-      plan,
     });
 
     if (insertClubError) {
@@ -265,22 +267,25 @@ const crearClubConAdmin = async (req, res) => {
       });
     }
 
+    const appUrl = (process.env.APP_URL || 'https://setgo-app.vercel.app').trim();
     return res.status(201).json({
-      message: 'Club creado correctamente y admin creado con password temporal.',
+      message: 'Club creado. Enviá el link de activación al cliente para que elija su plan y complete el pago.',
       club: {
-        id: club.id,
-        nombre: club.nombre,
-        slug: club.slug,
-        plan,
+        id:        club.id,
+        nombre:    club.nombre,
+        slug:      club.slug,
+        plan:      club.plan ?? 'basico',
+        is_active: false,
       },
       admin: {
-        email: adminEmail,
-        temporary_password: temporaryPassword,
+        email:                adminEmail,
+        temporary_password:   temporaryPassword,
         must_change_password: true,
       },
       access: {
-        login_url: `/${club.slug}/login`,
-        app_url: `/${club.slug}/inicio`,
+        activation_link: `${appUrl}/activar/${club.id}`,
+        login_url:       `/${club.slug}/login`,
+        app_url:         `/${club.slug}/inicio`,
       },
     });
   } catch (error) {
@@ -557,8 +562,32 @@ const resetearPuntos = async (req, res) => {
   }
 };
 
+const listarClubes = async (_req, res) => {
+  try {
+    const APP_URL = (process.env.APP_URL || 'https://setgo-app.vercel.app').trim();
+    const { data, error } = await supabase
+      .from('clubes')
+      .select('id, nombre, slug, plan, is_active, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error) return res.status(500).json({ error: 'Error al listar clubes.' });
+
+    return res.json(
+      (data || []).map((club) => ({
+        ...club,
+        activation_link: club.is_active === false
+          ? `${APP_URL}/activar/${club.id}`
+          : null,
+      })),
+    );
+  } catch (_) {
+    return res.status(500).json({ error: 'Error interno al listar clubes.' });
+  }
+};
+
 module.exports = {
   crearClubConAdmin,
+  listarClubes,
   listarTorneos,
   editarTorneo,
   softDeleteTorneo,

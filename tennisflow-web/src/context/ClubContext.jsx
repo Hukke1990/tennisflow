@@ -82,7 +82,7 @@ export function ClubProvider({ children }) {
 
       const { data, error } = await supabase
         .from('clubes')
-        .select('id, nombre, slug, logo_url, config_visual, plan, white_label')
+        .select('id, nombre, slug, logo_url, config_visual, plan, white_label, is_active')
         .eq('slug', slug)
         .maybeSingle();
 
