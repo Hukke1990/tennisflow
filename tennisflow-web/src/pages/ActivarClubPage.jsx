@@ -24,9 +24,9 @@ const PLANES = [
   },
   {
     id: 'test',
-    label: '⚠️ Test (1 ARS)',
+    label: '⚠️ Test (15 ARS)',
     usd: null,
-    ars_override: 1,
+    ars_override: 15,
     features: ['Solo para pruebas', 'Todas las funciones', 'Eliminar antes de producción'],
   },
 ];
