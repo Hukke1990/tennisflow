@@ -582,6 +582,8 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
   const [exportingBracket, setExportingBracket] = useState(false);
   const cachedScoreRef = useRef({});
   const bracketContainerRef = useRef(null);
+  const desktopCanvasRef = useRef(null);
+  const svgOverlayRef = useRef(null);
 
   useEffect(() => {
     cachedScoreRef.current = cachedScoreByPartido;
@@ -1220,7 +1222,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
   const nonFinalRounds = useMemo(() => bracketOrder.slice(0, -1), [bracketOrder]);
   const finalRoundKey = useMemo(() => bracketOrder[bracketOrder.length - 1] ?? null, [bracketOrder]);
 
-  const BRACKET_CELL_H = 240;
+  const BRACKET_CELL_H = 300; // 240 was too small for played matches with score rows (can reach ~296px)
   const firstRoundTopCount = useMemo(() => {
     if (nonFinalRounds.length === 0) return 1;
     const matches = sortPartidosByOrder(rondas[nonFinalRounds[0]] || []);
@@ -1323,8 +1325,8 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
       .toUpperCase();
   }, [finalWinnerMeta?.name, finalWinnerDisplayName]);
 
-  const championRouteMatchIds = useMemo(() => {
-    if (!torneoFinalizado || !finalWinnerId || !finalPartido) return new Set();
+  const finalistRouteMatchIds = useMemo(() => {
+    if (!finalPartido) return new Set();
 
     const matchesById = new Map(
       partidos
@@ -1333,33 +1335,43 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     );
 
     const pathIds = new Set();
-    let currentMatch = finalPartido;
-    let guard = 0;
+    const finalId = String(finalPartido?.id || '').trim();
+    if (!finalId) return pathIds;
+    pathIds.add(finalId);
 
-    while (currentMatch && guard < 32) {
-      guard += 1;
-      const currentMatchId = String(currentMatch?.id || '').trim();
-      if (!currentMatchId) break;
+    // Trace backwards from a match using ganador_id comparison.
+    // Key insight: a player wins EVERY match in their path, so
+    // ganador_id of any match in the path equals ganador_id of
+    // the origin that feeds it — no player-ID lookup needed.
+    const traceBack = (matchId, guard = 0) => {
+      if (guard > 24) return;
+      const match = matchesById.get(matchId);
+      if (!match) return;
+      pathIds.add(matchId);
+      const ganadorId = String(match?.ganador_id || '').trim();
+      if (!ganadorId) return; // match not played yet — stop here
 
-      pathIds.add(currentMatchId);
+      for (const side of [1, 2]) {
+        const originId = String(getOrigenPartidoId(match, side) || '').trim();
+        if (!originId) continue;
+        const originMatch = matchesById.get(originId);
+        if (!originMatch) continue;
+        const originGanador = String(originMatch?.ganador_id || '').trim();
+        if (originGanador && originGanador === ganadorId) {
+          traceBack(originId, guard + 1);
+          break; // found the correct side
+        }
+      }
+    };
 
-      const resolved = jugadoresPorPartido[currentMatchId] || {};
-      const j1Id = String(resolved?.j1Id || getJugadorId(currentMatch, 1) || '').trim();
-      const j2Id = String(resolved?.j2Id || getJugadorId(currentMatch, 2) || '').trim();
-
-      let championSide = null;
-      if (j1Id && j1Id === finalWinnerId) championSide = 1;
-      if (!championSide && j2Id && j2Id === finalWinnerId) championSide = 2;
-      if (!championSide) break;
-
-      const originMatchId = String(getOrigenPartidoId(currentMatch, championSide) || '').trim();
-      if (!originMatchId) break;
-
-      currentMatch = matchesById.get(originMatchId) || null;
+    // Trace both finalists' paths starting from their respective semi-finals
+    for (const side of [1, 2]) {
+      const originId = String(getOrigenPartidoId(finalPartido, side) || '').trim();
+      if (originId) traceBack(originId);
     }
 
     return pathIds;
-  }, [torneoFinalizado, finalWinnerId, finalPartido, partidos, jugadoresPorPartido]);
+  }, [finalPartido, partidos]);
 
   // ── exportBracketsToPDF — pure jsPDF vector drawing ─────────────────────
   // Defined here so bracketOrder, rondas, jugadoresPorPartido, finalWinnerDisplayName
@@ -2167,10 +2179,212 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
   );
 
   // â”€â”€ Match-card renderer (shared mobile + desktop) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── SVG connector overlay (desktop only) ────────────────────────────────
+  useEffect(() => {
+    const buildLines = () => {
+      const canvas = desktopCanvasRef.current;
+      if (!canvas) return;
+
+      // offsetLeft/offsetTop traversal: layout-space coords immune to CSS transforms.
+      // Walk up the offsetParent chain until we reach the canvas element.
+      const getOffset = (el) => {
+        let x = 0, y = 0;
+        let curr = el;
+        while (curr && curr !== canvas) {
+          x += curr.offsetLeft;
+          y += curr.offsetTop;
+          curr = curr.offsetParent;
+        }
+        return curr === canvas ? { x, y } : null;
+      };
+
+      const coords = (matchId) => {
+        const el = canvas.querySelector(`[data-card-id="${matchId}"]`);
+        if (!el) return null;
+        const off = getOffset(el);
+        if (!off) return null;
+        return {
+          midY:   off.y + el.offsetHeight / 2,
+          leftX:  off.x,
+          rightX: off.x + el.offsetWidth,
+        };
+      };
+
+      const paths = [];
+
+      // Determine mode: if the Final has been played, highlight both finalist paths
+      // (finalistRouteMatchIds). Otherwise, progressively light up actual winner arms.
+      const finalMatches = finalRoundKey ? sortPartidosByOrder(rondas[finalRoundKey] || []) : [];
+      const finalMatch   = finalMatches[0] || null;
+      const tournamentDone = !!String(finalMatch?.ganador_id || '').trim();
+
+      const half = (r) => sortPartidosByOrder(rondas[r] || []);
+      const topH  = (r) => { const m = half(r); return m.slice(0, Math.ceil(m.length / 2)); };
+      const botH  = (r) => { const m = half(r); return m.slice(Math.ceil(m.length / 2)); };
+
+      // ── fork: draws L-connectors for aMatches[2j],aMatches[2j+1] → bMatches[j]
+      // exitSide 'right': stubs exit RIGHT of a-cards, enter LEFT  of b-card (left half)
+      // exitSide 'left' : stubs exit LEFT  of a-cards, enter RIGHT of b-card (right half)
+      //
+      // Each arm is a continuous SVG polyline (single <path> d string) so corners
+      // render as sharp right-angles with no strokeLinecap blob at junction points.
+      //
+      // Winner arm  → full L-path: a.edge → vX → midY → b.edge  (accent color)
+      // Loser  arm  → half L-path: a.edge → vX → midY           (dim color, terminates at junction)
+      const fork = (aMatches, bMatches, exitSide) => {
+        for (let j = 0; j < bMatches.length; j++) {
+          const a0 = aMatches[2 * j];
+          const a1 = aMatches[2 * j + 1];
+          const b  = bMatches[j];
+          if (!a0 || !b) continue;
+          const ca0 = coords(a0.id);
+          const cb  = coords(b.id);
+          if (!ca0 || !cb) continue;
+
+          // Winner disambiguation: after b is played, only the side whose winner
+          // matches b's winner stays accented.
+          const bGanador  = String(b.ganador_id  || '').trim();
+          const a0Ganador = String(a0.ganador_id || '').trim();
+          const a1Ganador = a1 ? String(a1.ganador_id || '').trim() : '';
+          const bPlayed   = !!bGanador;
+
+          // Hybrid coloring:
+          //   Finished tournament  → use finalistRouteMatchIds (lights both finalist paths fully)
+          //   In progress          → strict: green only if this match has a winner AND that
+          //                          winner is the same player who also won the next match (b),
+          //                          or b hasn't been played yet (show advancement in progress).
+          const a0R = tournamentDone
+            ? finalistRouteMatchIds.has(String(a0.id))
+            : !!a0Ganador && (!bPlayed || a0Ganador === bGanador);
+          const a1R = tournamentDone
+            ? (!!a1 && finalistRouteMatchIds.has(String(a1?.id)))
+            : !!a1Ganador && (!bPlayed || a1Ganador === bGanador);
+
+          const midY    = cb.midY;
+          const ca1safe = a1 ? coords(a1.id) : null;
+
+          if (exitSide === 'right') {
+            const vX = (ca0.rightX + cb.leftX) / 2;
+
+            const d0    = `M ${ca0.rightX},${ca0.midY} H ${vX} V ${midY}`;
+            const d1    = ca1safe ? `M ${ca1safe.rightX},${ca1safe.midY} H ${vX} V ${midY}` : null;
+
+            if (a0R && !a1R) {
+              paths.push({ d: `M ${ca0.rightX},${ca0.midY} H ${vX} V ${midY} H ${cb.leftX}`, route: true });
+              if (d1) paths.push({ d: d1, route: false });
+            } else if (a1R && !a0R) {
+              if (ca1safe) paths.push({ d: `M ${ca1safe.rightX},${ca1safe.midY} H ${vX} V ${midY} H ${cb.leftX}`, route: true });
+              paths.push({ d: d0, route: false });
+            } else if (a0R && a1R) {
+              paths.push({ d: `M ${ca0.rightX},${ca0.midY} H ${vX} V ${midY} H ${cb.leftX}`, route: true });
+              if (d1) paths.push({ d: d1, route: true });
+            } else {
+              let dd = d0 + ` M ${vX},${midY} H ${cb.leftX}`;
+              if (d1) dd += ` ${d1}`;
+              paths.push({ d: dd, route: false });
+            }
+          } else {
+            const vX = (cb.rightX + ca0.leftX) / 2;
+
+            const d0    = `M ${ca0.leftX},${ca0.midY} H ${vX} V ${midY}`;
+            const d1    = ca1safe ? `M ${ca1safe.leftX},${ca1safe.midY} H ${vX} V ${midY}` : null;
+
+            if (a0R && !a1R) {
+              paths.push({ d: `M ${ca0.leftX},${ca0.midY} H ${vX} V ${midY} H ${cb.rightX}`, route: true });
+              if (d1) paths.push({ d: d1, route: false });
+            } else if (a1R && !a0R) {
+              if (ca1safe) paths.push({ d: `M ${ca1safe.leftX},${ca1safe.midY} H ${vX} V ${midY} H ${cb.rightX}`, route: true });
+              paths.push({ d: d0, route: false });
+            } else if (a0R && a1R) {
+              paths.push({ d: `M ${ca0.leftX},${ca0.midY} H ${vX} V ${midY} H ${cb.rightX}`, route: true });
+              if (d1) paths.push({ d: d1, route: true });
+            } else {
+              let dd = d0 + ` M ${vX},${midY} H ${cb.rightX}`;
+              if (d1) dd += ` ${d1}`;
+              paths.push({ d: dd, route: false });
+            }
+          }
+        }
+      };
+
+      // Left half: outer → inner
+      for (let i = 0; i < nonFinalRounds.length - 1; i++)
+        fork(topH(nonFinalRounds[i]), topH(nonFinalRounds[i + 1]), 'right');
+
+      // Left semi → Final
+      if (nonFinalRounds.length > 0 && finalRoundKey) {
+        const sT = topH(nonFinalRounds[nonFinalRounds.length - 1]);
+        const fM = half(finalRoundKey);
+        if (sT.length && fM.length) {
+          const cs = coords(sT[0].id); const cf = coords(fM[0].id);
+          if (cs && cf) {
+            // Semi green if played — both finalists won their semi, so always light both
+            const r = !!String(sT[0].ganador_id || '').trim();
+            const vX = (cs.rightX + cf.leftX) / 2;
+            paths.push({ d: `M ${cs.rightX},${cs.midY} H ${vX} V ${cf.midY} H ${cf.leftX}`, route: r });
+          }
+        }
+      }
+
+      // Right half: outer → inner (reversed)
+      const revR = [...nonFinalRounds].reverse();
+      for (let i = 0; i < revR.length - 1; i++)
+        fork(botH(revR[i + 1]), botH(revR[i]), 'left');
+
+      // Right semi → Final
+      if (nonFinalRounds.length > 0 && finalRoundKey) {
+        const sB = botH(revR[0]);
+        const fM = half(finalRoundKey);
+        if (sB.length && fM.length) {
+          const cs = coords(sB[0].id); const cf = coords(fM[0].id);
+          if (cs && cf) {
+            // Semi green if played — both finalists won their semi, so always light both
+            const r = !!String(sB[0].ganador_id || '').trim();
+            const vX = (cf.rightX + cs.leftX) / 2;
+            paths.push({ d: `M ${cs.leftX},${cs.midY} H ${vX} V ${cf.midY} H ${cf.rightX}`, route: r });
+          }
+        }
+      }
+
+      // Write directly to SVG DOM — no React state, no batching delay.
+      const svgEl = svgOverlayRef.current;
+      if (!svgEl) return;
+      while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+      paths.forEach(({ d, route }) => {
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', d);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', route ? '#a6ce39' : 'rgba(255,255,255,0.22)');
+        path.setAttribute('stroke-width', route ? '2' : '1.5');
+        path.setAttribute('stroke-linecap', 'butt');
+        path.setAttribute('stroke-linejoin', 'miter');
+        svgEl.appendChild(path);
+      });
+    };
+
+    // Two rAF frames: first to allow React to commit + browser to do layout,
+    // second to ensure paint is complete and stable positions are readable.
+    let rafId;
+    const scheduleRebuild = () => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => { rafId = requestAnimationFrame(buildLines); });
+    };
+    scheduleRebuild();
+    const ro = new ResizeObserver(scheduleRebuild);
+    if (desktopCanvasRef.current) ro.observe(desktopCanvasRef.current);
+    // Rebuild on scroll of the nearest scrollable ancestor
+    const scrollEl = desktopCanvasRef.current?.closest('.overflow-auto, .overflow-x-auto, .overflow-y-auto, .overflow-scroll') || null;
+    if (scrollEl) scrollEl.addEventListener('scroll', scheduleRebuild, { passive: true });
+    return () => {
+      cancelAnimationFrame(rafId);
+      ro.disconnect();
+      if (scrollEl) scrollEl.removeEventListener('scroll', scheduleRebuild);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partidos, nonFinalRounds, finalRoundKey, rondas, finalistRouteMatchIds]);
+
   const renderMatchCard = (partido, matchIndex, totalInColumn, connectorSide, fixedSlotH = null) => {
-    const partidoKey = String(partido?.id || '').trim();
-    const ganadorId = partido?.ganador_id;
-    const resolved = jugadoresPorPartido[partidoKey] || {};
+    const resolved = jugadoresPorPartido[String(partido.id || '')] || {};
     const j1Id = resolved.j1Id || getJugadorId(partido, 1);
     const j2Id = resolved.j2Id || getJugadorId(partido, 2);
     const j1Name = resolved.j1Name || getJugadorNombre(partido, 1);
@@ -2181,6 +2395,8 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     const j2Photo = getFotoPerfil(j2Id);
     const j1Seed = seedByJugadorId[String(j1Id || '').trim()] || null;
     const j2Seed = seedByJugadorId[String(j2Id || '').trim()] || null;
+    const ganadorId = String(partido?.ganador_id || '').trim();
+    const partidoKey = String(partido?.id || '').trim();
     const hasGanador = Boolean(ganadorId);
     const estado = getEstadoPartido(partido);
     const hasConflict = isConflictAvailability(partido);
@@ -2189,7 +2405,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     const ganadorKey = String(ganadorId || '').trim();
     const j1Key = String(j1Id || '').trim();
     const j2Key = String(j2Id || '').trim();
-    const isChampionRoute = hallOfFameMode && championRouteMatchIds.has(partidoKey);
+    const isChampionRoute = finalistRouteMatchIds.size > 0 && finalistRouteMatchIds.has(partidoKey);
     const isPlayed = hasGanador || estado.key === 'finalizado';
     const isLive = estado.key === 'en_juego';
     const canchaId = partido?.cancha?.id || partido?.cancha_id;
@@ -2218,41 +2434,56 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     const vStyleDown = cH ? { top: '50%', height: cH } : { top: '50%' };
     const vStyleUp   = cH ? { bottom: '50%', height: cH } : { bottom: '50%' };
 
+    const hasFinalistRoute = finalistRouteMatchIds.size > 1;
+    // Dim off-route cards only after the tournament is fully finished (final has a winner).
+    // During an in-progress tournament all cards stay full opacity.
+    const isOffRoute = !!finalWinnerId && hasFinalistRoute && !isChampionRoute;
+    // CSS connectors only for mobile (fixedSlotH === null); desktop uses the SVG overlay
+    const showCssConnectors = connectorSide !== 'none' && fixedSlotH === null;
+
     return (
       <div
         key={partido.id}
-        className={`relative group transition-opacity ${isOtherPlayerHovered ? 'opacity-30' : 'opacity-100'}`}
+        data-partido-id={String(partido.id)}
+        className={`relative group transition-opacity ${isOtherPlayerHovered || isOffRoute ? 'opacity-25' : 'opacity-100'}`}
+        style={fixedSlotH ? { height: fixedSlotH, minHeight: fixedSlotH, flexShrink: 0, display: 'flex', alignItems: 'center' } : undefined}
         onMouseLeave={() => setHoveredPlayerId(null)}
       >
-        {connectorSide === 'right' && (
+        {showCssConnectors && connectorSide === 'right' && (
           <>
             <div className={`absolute top-1/2 -right-6 w-6 border-b-2 z-0 transition-colors ${connClass}`} />
             {showV && matchIndex % 2 === 0 && <div className={`absolute -right-6 w-0 border-r-2 z-0 transition-colors ${connClass} ${vFallback}`} style={vStyleDown} />}
             {showV && matchIndex % 2 !== 0 && <div className={`absolute -right-6 w-0 border-r-2 z-0 transition-colors ${connClass} ${vFallback}`} style={vStyleUp} />}
-            <div className={`absolute top-1/2 -right-12 w-6 border-b-2 z-0 transition-colors ${connClass}`} />
+            {(!showV || matchIndex % 2 === 0) && (
+              <div className={`absolute -right-12 w-6 border-b-2 z-0 transition-colors ${connClass}`} style={{ top: '50%' }} />
+            )}
           </>
         )}
-        {connectorSide === 'left' && (
+        {showCssConnectors && connectorSide === 'left' && (
           <>
             <div className={`absolute top-1/2 -left-6 w-6 border-b-2 z-0 transition-colors ${connClass}`} />
             {showV && matchIndex % 2 === 0 && <div className={`absolute -left-6 w-0 border-r-2 z-0 transition-colors ${connClass} ${vFallback}`} style={vStyleDown} />}
             {showV && matchIndex % 2 !== 0 && <div className={`absolute -left-6 w-0 border-r-2 z-0 transition-colors ${connClass} ${vFallback}`} style={vStyleUp} />}
-            <div className={`absolute top-1/2 -left-12 w-6 border-b-2 z-0 transition-colors ${connClass}`} />
+            {(!showV || matchIndex % 2 === 0) && (
+              <div className={`absolute -left-12 w-6 border-b-2 z-0 transition-colors ${connClass}`} style={{ top: '50%' }} />
+            )}
           </>
         )}
 
-        <div className={`relative z-10 rounded-xl border overflow-hidden transition-all ${
+        <div
+          data-card-id={String(partido.id)}
+          className={`relative z-10 rounded-xl border overflow-hidden transition-all ${
           hasConflict
             ? 'border-red-400/60 bg-red-500/10 backdrop-blur-sm shadow-sm'
             : isLive
-              ? 'border-[#a6ce39]/50 bg-white/[0.06] backdrop-blur-md shadow-[0_0_24px_rgba(166,206,57,0.2)]'
-              : hallOfFameMode
-                ? 'border-white/45 bg-white/74 backdrop-blur-md shadow-[0_12px_28px_rgba(15,23,42,0.34)]'
-                : 'border-white/10 bg-white/5 backdrop-blur-md shadow-lg hover:border-white/[0.18] hover:bg-white/[0.08]'
+              ? 'border-[#a6ce39]/50 bg-[#0f1117] shadow-[0_0_24px_rgba(166,206,57,0.2)]'
+              : hasGanador
+                ? 'border-[#a6ce39]/30 bg-[#0f1117] shadow-lg'
+                : 'border-white/10 bg-[#0f1117] shadow-lg hover:border-white/[0.18]'
         } ${isChampionRoute || isPlayerHovered ? 'ring-1 ring-[#a6ce39]/60 shadow-[0_0_16px_rgba(166,206,57,0.3)]' : ''}`}>
           {isLive && <div className="absolute inset-0 rounded-xl ring-1 ring-[#a6ce39]/60 animate-pulse pointer-events-none z-20" />}
 
-          <div className={`px-3 py-2 text-xs border-b ${hasConflict ? 'bg-red-500/15 border-red-400/20 text-red-300' : isLive ? 'bg-[#a6ce39]/[0.08] border-[#a6ce39]/20 text-[#a6ce39]/90' : hallOfFameMode ? 'bg-white/62 border-white/80 text-slate-600' : 'bg-white/5 border-white/8 text-white/45'}`}>
+          <div className={`px-3 py-2 text-xs border-b ${hasConflict ? 'bg-red-500/15 border-red-400/20 text-red-300' : isLive ? 'bg-[#a6ce39]/[0.08] border-[#a6ce39]/20 text-[#a6ce39]/90' : 'bg-white/5 border-white/8 text-white/45'}`}>
             <p className="font-semibold">Hora: {slot.timeLabel}</p>
             <p className="font-semibold flex items-center gap-1.5">
               {isLive && <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#a6ce39] animate-pulse" />}
@@ -2269,7 +2500,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
 
           <button type="button" onClick={() => openResultadoModal(partido)} disabled={!adminMode || !partido?.fecha_hora} className="w-full text-left">
             <div
-              className={`flex items-center justify-between px-4 py-3 border-b transition-opacity ${hallOfFameMode ? 'border-white/40 bg-white/55' : 'border-white/8'} ${hasGanador && ganadorKey !== j1Key ? 'opacity-35' : ''}`}
+              className={`flex items-center justify-between px-4 py-3 border-b border-white/8 transition-opacity ${(j1IsBye || !j1Key) ? 'bg-slate-700/30' : ''} ${hasGanador && ganadorKey !== j1Key ? 'opacity-35' : ''}`}
               onMouseEnter={() => j1Key && setHoveredPlayerId(j1Key)}
             >
               <div className="flex items-center gap-2 min-w-0">
@@ -2286,7 +2517,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
                     hasGanador && ganadorKey === j1Key ? 'text-[#ccff00] font-black'
                       : hasGanador && ganadorKey !== j1Key ? 'text-slate-400'
                         : hoveredPlayerId === j1Key ? 'text-[#a6ce39]'
-                          : hallOfFameMode ? 'text-slate-700' : 'text-white/90'
+                          : 'text-white/90'
                   }`}>{j1Name}</span>
                 )}
               </div>
@@ -2294,7 +2525,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
             </div>
 
             {score && parsedSets.length > 0 ? (
-              <div className={`px-4 py-1.5 border-b flex justify-center gap-1.5 ${hallOfFameMode ? 'border-white/50 bg-white/35' : 'border-white/8 bg-white/[0.03]'}`}>
+              <div className="px-4 py-1.5 border-b border-white/8 bg-white/[0.03] flex justify-center gap-1.5">
                 {parsedSets.map(([a, b], si) => (
                   <div key={si} className="flex flex-col gap-0.5">
                     <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-[11px] font-black border ${a > b ? 'bg-[#a6ce39] text-[#0d2740] border-[#a6ce39]/70' : 'bg-white/10 text-white/45 border-white/10'}`}>{a}</span>
@@ -2303,13 +2534,13 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
                 ))}
               </div>
             ) : score ? (
-              <div className={`px-4 py-1.5 border-b text-center ${hallOfFameMode ? 'border-white/50 bg-white/35' : 'border-white/8 bg-white/[0.03]'}`}>
-                <span className={`font-mono text-sm tracking-wide ${hallOfFameMode ? 'font-black text-lg text-slate-800' : 'text-white/60'}`}>{score}</span>
+              <div className="px-4 py-1.5 border-b border-white/8 bg-white/[0.03] text-center">
+                <span className="font-mono text-sm tracking-wide text-white/60">{score}</span>
               </div>
             ) : null}
 
             <div
-              className={`flex items-center justify-between px-4 py-3 transition-opacity ${hallOfFameMode ? 'bg-white/55' : ''} ${hasGanador && ganadorKey !== j2Key ? 'opacity-35' : ''}`}
+              className={`flex items-center justify-between px-4 py-3 transition-opacity ${(j2IsBye || !j2Key) ? 'bg-slate-700/30' : ''} ${hasGanador && ganadorKey !== j2Key ? 'opacity-35' : ''}`}
               onMouseEnter={() => j2Key && setHoveredPlayerId(j2Key)}
             >
               <div className="flex items-center gap-2 min-w-0">
@@ -2326,7 +2557,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
                     hasGanador && ganadorKey === j2Key ? 'text-[#ccff00] font-black'
                       : hasGanador && ganadorKey !== j2Key ? 'text-slate-400'
                         : hoveredPlayerId === j2Key ? 'text-[#a6ce39]'
-                          : hallOfFameMode ? 'text-slate-700' : 'text-white/90'
+                          : 'text-white/90'
                   }`}>{j2Name}</span>
                 )}
               </div>
@@ -2334,12 +2565,12 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
             </div>
           </button>
 
-          <div className={`px-3 py-2 border-t flex flex-col gap-1 text-xs ${hallOfFameMode ? 'border-white/20 text-slate-200' : 'border-white/8 text-white/50'}`}>
+          <div className="px-3 py-2 border-t border-white/8 text-white/50 flex flex-col gap-1 text-xs">
             <div className="flex items-center justify-between gap-2">
-              <span className={`font-semibold ${hallOfFameMode ? 'text-slate-200/85' : 'text-white/35'}`}>{getCategoriaRama(partido)}</span>
+              <span className="font-semibold text-white/35">{getCategoriaRama(partido)}</span>
               <span className={`px-2 py-0.5 rounded border font-bold ${estado.badge}`}>{estado.label}</span>
             </div>
-            {isPlayed && <span className={`text-[11px] ${hallOfFameMode ? 'text-slate-200/80' : 'text-white/30'}`}>Superficie: {superficie}</span>}
+            {isPlayed && <span className="text-[11px] text-white/30">Superficie: {superficie}</span>}
             {adminMode && partido?.fecha_hora && (
               <button type="button" onClick={() => openResultadoModal(partido)} className="mt-1 text-xs font-bold text-[#a6ce39] bg-[#a6ce39]/10 hover:bg-[#a6ce39]/20 border border-[#a6ce39]/30 rounded px-2 py-1 transition-colors">
                 Gestionar resultado
@@ -2367,8 +2598,8 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     return (
       <div
         key={`${keyPrefix}-${rondaOrden}`}
-        className={`flex flex-col justify-around w-72 relative pt-14 gap-8 transition-all ${shouldBlur ? 'opacity-45 blur-[1.2px] saturate-[0.6]' : 'opacity-100'}`}
-        style={desktopHeight ? { height: `${desktopHeight}px`, gap: 0 } : undefined}
+        className={`flex flex-col w-72 relative pt-14 transition-all ${desktopHeight ? '' : 'justify-around gap-8'} ${shouldBlur ? 'opacity-45 blur-[1.2px] saturate-[0.6]' : 'opacity-100'}`}
+        style={desktopHeight ? { height: `${desktopHeight + 56}px` } : undefined}
       >
         <div className="absolute top-0 left-0 right-0 text-center">
           <h4 className={`text-xl font-black leading-none mb-1 ${hallOfFameMode ? 'text-white/88 [font-family:Georgia,Times,serif]' : 'text-white/80'}`}>
@@ -2488,16 +2719,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
         />
       ) : (
         <div ref={bracketContainerRef} className={`relative${isFullscreen ? ' bg-[#0d2740] p-4' : ''}`}>
-          <div className={`relative rounded-2xl ${hallOfFameMode ? 'border border-white/20 bg-white/10 backdrop-blur-md pt-4' : ''}`}>
-            {hallOfFameMode && (
-              <>
-                <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_20%_20%,rgba(251,191,36,0.18),transparent_40%),radial-gradient(circle_at_80%_15%,rgba(59,130,246,0.18),transparent_35%)]" />
-                <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[linear-gradient(120deg,rgba(255,255,255,0.06),transparent_40%,rgba(255,255,255,0.03))]" />
-                <div className="pointer-events-none absolute inset-x-[6%] bottom-[18%] h-px bg-white/30" />
-                <div className="pointer-events-none absolute inset-x-[14%] bottom-[26%] h-px bg-white/20" />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[38%] rounded-b-2xl bg-[radial-gradient(ellipse_at_bottom,rgba(180,112,63,0.35),rgba(57,39,22,0.16)_52%,transparent_84%)]" />
-              </>
-            )}
+          <div className="relative">
 
             <div className="w-full">
               {/* â”€â”€ MOBILE: horizontal left-to-right â”€â”€ */}
@@ -2581,7 +2803,15 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
                         wrapperClass="!w-full cursor-grab active:cursor-grabbing"
                         wrapperStyle={{ height: isFullscreen ? 'calc(100vh - 3rem)' : '82vh' }}
                       >
-                        <div className="flex items-stretch justify-center min-w-max mx-auto pb-12 pt-4 px-8">
+                        <div ref={desktopCanvasRef} className="relative flex items-stretch justify-center min-w-max mx-auto pb-12 pt-4 px-8">
+
+                  {/* SVG connector overlay — lives inside TransformComponent so it scales/pans with cards */}
+                  {/* Children managed via direct DOM (svgOverlayRef) — React does not touch them */}
+                  <svg
+                    ref={svgOverlayRef}
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible', zIndex: 1 }}
+                    aria-hidden="true"
+                  />
 
                   {/* LEFT HALF: outer â†’ inner, connectors â†’ right */}
                   <div className="flex items-stretch gap-12">
