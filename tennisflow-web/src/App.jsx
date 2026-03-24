@@ -20,6 +20,7 @@ import BracketPage from './pages/BracketPage';
 import ClubNotFoundPage from './pages/ClubNotFoundPage';
 import SuperAdminPage from './pages/SuperAdminPage';
 import MisClubesPage from './pages/MisClubesPage';
+import SuscripcionExitoPage from './pages/SuscripcionExitoPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import SuperAdminRoute from './components/SuperAdminRoute';
 import ClubMemberGuard from './components/ClubMemberGuard';
@@ -40,6 +41,7 @@ function App() {
           )}
         />
         <Route path="/club-no-encontrado" element={<ClubNotFoundPage />} />
+        <Route path="/suscripcion/exito" element={<SuscripcionExitoPage />} />
 
         <Route path="/:clubSlug" element={<ClubProvider><Outlet /></ClubProvider>}>
           {/* Index: muestra login o redirige a inicio segun autenticacion */}

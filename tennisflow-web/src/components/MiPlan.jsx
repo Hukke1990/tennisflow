@@ -104,8 +104,23 @@ function UsageBar({ label, current, limit, barColor, loading = false }) {
  *   torneosCount  {number} - torneos del club
  */
 export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
-  const { clubPlan = 'basico', clubId } = useClub();
+  const { clubPlan = 'basico', clubId, clubSlug } = useClub();
   const [jugadoresCount, setJugadoresCount] = useState(null);
+
+  // Estado de suscripción desde el backend
+  const [suscripcion, setSuscripcion] = useState(null);   // objeto suscripcion o null
+  const [suscripcionActiva, setSuscripcionActiva] = useState(false);
+  const [suscripcionLoading, setSuscripcionLoading] = useState(false);
+  const [suscripcionError, setSuscripcionError] = useState(null);
+
+  // Estados del flujo de upgrade
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState(null);
+
+  // Modal de cancelación
+  const [cancelModal, setCancelModal] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState(null);
 
   useEffect(() => {
     if (!clubId) return;
@@ -113,6 +128,48 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
       .then(({ data }) => setJugadoresCount(data.count ?? 0))
       .catch(() => setJugadoresCount(null));
   }, [clubId]);
+
+  useEffect(() => {
+    if (!clubId) return;
+    setSuscripcionLoading(true);
+    setSuscripcionError(null);
+    axios.get('/api/suscripciones/estado')
+      .then(({ data }) => {
+        setSuscripcion(data.suscripcion);
+        setSuscripcionActiva(data.activa);
+      })
+      .catch(() => setSuscripcionError('No se pudo cargar el estado de la suscripción.'))
+      .finally(() => setSuscripcionLoading(false));
+  }, [clubId]);
+
+  const handleUpgrade = async (planType) => {
+    setUpgradeLoading(true);
+    setUpgradeError(null);
+    try {
+      const { data } = await axios.post('/api/suscripciones/iniciar', { plan_type: planType });
+      if (!data?.init_point) throw new Error('No se recibió la URL de pago de Mercado Pago.');
+      window.location.href = data.init_point;
+    } catch (err) {
+      const msg = err.response?.data?.error || err.message || 'Error inesperado al iniciar la suscripción.';
+      setUpgradeError(msg);
+      setUpgradeLoading(false);
+    }
+  };
+
+  const handleCancelar = async () => {
+    setCancelLoading(true);
+    setCancelError(null);
+    try {
+      await axios.post('/api/suscripciones/cancelar');
+      setCancelModal(false);
+      setSuscripcion(null);
+      setSuscripcionActiva(false);
+    } catch (err) {
+      setCancelError(err.response?.data?.error || 'Error al cancelar la suscripción.');
+    } finally {
+      setCancelLoading(false);
+    }
+  };
 
   const planLabel = PLAN_LABELS[clubPlan] || clubPlan;
   const colors = PLAN_COLORS[clubPlan] || PLAN_COLORS.basico;
@@ -123,12 +180,17 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
   return (
     <div className="max-w-2xl mx-auto py-6 px-4 space-y-5">
       {/* Plan badge */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <div className={`px-4 py-1.5 rounded-full border text-sm font-bold tracking-wide ${colors.badge}`}>
           ⭐ Plan {planLabel}
         </div>
         {isPremium && (
           <span className="text-xs text-amber-600 font-medium">Plan activo con todas las funciones</span>
+        )}
+        {suscripcion?.status === 'paused' && (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 border border-red-200 text-red-700 text-xs font-bold">
+            ⚠️ Suscripción pausada — actualizá tu método de pago
+          </span>
         )}
       </div>
 
@@ -192,17 +254,127 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
             )}
           </ul>
 
-          <button className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold py-3 rounded-xl transition-all shadow-md shadow-amber-200">
-            {clubPlan === 'basico' ? 'Actualizar a Pro' : 'Actualizar a Premium'}
-          </button>
+          {upgradeError && (
+            <p className="text-red-600 text-xs mb-3">{upgradeError}</p>
+          )}
+
+          {suscripcionActiva ? (
+            /* Ya tiene una suscripción activa en este plan */
+            <div className="space-y-3">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl py-3 px-4 text-center">
+                <p className="text-emerald-700 text-sm font-semibold">✓ Suscripción activa</p>
+                {suscripcion?.next_payment_date && (
+                  <p className="text-emerald-600 text-xs mt-0.5">
+                    Próximo cobro: {new Date(suscripcion.next_payment_date).toLocaleDateString('es-AR')}
+                  </p>
+                )}
+              </div>
+              <a
+                href="https://www.mercadopago.com.ar/subscriptions"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold py-3 rounded-xl transition-all shadow-md shadow-amber-200 text-sm"
+              >
+                🔧 Gestionar Suscripción
+              </a>
+              <button
+                type="button"
+                onClick={() => setCancelModal(true)}
+                className="w-full text-red-500 hover:text-red-700 text-sm font-medium py-2 border border-red-200 hover:border-red-300 rounded-xl transition-colors"
+              >
+                Cancelar suscripción
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={upgradeLoading}
+              onClick={() => handleUpgrade(clubPlan === 'basico' ? 'pro' : 'premium')}
+              className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all shadow-md shadow-amber-200"
+            >
+              {upgradeLoading
+                ? 'Redirigiendo a Mercado Pago…'
+                : (clubPlan === 'basico' ? 'Actualizar a Pro' : 'Actualizar a Premium')}
+            </button>
+          )}
         </div>
       )}
 
       {isPremium && (
-        <div className="bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-5 text-center">
+        <div className="bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-5 text-center space-y-4">
           <p className="text-2xl mb-1">🏆</p>
           <p className="font-semibold text-amber-800">Estás en el plan máximo</p>
           <p className="text-amber-600 text-sm mt-1">Tenés acceso a todas las funciones de SetGo.</p>
+
+          {suscripcionActiva ? (
+            <div className="space-y-2">
+              {suscripcion?.next_payment_date && (
+                <p className="text-amber-700 text-xs">
+                  Próximo cobro: {new Date(suscripcion.next_payment_date).toLocaleDateString('es-AR')}
+                </p>
+              )}
+              <a
+                href="https://www.mercadopago.com.ar/subscriptions"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm transition-colors shadow-md shadow-amber-200"
+              >
+                🔧 Gestionar Suscripción
+              </a>
+              <br />
+              <button
+                type="button"
+                onClick={() => setCancelModal(true)}
+                className="text-red-400 hover:text-red-600 text-xs font-medium transition-colors"
+              >
+                Cancelar suscripción
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={upgradeLoading}
+              onClick={() => handleUpgrade('premium')}
+              className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white font-semibold text-sm transition-colors shadow-md shadow-amber-200"
+            >
+              {upgradeLoading ? 'Redirigiendo…' : 'Activar suscripción Grand Slam'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Modal de confirmación de cancelación */}
+      {cancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-7 max-w-sm w-full text-center space-y-4">
+            <p className="text-3xl">⚠️</p>
+            <h3 className="text-lg font-bold text-gray-900">¿Cancelar la suscripción?</h3>
+            <p className="text-gray-500 text-sm leading-relaxed">
+              Tu plan pasará a <strong>Básico</strong> al finalizar el período actual.
+              Perderás el acceso a las funciones avanzadas.
+            </p>
+            {cancelError && (
+              <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg py-2 px-3">{cancelError}</p>
+            )}
+            <div className="flex gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => { setCancelModal(false); setCancelError(null); }}
+                disabled={cancelLoading}
+                className="flex-1 py-3 border border-gray-200 rounded-xl text-gray-600 font-semibold text-sm hover:bg-gray-50 transition-colors disabled:opacity-60"
+              >
+                Mantener plan
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelar}
+                disabled={cancelLoading}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold text-sm transition-colors disabled:opacity-60"
+              >
+                {cancelLoading ? 'Cancelando…' : 'Sí, cancelar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -155,10 +155,14 @@ const buildWhatsAppUrlForInscripcion = (inscripcion, template) => {
 
 export default function AdminDashboard() {
   const { rolReal } = useAuth();
-  const { clubPlan } = useClub();
+  const { clubPlan, clubId } = useClub();
   const isSuperAdmin = rolReal === 'super_admin';
   const isAdminOrSuperAdmin = rolReal === 'admin' || rolReal === 'super_admin';
   const [activeTab, setActiveTab] = useState('canchas');
+
+  // Estado de suscripción para el banner de pago rechazado
+  const [suscripcionPausada, setSuscripcionPausada] = useState(false);
+  const [suscripcionPreapprovalId, setSuscripcionPreapprovalId] = useState(null);
 
   const {
     currentCourts,
@@ -259,6 +263,19 @@ export default function AdminDashboard() {
       if (newSocket) newSocket.disconnect();
     };
   }, []);
+
+  // Verificar si la suscripción está pausada (pago rechazado) para mostrar banner
+  useEffect(() => {
+    if (!clubId) return;
+    axios.get('/api/suscripciones/estado')
+      .then(({ data }) => {
+        setSuscripcionPausada(data.suscripcion?.status === 'paused');
+        setSuscripcionPreapprovalId(data.suscripcion?.preapproval_id || null);
+      })
+      .catch(() => {
+        // Silenciar error — el banner es best-effort
+      });
+  }, [clubId]);
 
   const fetchTorneosAdmin = async () => {
     try {
@@ -667,6 +684,30 @@ export default function AdminDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
+
+      {/* Banner de pago rechazado / suscripción pausada */}
+      {suscripcionPausada && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-start gap-3 flex-1">
+            <span className="text-xl mt-0.5">⚠️</span>
+            <div>
+              <p className="font-semibold text-red-800 text-sm">Problema con tu suscripción</p>
+              <p className="text-red-600 text-xs mt-0.5">
+                Hubo un problema con tu pago. Actualizá tu método de pago para mantener el acceso a las funciones premium.
+              </p>
+            </div>
+          </div>
+          <a
+            href="https://www.mercadopago.com.ar/subscriptions"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+          >
+            Actualizar método de pago →
+          </a>
+        </div>
+      )}
+
       <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-4 sm:p-6 flex flex-wrap gap-2">
           {TAB_ITEMS.map((tab) => {
