@@ -2824,77 +2824,93 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
 
                   {/* CENTER: GRAN FINAL */}
                   <div className="flex flex-col items-center justify-center self-center px-10 shrink-0">
+                    {/* Header */}
                     <div className="text-center mb-6">
                       <div className={`text-[11px] font-black tracking-[0.28em] uppercase mb-1 ${hallOfFameMode ? 'text-amber-400' : 'text-[#a6ce39]/70'}`}>Punto de convergencia</div>
                       <h4 className={`text-3xl font-black tracking-[0.12em] uppercase ${hallOfFameMode ? 'text-amber-200 [font-family:Georgia,Times,serif]' : 'text-white'}`}>
                         Gran Final
                       </h4>
-                      <span className={`mt-2 inline-flex items-center rounded-full border bg-gradient-to-r px-4 py-1.5 text-[11px] font-black tracking-wide ${hallOfFameMode ? 'from-emerald-300/90 via-emerald-200/90 to-emerald-100/90 text-emerald-950 border-emerald-200/80' : 'from-[#a6ce39]/25 to-[#a6ce39]/10 text-[#a6ce39] border-[#a6ce39]/35'}`}>
-                        +{toSafeNonNegativeInt(pointsConfig.puntos_campeon, 0)} pts ELO — Campeón
-                      </span>
-                    </div>
-                    <div className="w-80">
-                      {finalRoundKey && sortPartidosByOrder(rondas[finalRoundKey] || []).map((partido, idx) =>
-                        renderMatchCard(partido, idx, 1, 'none')
+                      {!torneoFinalizado && (
+                        <span className={`mt-2 inline-flex items-center rounded-full border bg-gradient-to-r px-4 py-1.5 text-[11px] font-black tracking-wide ${hallOfFameMode ? 'from-emerald-300/90 via-emerald-200/90 to-emerald-100/90 text-emerald-950 border-emerald-200/80' : 'from-[#a6ce39]/25 to-[#a6ce39]/10 text-[#a6ce39] border-[#a6ce39]/35'}`}>
+                          +{toSafeNonNegativeInt(pointsConfig.puntos_campeon, 0)} pts ELO — Campeón
+                        </span>
                       )}
                     </div>
 
-                    {/* ── FICHA DEL CAMPEÓN — dentro del canvas, sigue zoom/pan ── */}
-                    {torneoFinalizado && finalWinnerDisplayName && (
-                      <div className="mt-10 flex flex-col items-center">
-                        {/* Línea vertical que conecta con la tarjeta de la final */}
-                        <div className={`w-px h-10 ${hallOfFameMode ? 'bg-[#A6CE39]/50' : 'bg-[#a6ce39]/40'}`} />
+                    {/* ── CONVERGENCE POINT ──
+                         When done: premium champion card carries data-card-id so SVG lines terminate here.
+                         When in progress: regular match card (data-card-id lives inside renderMatchCard). */}
+                    {torneoFinalizado && finalPartido && finalWinnerId ? (
+                      <div
+                        key={`champ-${finalPartido.id}`}
+                        data-card-id={String(finalPartido.id)}
+                        className="champ-card-entry champ-card-glow relative w-80 rounded-2xl overflow-hidden text-center py-8 px-5"
+                        style={{ background: 'linear-gradient(160deg, #0f2518 0%, #081510 50%, #030b07 100%)' }}
+                      >
+                        {/* Radial spotlight from top */}
+                        <div className="pointer-events-none absolute inset-0"
+                          style={{ background: 'radial-gradient(ellipse 80% 45% at 50% 0%, rgba(166,206,57,0.10) 0%, transparent 65%)' }} />
 
-                        <div className="relative flex items-end justify-center">
-                          <div className="champ-card-entry champ-card-glow relative rounded-2xl border border-[#A6CE39]/40 bg-gradient-to-b from-[#0c2010] to-[#040e1c] px-11 py-10 text-center min-w-[450px] overflow-hidden">
-                            {/* Trophy watermark */}
-                            <img src={trophyHero} alt="" aria-hidden="true" className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-64 w-auto object-contain opacity-[0.04]" />
-                            {/* Inner radial glow at top */}
-                            <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(ellipse_60%_40%_at_50%_0%,rgba(166,206,57,0.08),transparent_70%)]" />
-
-                            <p className="relative text-[11px] font-black tracking-[0.32em] uppercase" style={{ color: '#A6CE39' }}>🏆 WINNER</p>
-
-                            <div className="relative mt-4 flex justify-center">
-                              <svg viewBox="0 0 260 120" className="absolute top-1/2 -translate-y-1/2 h-[110px] w-[250px] text-amber-400/30" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                                <path d="M24 104C74 80 90 32 118 16" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-                                <path d="M42 108C80 88 96 52 118 34" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
-                                <path d="M236 104C186 80 170 32 142 16" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-                                <path d="M218 108C180 88 164 52 142 34" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
-                              </svg>
-
-                              <div className="relative h-36 w-36 rounded-full overflow-hidden" style={{ border: '3px solid rgba(251,191,36,0.85)', boxShadow: '0 0 0 3px rgba(166,206,57,0.35), 0 0 0 6px rgba(166,206,57,0.08), inset 0 0 0 1px rgba(251,191,36,0.1)' }}>
-                                {finalWinnerMeta?.photo ? (
-                                  <img src={finalWinnerMeta.photo} alt={finalWinnerMeta.name} className="h-full w-full object-cover" />
-                                ) : (
-                                  <div className="h-full w-full flex items-center justify-center font-black text-4xl" style={{ background: 'linear-gradient(135deg,#0c2010,#040e1c)', color: '#A6CE39' }}>{finalWinnerInitials}</div>
-                                )}
+                        {/* Avatar */}
+                        <div className="relative mx-auto mb-4 h-24 w-24 rounded-full overflow-hidden"
+                          style={{ border: '2.5px solid rgba(251,191,36,0.80)', boxShadow: '0 0 0 4px rgba(166,206,57,0.18), 0 0 28px rgba(166,206,57,0.12)' }}>
+                          {finalWinnerMeta?.photo
+                            ? <img src={finalWinnerMeta.photo} alt={finalWinnerMeta.name} className="h-full w-full object-cover" />
+                            : <div className="h-full w-full flex items-center justify-center font-black text-3xl"
+                                style={{ background: 'linear-gradient(135deg,#0a1c0e,#040e1c)', color: '#A6CE39' }}>
+                                {finalWinnerInitials}
                               </div>
-                            </div>
-
-                            <p className="relative mt-5 text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-[#f6d67e] to-[#b88315] leading-[1.02] [font-family:Georgia,Times,serif]">
-                              {finalWinnerDisplayName}
-                            </p>
-
-                            <p className="relative mt-2 text-[11px] font-bold tracking-[0.3em] uppercase" style={{ color: 'rgba(166,206,57,0.8)' }}>¡CAMPEÓN!</p>
-
-                            <div className="relative mt-3 flex justify-center">
-                              <div className="inline-flex items-center rounded-full border border-[#A6CE39]/30 bg-[#A6CE39]/10 px-4 py-1.5 text-sm font-black" style={{ color: '#A6CE39', boxShadow: '0 4px 16px rgba(166,206,57,0.15)' }}>
-                                +{toSafeNonNegativeInt(pointsConfig.puntos_campeon, 0)} pts ELO
-                              </div>
-                            </div>
-
-                            <p className="relative mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
-                              {`Campeón del torneo${finalizacionFechaLabel ? ` - ${finalizacionFechaLabel}` : ''}`}
-                            </p>
-
-                            <div className="relative mt-3 flex items-center justify-center gap-2 text-xs">
-                              {finalWinnerMeta?.ranking ? <span className="rounded-full border border-amber-400/25 bg-amber-400/10 px-2 py-0.5 font-bold text-amber-400">#{finalWinnerMeta.ranking}</span> : null}
-                              {finalWinnerMeta?.location ? <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-semibold text-slate-400">{finalWinnerMeta.location}</span> : null}
-                            </div>
-                          </div>
+                          }
                         </div>
-                        {/* Espacio inferior para que la ficha no quede cortada */}
-                        <div className="h-16" />
+
+                        {/* Name */}
+                        <p className="relative text-2xl font-black leading-tight"
+                          style={{ background: 'linear-gradient(to bottom, #f9e4a0, #c9920e)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+                          {finalWinnerDisplayName}
+                        </p>
+
+                        {/* CAMPEÓN label */}
+                        <p className="relative mt-1 text-[9px] font-black tracking-[0.38em] uppercase" style={{ color: 'rgba(166,206,57,0.85)' }}>¡CAMPEÓN!</p>
+
+                        {/* ELO badge */}
+                        <div className="relative mt-4 flex justify-center">
+                          <span className="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-black"
+                            style={{ color: '#A6CE39', border: '1px solid rgba(166,206,57,0.28)', background: 'rgba(166,206,57,0.08)', boxShadow: '0 4px 14px rgba(166,206,57,0.10)' }}>
+                            +{toSafeNonNegativeInt(pointsConfig.puntos_campeon, 0)} pts ELO
+                          </span>
+                        </div>
+
+                        {/* Meta pills */}
+                        {(finalWinnerMeta?.ranking || finalWinnerMeta?.location) && (
+                          <div className="relative mt-2.5 flex flex-wrap items-center justify-center gap-2">
+                            {finalWinnerMeta.ranking && (
+                              <span className="rounded-full px-2 py-0.5 text-[11px] font-bold text-amber-300"
+                                style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.22)' }}>
+                                #{finalWinnerMeta.ranking}
+                              </span>
+                            )}
+                            {finalWinnerMeta.location && (
+                              <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-slate-400"
+                                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.10)' }}>
+                                {finalWinnerMeta.location}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Date + Score */}
+                        <p className="relative mt-3 text-[9px] font-semibold uppercase tracking-[0.2em] text-white/22">
+                          {finalizacionFechaLabel ? `Campeón · ${finalizacionFechaLabel}` : 'Campeón del torneo'}
+                        </p>
+                        {finalPartido?.resultado && (
+                          <p className="relative mt-1 text-sm tracking-wide text-gray-400">{finalPartido.resultado}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="w-80">
+                        {finalRoundKey && sortPartidosByOrder(rondas[finalRoundKey] || []).map((partido, idx) =>
+                          renderMatchCard(partido, idx, 1, 'none')
+                        )}
                       </div>
                     )}
                   </div>

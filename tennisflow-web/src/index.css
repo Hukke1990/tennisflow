@@ -7,15 +7,28 @@
 
 /* ── Champion card animations ── */
 @keyframes champCardEntry {
-  from { opacity: 0; transform: scale(0.86) translateY(20px); }
+  from { opacity: 0; transform: scale(0.88) translateY(16px); }
   to   { opacity: 1; transform: scale(1)    translateY(0);    }
 }
 @keyframes champCardGlow {
-  0%, 100% { box-shadow: 0 0 0 1px rgba(166,206,57,0.40), 0 0 48px rgba(166,206,57,0.18), 0 36px 90px rgba(4,14,28,0.92); }
-  50%      { box-shadow: 0 0 0 1px rgba(166,206,57,0.72), 0 0 86px rgba(166,206,57,0.38), 0 36px 90px rgba(4,14,28,0.92); }
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(166,206,57,0.35),
+      0 0 0 3px rgba(251,191,36,0.10),
+      0 0 52px rgba(166,206,57,0.16),
+      0 44px 100px rgba(0,0,0,0.92);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(166,206,57,0.68),
+      0 0 0 3px rgba(251,191,36,0.20),
+      0 0 92px rgba(166,206,57,0.34),
+      0 44px 100px rgba(0,0,0,0.92);
+  }
 }
-.champ-card-entry { animation: champCardEntry 0.75s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
-.champ-card-glow  { animation: champCardGlow  3.5s ease-in-out infinite; }
+/* Entry animation runs once; glow starts after entry finishes (0.7s delay) */
+.champ-card-entry { animation: champCardEntry 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.champ-card-glow  { animation: champCardGlow  3.5s ease-in-out 0.7s infinite; }
 
 body {
   margin: 0;
