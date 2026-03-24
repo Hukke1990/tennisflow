@@ -44,7 +44,7 @@ const PLAN_MAP = {
  * Documentación MP: https://www.mercadopago.com/developers/es/docs/your-integrations/notifications/webhooks
  */
 const verifyMpSignature = (req) => {
-  const secret = process.env.MP_WEBHOOK_SECRET;
+  const secret = process.env.MP_WEBHOOK_SECRET?.trim();
   if (!secret) return true; // sin secret → aceptar todo (solo para desarrollo)
 
   const xSignature  = req.headers['x-signature'] || '';
