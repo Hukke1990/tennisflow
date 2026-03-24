@@ -115,7 +115,7 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
   const [suscripcionActiva, setSuscripcionActiva] = useState(false);
   const [suscripcionLoading, setSuscripcionLoading] = useState(false);
   const [suscripcionError, setSuscripcionError] = useState(null);
-  const [pendingPlanChange, setPendingPlanChange] = useState(null); // plan al que cambiará
+  const [pendingPlanId, setPendingPlanId] = useState(null); // plan al que cambiará
 
   // Estados del flujo de upgrade
   const [upgradeLoading, setUpgradeLoading] = useState(false);
@@ -151,11 +151,22 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
       .then(({ data }) => {
         setSuscripcion(data.suscripcion);
         setSuscripcionActiva(data.activa);
-        setPendingPlanChange(data.pending_plan_change ?? null);
+        setPendingPlanId(data.pending_plan_id ?? null);
       })
       .catch(() => setSuscripcionError('No se pudo cargar el estado de la suscripción.'))
       .finally(() => setSuscripcionLoading(false));
   }, [clubId]);
+
+  // Calcula días restantes entre hoy y next_payment_date
+  const getDiasRestantes = (nextDate) => {
+    if (!nextDate) return null;
+    const hoy  = new Date();
+    const fin  = new Date(nextDate);
+    hoy.setHours(0, 0, 0, 0);
+    fin.setHours(0, 0, 0, 0);
+    const diff = Math.ceil((fin - hoy) / (1000 * 60 * 60 * 24));
+    return diff > 0 ? diff : 0;
+  };
 
   const handleUpgrade = async (planType) => {
     setUpgradeLoading(true);
@@ -178,7 +189,7 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
       const { data } = await axios.post('/api/suscripciones/cancelar');
       setCancelModal(false);
       // No limpiamos suscripcionActiva porque el plan sigue activo hasta el vencimiento
-      setPendingPlanChange(data.pending_plan_change ?? 'basico');
+      setPendingPlanId(data.pending_plan_id ?? 'basico');
     } catch (err) {
       setCancelError(err.response?.data?.error || 'Error al cancelar la suscripción.');
     } finally {
@@ -191,12 +202,11 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
     setAnularError(null);
     try {
       await axios.post('/api/suscripciones/anular-cambio-pendiente');
-      setPendingPlanChange(null);
       // Refrescar estado completo
       const { data } = await axios.get('/api/suscripciones/estado');
       setSuscripcion(data.suscripcion);
       setSuscripcionActiva(data.activa);
-      setPendingPlanChange(data.pending_plan_change ?? null);
+      setPendingPlanId(data.pending_plan_id ?? null);
     } catch (err) {
       setAnularError(err.response?.data?.error || 'No se pudo anular el cambio pendiente.');
     } finally {
@@ -228,36 +238,41 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
       </div>
 
       {/* Banner de cambio de plan pendiente */}
-      {pendingPlanChange && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
-          <div className="flex items-start gap-2">
-            <span className="text-lg">🔔</span>
-            <div className="flex-1">
-              <p className="text-amber-800 font-semibold text-sm">Cambio de plan programado</p>
-              <p className="text-amber-700 text-sm mt-0.5">
-                Tu plan cambiará a{' '}
-                <strong>{PLAN_LABELS[pendingPlanChange] || pendingPlanChange}</strong>
-                {suscripcion?.next_payment_date && (
-                  <> el día <strong>{new Date(suscripcion.next_payment_date).toLocaleDateString('es-AR')}</strong></>
-                )}
-                . Seguirás disfrutando del{' '}
-                <strong>Plan {planLabel}</strong> hasta entonces.
-              </p>
+      {pendingPlanId && (() => {
+        const dias = getDiasRestantes(suscripcion?.next_payment_date);
+        const fechaVto = suscripcion?.next_payment_date
+          ? new Date(suscripcion.next_payment_date).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })
+          : null;
+        return (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">🔔</span>
+              <div className="flex-1">
+                <p className="text-amber-800 font-bold text-sm">Cambio de plan programado</p>
+                <p className="text-amber-700 text-sm mt-1 leading-relaxed">
+                  {dias !== null && dias > 0
+                    ? <>Tu plan actual seguirá activo por los próximos <strong>{dias} día{dias !== 1 ? 's' : ''}</strong>. </>
+                    : <>Tu plan actual está vigente hasta hoy. </>}
+                  {fechaVto && (
+                    <>El <strong>{fechaVto}</strong>, tu suscripción cambiará automáticamente al <strong>Plan {PLAN_LABELS[pendingPlanId] || pendingPlanId}</strong>.</>
+                  )}
+                </p>
+              </div>
             </div>
+            {anularError && (
+              <p className="text-red-600 text-xs bg-red-50 border border-red-100 rounded-lg px-3 py-2">{anularError}</p>
+            )}
+            <button
+              type="button"
+              onClick={handleAnularCambioPendiente}
+              disabled={anularLoading}
+              className="w-full py-2.5 border border-amber-300 hover:border-amber-400 bg-white hover:bg-amber-50 text-amber-700 font-semibold text-sm rounded-xl transition-colors disabled:opacity-60"
+            >
+              {anularLoading ? 'Procesando…' : '↩ Anular cambio de plan'}
+            </button>
           </div>
-          {anularError && (
-            <p className="text-red-600 text-xs bg-red-50 border border-red-100 rounded-lg px-3 py-2">{anularError}</p>
-          )}
-          <button
-            type="button"
-            onClick={handleAnularCambioPendiente}
-            disabled={anularLoading}
-            className="w-full mt-1 py-2 border border-amber-300 hover:border-amber-400 bg-white hover:bg-amber-50 text-amber-700 font-semibold text-sm rounded-xl transition-colors disabled:opacity-60"
-          >
-            {anularLoading ? 'Procesando…' : '↩ Anular cambio pendiente'}
-          </button>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Usage card */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">

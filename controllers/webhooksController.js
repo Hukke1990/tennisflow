@@ -171,12 +171,12 @@ const mercadopago = async (req, res) => {
 
     const clubId = pmData.external_reference ?? null;
 
-    // Buscar suscripción vinculada para obtener suscripcion_id, plan_id y pending_plan_change
+    // Buscar suscripción vinculada para obtener suscripcion_id, plan_id y pending_plan_id
     let suscripcionRow = null;
     if (pmData.preapproval_id) {
       const { data } = await supabase
         .from('suscripciones')
-        .select('id, plan_id, pending_plan_change, club_id')
+        .select('id, plan_id, pending_plan_id, club_id')
         .eq('preapproval_id', pmData.preapproval_id)
         .maybeSingle();
       suscripcionRow = data;
@@ -185,7 +185,7 @@ const mercadopago = async (req, res) => {
     if (!suscripcionRow && clubId) {
       const { data } = await supabase
         .from('suscripciones')
-        .select('id, plan_id, pending_plan_change, club_id')
+        .select('id, plan_id, pending_plan_id, club_id')
         .eq('club_id', clubId)
         .maybeSingle();
       suscripcionRow = data;
@@ -196,12 +196,12 @@ const mercadopago = async (req, res) => {
       : 'pending';
 
     // Si el cobro fue aprobado y hay un cambio de plan pendiente, aplicarlo ahora
-    if (paymentStatus === 'approved' && suscripcionRow?.pending_plan_change && clubId) {
-      const newPlan = suscripcionRow.pending_plan_change;
-      console.log(`[webhook] Aplicando pending_plan_change: ${suscripcionRow.plan_id} → ${newPlan} (club ${clubId})`);
+    if (paymentStatus === 'approved' && suscripcionRow?.pending_plan_id && clubId) {
+      const newPlan = suscripcionRow.pending_plan_id;
+      console.log(`[webhook] Aplicando pending_plan_id: ${suscripcionRow.plan_id} → ${newPlan} (club ${clubId})`);
       await Promise.all([
         supabase.from('clubes').update({ plan: newPlan }).eq('id', clubId),
-        supabase.from('suscripciones').update({ pending_plan_change: null, plan_id: newPlan }).eq('id', suscripcionRow.id),
+        supabase.from('suscripciones').update({ pending_plan_id: null, plan_id: newPlan }).eq('id', suscripcionRow.id),
       ]);
     }
 
@@ -372,13 +372,13 @@ const mercadopago = async (req, res) => {
 
     // ── Degradar plan si es cancelada / pausada (diferido) ──────────────────
     // NO degradamos el plan del club inmediatamente: el usuario ya pagó el mes actual.
-    // Marcamos pending_plan_change='basico' para que el cron lo aplique al vencer el período.
+    // Marcamos pending_plan_id='basico' para que el cron lo aplique al vencer el período.
     const shouldDowngrade = shouldDowngradePlan;
 
     if (shouldDowngrade) {
       const { error: pendingError } = await supabase
         .from('suscripciones')
-        .update({ pending_plan_change: 'basico' })
+        .update({ pending_plan_id: 'basico' })
         .eq('club_id', clubId);
 
       if (!pendingError) {
@@ -386,7 +386,7 @@ const mercadopago = async (req, res) => {
         actionTaken = 'pending_downgrade';
         console.log(`[webhook] Club ${clubId}: downgrade a básico diferido (${newSubscriptionStatus})`);
       } else {
-        console.error('[webhook] Error al marcar pending_plan_change:', pendingError);
+        console.error('[webhook] Error al marcar pending_plan_id:', pendingError);
         actionTaken = 'error';
       }
     }

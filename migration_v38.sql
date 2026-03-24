@@ -1,9 +1,9 @@
 -- migration_v38.sql
--- Agrega pending_plan_change a suscripciones + función + cron para degradar planes expirados
+-- Agrega pending_plan_id a suscripciones + función + cron para degradar planes expirados
 
 -- 1. Nuevo campo en suscripciones
 ALTER TABLE suscripciones
-  ADD COLUMN IF NOT EXISTS pending_plan_change text;
+  ADD COLUMN IF NOT EXISTS pending_plan_id text;
 
 -- 2. Función que degrada planes cuyo período ya expiró
 CREATE OR REPLACE FUNCTION apply_expired_plan_changes()
@@ -14,23 +14,23 @@ DECLARE
   rec RECORD;
 BEGIN
   FOR rec IN
-    SELECT s.id, s.club_id, s.pending_plan_change
+    SELECT s.id, s.club_id, s.pending_plan_id
     FROM suscripciones s
-    WHERE s.status              = 'cancelled'
-      AND s.pending_plan_change IS NOT NULL
+    WHERE s.pending_plan_id IS NOT NULL
       AND (s.next_payment_date IS NULL OR s.next_payment_date < NOW())
   LOOP
     -- Degradar el plan del club
     UPDATE clubes
-       SET plan = rec.pending_plan_change
+       SET plan = rec.pending_plan_id
      WHERE id   = rec.club_id;
 
-    -- Limpiar el cambio pendiente
+    -- Limpiar el cambio pendiente y actualizar plan_id
     UPDATE suscripciones
-       SET pending_plan_change = NULL
+       SET pending_plan_id = NULL,
+           plan_id         = rec.pending_plan_id
      WHERE id = rec.id;
 
-    RAISE NOTICE 'Club % degradado a %', rec.club_id, rec.pending_plan_change;
+    RAISE NOTICE 'Club % degradado a %', rec.club_id, rec.pending_plan_id;
   END LOOP;
 END;
 $$;
