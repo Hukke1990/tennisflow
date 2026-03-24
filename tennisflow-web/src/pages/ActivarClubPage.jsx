@@ -1,7 +1,99 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 
 const API = import.meta.env.VITE_API_URL ?? '';
+
+// ── Pantalla de éxito con polling ─────────────────────────────────────────────
+function PagoExitoScreen({ clubId, clubNombre }) {
+  const [estado, setEstado] = useState('verificando'); // 'verificando' | 'activo' | 'timeout'
+  const [slug, setSlug]     = useState(null);
+  const intentos = useRef(0);
+  const MAX_INTENTOS = 20; // ~40 segundos
+
+  useEffect(() => {
+    const intervalo = setInterval(async () => {
+      intentos.current += 1;
+      try {
+        const res  = await fetch(`${API}/api/activar/${clubId}/verificar`);
+        const data = await res.json();
+        if (data.is_active) {
+          setSlug(data.slug);
+          setEstado('activo');
+          clearInterval(intervalo);
+          return;
+        }
+      } catch (_) { /* seguir intentando */ }
+
+      if (intentos.current >= MAX_INTENTOS) {
+        setEstado('timeout');
+        clearInterval(intervalo);
+      }
+    }, 2000);
+
+    return () => clearInterval(intervalo);
+  }, [clubId]);
+
+  if (estado === 'activo') {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
+        <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-8 max-w-md w-full text-center">
+          <div className="w-14 h-14 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4 text-3xl">
+            🎾
+          </div>
+          <h2 className="text-white text-2xl font-bold mb-2">¡Club activado!</h2>
+          <p className="text-slate-400 mb-6">
+            <span className="text-white font-medium">{clubNombre}</span> ya está listo para usar.
+          </p>
+          {slug && (
+            <a
+              href={`/${slug}/login`}
+              className="inline-block bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-8 rounded-xl transition-colors"
+            >
+              Ingresar al club
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (estado === 'timeout') {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
+        <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-8 max-w-md w-full text-center">
+          <div className="text-3xl mb-4">⏳</div>
+          <h2 className="text-white text-xl font-semibold mb-2">Pago en proceso</h2>
+          <p className="text-slate-400 mb-2">
+            El pago fue recibido pero la activación está tardando más de lo esperado.
+          </p>
+          <p className="text-slate-500 text-sm mb-6">
+            En unos minutos tu club estará activo. Si el problema persiste, contactá soporte.
+          </p>
+          <button
+            type="button"
+            onClick={() => { intentos.current = 0; setEstado('verificando'); }}
+            className="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 py-2 px-6 rounded-lg transition-colors text-sm"
+          >
+            Reintentar verificación
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Verificando...
+  return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
+      <div className="bg-slate-900 border border-white/10 rounded-2xl p-8 max-w-md w-full text-center">
+        <div className="w-10 h-10 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin mx-auto mb-4" />
+        <h2 className="text-white text-xl font-semibold mb-2">Verificando pago…</h2>
+        <p className="text-slate-400 text-sm">
+          Confirmando con Mercado Pago que el pago fue exitoso. Esto tarda unos segundos.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 const PLANES = [
   {
@@ -128,20 +220,7 @@ export default function ActivarClubPage() {
   }
 
   if (pagoExito) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
-        <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-8 max-w-md w-full text-center">
-          <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4 text-2xl">
-            🎾
-          </div>
-          <h2 className="text-white text-xl font-semibold mb-2">¡Pago recibido!</h2>
-          <p className="text-slate-400">
-            Tu club <span className="text-white font-medium">{club?.nombre}</span> será activado en
-            momentos. Revisá tu email para las instrucciones de acceso.
-          </p>
-        </div>
-      </div>
-    );
+    return <PagoExitoScreen clubId={clubId} clubNombre={club?.nombre} />;
   }
 
   return (

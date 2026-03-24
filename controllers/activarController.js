@@ -182,4 +182,104 @@ const iniciarPago = async (req, res) => {
   }
 };
 
-module.exports = { getClubParaActivar, iniciarPago };
+// ── GET /api/activar/:clubId/verificar ─────────────────────────────────────
+// Consulta MP directamente y activa el club si el preapproval está authorized.
+// El frontend lo llama en polling al volver de la página de pago.
+
+const verificarPago = async (req, res) => {
+  try {
+    const clubId = String(req.params?.clubId || '').trim();
+    if (!clubId) return res.status(400).json({ error: 'Club ID requerido.' });
+
+    const mpToken = process.env.MP_ACCESS_TOKEN;
+    if (!mpToken) return res.status(500).json({ error: 'Configuración incompleta.' });
+
+    // Obtener el preapproval_id guardado en suscripciones para este club
+    const { data: sub } = await supabase
+      .from('suscripciones')
+      .select('preapproval_id, plan_id, status')
+      .eq('club_id', clubId)
+      .maybeSingle();
+
+    if (!sub?.preapproval_id) {
+      return res.json({ is_active: false, reason: 'sin_suscripcion' });
+    }
+
+    // Consultar MP: primero intentar como preapproval (suscripción), luego como plan template
+    let mpStatus = null;
+    let resolvedPlanId = sub.plan_id ?? 'basico';
+
+    // Buscar suscripción activa vinculada al template (el ID que guardamos es el del plan)
+    try {
+      // Buscar preapprovals activos cuyo preapproval_plan_id sea nuestro template
+      const searchRes = await fetch(
+        `https://api.mercadopago.com/preapproval/search?preapproval_plan_id=${sub.preapproval_id}&external_reference=${clubId}`,
+        { headers: { Authorization: `Bearer ${mpToken}` } },
+      );
+      if (searchRes.ok) {
+        const searchData = await searchRes.json();
+        const instances = searchData?.results ?? [];
+        const authorized = instances.find((i) => i.status === 'authorized');
+        if (authorized) {
+          mpStatus = 'authorized';
+          resolvedPlanId = sub.plan_id ?? 'basico';
+        } else if (instances.length > 0) {
+          mpStatus = instances[0].status;
+        }
+      }
+    } catch (_) { /* ignorar */ }
+
+    // Fallback: consultar el template directamente
+    if (!mpStatus) {
+      try {
+        const planRes = await fetch(
+          `https://api.mercadopago.com/preapproval_plan/${sub.preapproval_id}`,
+          { headers: { Authorization: `Bearer ${mpToken}` } },
+        );
+        if (planRes.ok) {
+          const planData = await planRes.json();
+          // El plan en sí no tiene status de "pagado", buscar si tiene suscripciones
+          // Si llegamos aquí sin encontrar instancia, el pago aún no procesó
+          mpStatus = planData?.status ?? null;
+        }
+      } catch (_) { /* ignorar */ }
+    }
+
+    // Si encontramos una instancia autorizada → activar el club
+    if (mpStatus === 'authorized') {
+      const { PLAN_MAP } = { PLAN_MAP: { basico:'basico', pro:'pro', premium:'premium', test:'test' } };
+      const targetPlan = PLAN_MAP[resolvedPlanId] ?? 'basico';
+
+      await Promise.all([
+        supabase.from('clubes').update({ is_active: true, plan: targetPlan }).eq('id', clubId),
+        supabase.from('suscripciones').update({ status: 'authorized' }).eq('club_id', clubId),
+      ]);
+
+      const { data: club } = await supabase
+        .from('clubes')
+        .select('slug')
+        .eq('id', clubId)
+        .maybeSingle();
+
+      return res.json({ is_active: true, plan: targetPlan, slug: club?.slug ?? null });
+    }
+
+    // Verificar si el club ya fue activado por el webhook antes de que llegáramos
+    const { data: club } = await supabase
+      .from('clubes')
+      .select('is_active, plan, slug')
+      .eq('id', clubId)
+      .maybeSingle();
+
+    if (club?.is_active) {
+      return res.json({ is_active: true, plan: club.plan, slug: club.slug });
+    }
+
+    return res.json({ is_active: false, mp_status: mpStatus, reason: 'pendiente' });
+  } catch (err) {
+    console.error('[activar] Error en verificarPago:', err);
+    return res.status(500).json({ error: 'Error interno.' });
+  }
+};
+
+module.exports = { getClubParaActivar, iniciarPago, verificarPago };
