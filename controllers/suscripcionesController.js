@@ -183,11 +183,11 @@ const cancelar = async (req, res) => {
       });
     }
 
-    // Actualizar DB: suscripcion → cancelled + actualizar preapproval_id real si cambió
+    // Actualizar DB: suscripcion → cancelled + plan_id a basico + preapproval_id real si cambió
     await Promise.all([
       supabase
         .from('suscripciones')
-        .update({ status: 'cancelled', preapproval_id: realPreapprovalId })
+        .update({ status: 'cancelled', plan_id: 'basico', preapproval_id: realPreapprovalId })
         .eq('club_id', clubId),
       supabase
         .from('clubes')

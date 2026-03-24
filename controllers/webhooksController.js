@@ -294,9 +294,11 @@ const mercadopago = async (req, res) => {
       mpData.next_payment_date ??
       null;
 
+    const shouldDowngradePlan = ['cancelled', 'paused'].includes(newSubscriptionStatus);
+
     const upsertPayload = {
       club_id:          clubId,
-      plan_id:          resolvedPlanId,
+      plan_id:          shouldDowngradePlan ? 'basico' : resolvedPlanId,
       preapproval_id:   resourceId,   // actualiza al ID real de la instancia de suscripción
       status:           newSubscriptionStatus,
       next_payment_date: nextPaymentDate,
@@ -350,7 +352,7 @@ const mercadopago = async (req, res) => {
     }
 
     // ── Degradar a básico si la suscripción es cancelada / pausada ───────────
-    const shouldDowngrade = ['cancelled', 'paused'].includes(newSubscriptionStatus);
+    const shouldDowngrade = shouldDowngradePlan;
 
     if (shouldDowngrade) {
       const { error: downgradeError } = await supabase
