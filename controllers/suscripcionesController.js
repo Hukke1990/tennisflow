@@ -237,7 +237,7 @@ const getPlanes = (_req, res) => {
  * El club y el email se resuelven desde el usuario autenticado.
  */
 const PLAN_PRICES_MP = {
-  pro:     { amount: 50, reason: 'SetGo Pro — Suscripción mensual', amount_ars_override: 100 }, // TEST: revertir a null antes de producción real
+  pro:     { amount: 50, reason: 'SetGo Pro — Suscripción mensual' },
   premium: { amount: 70, reason: 'SetGo Grand Slam — Suscripción mensual' },
 };
 
