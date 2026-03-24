@@ -10,6 +10,26 @@ const resolveClubId = (req) => {
   return fromParams || fromUser || fromQuery || null;
 };
 
+const DOLAR_FALLBACK = 1200; // tasa de emergencia si la API falla
+
+/**
+ * Obtiene la cotización del dólar oficial (venta) desde dolarapi.com.
+ * Si falla, devuelve el valor de fallback.
+ */
+const fetchCotizacion = async () => {
+  try {
+    const resp = await fetch('https://dolarapi.com/v1/dolares/oficial', {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!resp.ok) throw new Error(`dolarapi status ${resp.status}`);
+    const d = await resp.json();
+    const rate = Number(d?.venta);
+    return Number.isFinite(rate) && rate > 0 ? rate : DOLAR_FALLBACK;
+  } catch {
+    return DOLAR_FALLBACK;
+  }
+};
+
 // ── Controladores ─────────────────────────────────────────────────────────────
 
 /**
@@ -185,8 +205,8 @@ const getPlanes = (_req, res) => {
  * El club y el email se resuelven desde el usuario autenticado.
  */
 const PLAN_PRICES_MP = {
-  pro:     { amount: 50, reason: 'TennisFlow Pro — Suscripción mensual' },
-  premium: { amount: 70, reason: 'TennisFlow Grand Slam — Suscripción mensual' },
+  pro:     { amount: 50, reason: 'SetGo Pro — Suscripción mensual' },
+  premium: { amount: 70, reason: 'SetGo Grand Slam — Suscripción mensual' },
 };
 
 /**
@@ -195,8 +215,8 @@ const PLAN_PRICES_MP = {
  * En producción, APP_URL es HTTPS y se usa directamente.
  */
 const buildBackUrl = (plan_type, slug) => {
-  const appUrl     = process.env.APP_URL || '';
-  const backBase   = process.env.MP_BACK_URL || appUrl;
+  const appUrl     = (process.env.APP_URL || '').trim();
+  const backBase   = (process.env.MP_BACK_URL || appUrl).trim();
   const isLocalhost = backBase.includes('localhost') || backBase.includes('127.0.0.1');
   if (isLocalhost) {
     // Fallback: página neutra de MP (el admin verá la confirmación en el panel de MP)
@@ -235,7 +255,12 @@ const iniciar = async (req, res) => {
       return res.status(404).json({ error: 'Club no encontrado.' });
     }
 
-    const webhookUrl = process.env.MP_WEBHOOK_URL || '';
+    // Cotización del dólar oficial y cálculo en ARS
+    const cotizacion = await fetchCotizacion();
+    const monto_usd  = planPrice.amount;
+    const monto_ars  = Math.round(monto_usd * cotizacion);
+
+    const webhookUrl = (process.env.MP_WEBHOOK_URL || '').trim();
 
     // Usar preapproval_plan: no requiere payer_email (el pagador lo ingresa en el checkout).
     // Es el flujo correcto para suscripciones donde el admin compra para su propia cuenta.
@@ -244,8 +269,8 @@ const iniciar = async (req, res) => {
       auto_recurring: {
         frequency:           1,
         frequency_type:      'months',
-        transaction_amount:  planPrice.amount,
-        currency_id:         process.env.MP_CURRENCY_ID || 'ARS',
+        transaction_amount:  monto_ars,
+        currency_id:         'ARS',
       },
       back_url:          buildBackUrl(plan_type, club.slug),
       external_reference: clubId,
@@ -270,7 +295,7 @@ const iniciar = async (req, res) => {
     const mpData = await mpResponse.json();
 
     // Persistir plan pendiente (el status se actualizará vía webhook cuando el pago se confirme)
-    await supabase
+    const { data: suscripcionData } = await supabase
       .from('suscripciones')
       .upsert(
         {
@@ -281,7 +306,23 @@ const iniciar = async (req, res) => {
           external_reference: clubId,
         },
         { onConflict: 'club_id' },
-      );
+      )
+      .select('id')
+      .maybeSingle();
+
+    // Registrar en historial de pagos con cotización aplicada
+    await supabase.from('pagos_historial').insert({
+      club_id:        clubId,
+      suscripcion_id: suscripcionData?.id ?? null,
+      preapproval_id: mpData.id,
+      monto:          monto_ars,
+      monto_usd,
+      cotizacion,
+      currency:       'ARS',
+      plan_id:        plan_type,
+      status:         mpData.status ?? 'pending',
+      descripcion:    `Inicio suscripción ${plan_type} — $${monto_usd} USD × ${cotizacion} = $${monto_ars} ARS`,
+    });
 
     const planCfg = getPlanConfig(plan_type);
     return res.status(200).json({
@@ -290,6 +331,8 @@ const iniciar = async (req, res) => {
       status:         mpData.status,
       plan:           plan_type,
       price_display:  formatPrice(planCfg.monthly_price_usd),
+      monto_ars,
+      cotizacion,
       tax_disclaimer: 'Impuestos no incluidos',
     });
   } catch (err) {
@@ -298,4 +341,22 @@ const iniciar = async (req, res) => {
   }
 };
 
-module.exports = { getEstado, cancelar, getPlanes, iniciar };
+/**
+ * GET /api/suscripciones/cotizacion
+ *
+ * Devuelve la cotización actual del dólar oficial y los precios aproximados
+ * en ARS para cada plan. Público (sin auth requerida).
+ */
+const getCotizacion = async (_req, res) => {
+  const cotizacion = await fetchCotizacion();
+  return res.status(200).json({
+    cotizacion,
+    fuente: cotizacion === DOLAR_FALLBACK ? 'fallback' : 'dolarapi',
+    precios_ars: {
+      pro:     Math.round(50 * cotizacion),
+      premium: Math.round(70 * cotizacion),
+    },
+  });
+};
+
+module.exports = { getEstado, cancelar, getPlanes, iniciar, getCotizacion };

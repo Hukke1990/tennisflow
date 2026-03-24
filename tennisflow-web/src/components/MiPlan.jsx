@@ -107,6 +107,9 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
   const { clubPlan = 'basico', clubId, clubSlug } = useClub();
   const [jugadoresCount, setJugadoresCount] = useState(null);
 
+  // Cotización dólar oficial para mostrar precio en ARS
+  const [preciosARS, setPreciosARS] = useState(null);
+
   // Estado de suscripción desde el backend
   const [suscripcion, setSuscripcion] = useState(null);   // objeto suscripcion o null
   const [suscripcionActiva, setSuscripcionActiva] = useState(false);
@@ -128,6 +131,12 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
       .then(({ data }) => setJugadoresCount(data.count ?? 0))
       .catch(() => setJugadoresCount(null));
   }, [clubId]);
+
+  useEffect(() => {
+    axios.get('/api/suscripciones/cotizacion')
+      .then(({ data }) => setPreciosARS(data.precios_ars))
+      .catch(() => {}); // fallo silencioso; el precio en USD sigue visible
+  }, []);
 
   useEffect(() => {
     if (!clubId) return;
@@ -230,10 +239,31 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
           <h3 className="font-semibold text-amber-800 mb-1">
             {clubPlan === 'basico' ? '¿Necesitás más capacidad? Pasate a Pro' : 'Desbloqueá todo con Premium'}
           </h3>
-          <p className="text-amber-700 text-sm mb-4">
+          <p className="text-amber-700 text-sm mb-1">
             {clubPlan === 'basico'
               ? 'Con Pro gestionás hasta 5 torneos, 6 canchas y 500 jugadores.'
               : 'Con Premium obtenés todo ilimitado, partidos en vivo y branding propio.'}
+          </p>
+          <p className="text-amber-800 text-base font-bold mb-4">
+            {clubPlan === 'basico' ? (
+              <>
+                $50 <span className="text-xs font-semibold">USD/mes</span>
+                {preciosARS?.pro && (
+                  <span className="ml-2 text-amber-600 font-semibold text-sm">
+                    (~${preciosARS.pro.toLocaleString('es-AR')} ARS)
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                $70 <span className="text-xs font-semibold">USD/mes</span>
+                {preciosARS?.premium && (
+                  <span className="ml-2 text-amber-600 font-semibold text-sm">
+                    (~${preciosARS.premium.toLocaleString('es-AR')} ARS)
+                  </span>
+                )}
+              </>
+            )}
           </p>
 
           <ul className="space-y-1.5 mb-5">
@@ -259,7 +289,6 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
           )}
 
           {suscripcionActiva ? (
-            /* Ya tiene una suscripción activa en este plan */
             <div className="space-y-3">
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl py-3 px-4 text-center">
                 <p className="text-emerald-700 text-sm font-semibold">✓ Suscripción activa</p>
@@ -297,6 +326,9 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
                 : (clubPlan === 'basico' ? 'Actualizar a Pro' : 'Actualizar a Premium')}
             </button>
           )}
+          <p className="text-amber-600 text-xs mt-3 text-center">
+            El cobro se realiza en pesos argentinos al tipo de cambio del día.
+          </p>
         </div>
       )}
 

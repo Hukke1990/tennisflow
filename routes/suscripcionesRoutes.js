@@ -6,6 +6,9 @@ const { requireAuth, requireAdmin } = require('../middlewares/auth');
 // GET /api/suscripciones/planes — público, lista de planes con precios
 router.get('/planes', suscripcionesController.getPlanes);
 
+// GET /api/suscripciones/cotizacion — público, cotización dólar oficial + precios en ARS
+router.get('/cotizacion', suscripcionesController.getCotizacion);
+
 // GET /api/suscripciones/estado — estado de la suscripción del club autenticado
 router.get('/estado', requireAuth, requireAdmin, suscripcionesController.getEstado);
 
