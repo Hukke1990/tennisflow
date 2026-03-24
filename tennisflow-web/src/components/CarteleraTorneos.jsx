@@ -5,6 +5,7 @@ import { es } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import InscripcionModal from './InscripcionModal';
 import BajaModal from './BajaModal';
+import PublicClubBanner from './PublicClubBanner';
 import { getInscripcionWindowState } from '../lib/inscripcionWindow';
 import { useAuth } from '../context/AuthContext';
 import { useClub, useClubPath } from '../context/ClubContext';
@@ -264,7 +265,7 @@ function CourtOverlay({ surfaceKey = 'default' }) {
 
 export default function CarteleraTorneos() {
   const navigate = useNavigate();
-  const { clubId } = useClub();
+  const { clubId, clubPlan, clubWhiteLabel } = useClub();
   const toClubPath = useClubPath();
   const { isAdmin, user, perfil } = useAuth();
   const [torneos, setTorneos] = useState([]);
@@ -906,6 +907,11 @@ export default function CarteleraTorneos() {
           }}
         />
       )}
+
+      <PublicClubBanner
+        clubPlan={clubPlan}
+        clubWhiteLabel={clubWhiteLabel}
+      />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth, requireAdmin } = require('../middlewares/auth');
+const { checkPlanLimit } = require('../middlewares/checkPlanLimit');
 
 // Exportar como función para inyectar io
 module.exports = (io) => {
@@ -10,7 +11,7 @@ module.exports = (io) => {
   router.get('/', canchasController.obtenerCanchas);
 
   // POST /api/canchas
-  router.post('/', requireAuth, requireAdmin, canchasController.crearCancha);
+  router.post('/', requireAuth, requireAdmin, checkPlanLimit('cancha'), canchasController.crearCancha);
 
   // PUT /api/canchas/:id/estado
   router.put('/:id/estado', requireAuth, requireAdmin, canchasController.actualizarEstadoCancha);

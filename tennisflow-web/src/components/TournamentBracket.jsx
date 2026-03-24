@@ -550,7 +550,7 @@ const payloadMatchesTournament = (payload, torneoId) => {
 };
 
 export default function TournamentBracket({ torneoId, adminMode = false }) {
-  const { clubId: contextClubId, club } = useClub();
+  const { clubId: contextClubId, club, clubPlan = 'basico' } = useClub();
   const [partidos, setPartidos] = useState([]);
   const [canchas, setCanchas] = useState([]);
   const [torneoEstado, setTorneoEstado] = useState('');
@@ -1377,11 +1377,27 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
   // Defined here so bracketOrder, rondas, jugadoresPorPartido, finalWinnerDisplayName
   // are all in scope (they are defined earlier in the component body above this point).
   // eslint-disable-next-line no-shadow
-  const exportBracketsToPDF = useCallback(() => {
+  const exportBracketsToPDF = useCallback(async () => {
     if (exportingBracket || !partidos.length || !bracketOrder.length) return;
     setExportingBracket(true);
     try {
       const today = format(new Date(), 'dd/MM/yyyy', { locale: es });
+
+      // Cargar logo para Pro y Premium
+      const isPro = clubPlan === 'pro' || clubPlan === 'premium';
+      let logoDataUrl = null;
+      if (isPro && club?.logo_url) {
+        try {
+          const resp = await fetch(club.logo_url);
+          const blob = await resp.blob();
+          logoDataUrl = await new Promise((res, rej) => {
+            const fr = new FileReader();
+            fr.onload = () => res(fr.result);
+            fr.onerror = rej;
+            fr.readAsDataURL(blob);
+          });
+        } catch { logoDataUrl = null; }
+      }
       const numCols = bracketOrder.length;
       const pageFormat = numCols > 4 ? 'a3' : 'a4';
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: pageFormat });
@@ -1443,7 +1459,10 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
       pdf.setFont('helvetica', 'italic');
       pdf.setFontSize(6.5);
       pdf.setTextColor(...GRAY);
-      pdf.text(`Generado por SetGo · ${today}`, pageW / 2, footerY, { align: 'center' });
+      const footerText = clubPlan === 'basico'
+        ? `Generado por SetGo · ${today}`
+        : `${club?.nombre || ''} · ${today}`.replace(/^· /, '').trim();
+      pdf.text(footerText, pageW / 2, footerY, { align: 'center' });
 
       // ── Bracket geometry ──────────────────────────────────────────────
       const bTop = hY;
@@ -1646,7 +1665,7 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
     }
   }, [
     bracketOrder, rondas, jugadoresPorPartido, partidos,
-    exportingBracket, torneoTitulo, finalWinnerDisplayName, club,
+    exportingBracket, torneoTitulo, finalWinnerDisplayName, club, clubPlan,
   ]);
 
   const mutateProgramacion = async (partidoId, slotData, mode) => {

@@ -22,6 +22,7 @@ app.use('/api/perfil', require('./routes/perfilRoutes'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 app.use('/api/rankings', require('./routes/rankingsRoutes'));
 app.use('/api/super-admin', require('./routes/superAdminRoutes'));
+app.use('/api/club-config', require('./routes/clubConfigRoutes'));
 
 
 

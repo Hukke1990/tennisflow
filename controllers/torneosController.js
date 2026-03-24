@@ -1,5 +1,6 @@
 const supabase = require('../services/supabase');
 const { randomUUID } = require('crypto');
+const { getPlanConfig } = require('../services/planConfig');
 
 const DEFAULT_INSCRIBIBLE_STATE = 'publicado';
 const INSCRIBIBLE_STATES = new Set(['publicado', 'abierto']);
@@ -907,6 +908,40 @@ const crearTorneo = async (req, res) => {
     const reglasFechasError = validateTournamentDateRules(payload);
     if (reglasFechasError) {
       return res.status(400).json({ error: reglasFechasError });
+    }
+
+    // Verificar límite de torneos simultáneos según el plan
+    {
+      const { data: clubRow } = await supabase
+        .from('clubes')
+        .select('plan')
+        .eq('id', clubId)
+        .maybeSingle();
+
+      const planCfg = getPlanConfig(clubRow?.plan);
+      const maxSimultaneous = planCfg.max_simultaneous_tournaments;
+
+      if (maxSimultaneous !== -1 && maxSimultaneous < 100) {
+        const { data: overlapCount, error: rpcError } = await supabase.rpc(
+          'check_tournament_overlap',
+          {
+            p_club_id:    clubId,
+            p_start_date: payload.fecha_inicio,
+            p_end_date:   payload.fecha_fin,
+          }
+        );
+
+        if (!rpcError && overlapCount >= maxSimultaneous) {
+          return res.status(403).json({
+            code:     'LIMIT_REACHED',
+            resource: 'torneo_simultaneo',
+            current:  overlapCount,
+            limit:    maxSimultaneous,
+            plan:     clubRow?.plan ?? 'basico',
+            message:  `Tu plan permite máximo ${maxSimultaneous} torneos simultáneos. Finalizá o cancelá uno existente, o actualizá tu plan.`,
+          });
+        }
+      }
     }
 
     const { ids: canchasIds, error: canchasParseError } = normalizeAssignedCanchas(req.body);

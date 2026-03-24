@@ -770,7 +770,7 @@ const broadcastLiveUpdate = ({ torneoId, partidoId, action }) => {
   }
 };
 
-export default function AdminLiveControl({ torneos = [] }) {
+export default function AdminLiveControl({ torneos = [], canUseLive = true }) {
   const { isAdmin } = useAuth();
   const canManageLive = Boolean(isAdmin);
   const [selectedTorneoId, setSelectedTorneoId] = useState('');
@@ -1779,14 +1779,31 @@ export default function AdminLiveControl({ torneos = [] }) {
                             <p className="text-xs mt-1">{getDisplayPartidoLabel(partido)}</p>
                             <p className="text-xs text-gray-500 mt-1">{formatScheduled(partido?.fecha_hora)}</p>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleStartNext(card)}
-                            disabled={busy || !canManageLive}
-                            className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm py-3 disabled:opacity-60"
-                          >
-                            {busy ? 'Iniciando...' : 'Iniciar Siguiente Partido'}
-                          </button>
+                          {canUseLive ? (
+                            <button
+                              type="button"
+                              onClick={() => handleStartNext(card)}
+                              disabled={busy || !canManageLive}
+                              className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm py-3 disabled:opacity-60"
+                            >
+                              {busy ? 'Iniciando...' : 'Iniciar Siguiente Partido'}
+                            </button>
+                          ) : (
+                            <div className="relative group">
+                              <button
+                                type="button"
+                                disabled
+                                className="w-full rounded-xl bg-gray-200 text-gray-400 font-bold text-sm py-3 cursor-not-allowed flex items-center justify-center gap-2"
+                              >
+                                <span>🔒</span>
+                                Partido en Vivo
+                              </button>
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-56 rounded-xl bg-gray-900 text-white text-xs font-medium px-3 py-2 text-center shadow-lg z-20 pointer-events-none">
+                                Función exclusiva para Plan Grand Slam
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+                              </div>
+                            </div>
+                          )}
                         </>
                       ) : (
                         <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-4 text-sm text-gray-500 text-center">

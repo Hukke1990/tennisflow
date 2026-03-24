@@ -6,6 +6,13 @@ import AdminLiveControl from './AdminLiveControl';
 import AdminControlPanel from './AdminControlPanel';
 import DevToolsPanel from './DevToolsPanel';
 import { useAuth } from '../context/AuthContext';
+import { useClub } from '../context/ClubContext';
+import PlanLimitModal from './PlanLimitModal';
+import MiPlan from './MiPlan';
+import SetGoBanner from './SetGoBanner';
+import ClubConfigTab from './ClubConfigTab';
+import PlanStatusCard from './PlanStatusCard';
+import { usePlanRestrictions } from '../hooks/usePlanRestrictions';
 
 const DEFAULT_POINTS_BY_ROUND = {
   32: '5',
@@ -148,9 +155,19 @@ const buildWhatsAppUrlForInscripcion = (inscripcion, template) => {
 
 export default function AdminDashboard() {
   const { rolReal } = useAuth();
+  const { clubPlan } = useClub();
   const isSuperAdmin = rolReal === 'super_admin';
   const isAdminOrSuperAdmin = rolReal === 'admin' || rolReal === 'super_admin';
   const [activeTab, setActiveTab] = useState('canchas');
+
+  const {
+    currentCourts,
+    currentTournamentsThisWeekend,
+    limits: planLimits,
+    isOverLimit,
+    loading: planLoading,
+    refresh: refreshPlan,
+  } = usePlanRestrictions();
   const [canchas, setCanchas] = useState([]);
   const [loadingCanchas, setLoadingCanchas] = useState(true);
   const [canchaForm, setCanchaForm] = useState({
@@ -161,6 +178,7 @@ export default function AdminDashboard() {
   });
   const [editingCanchaId, setEditingCanchaId] = useState(null);
   const [canchaCrudStatus, setCanchaCrudStatus] = useState({ loading: false, error: null, success: null });
+  const [planLimitModal, setPlanLimitModal] = useState({ open: false, resource: null, current: 0, limit: 0, plan: 'basico' });
 
   // Estados de torneos
   const [torneosConfigurados, setTorneosConfigurados] = useState([]);
@@ -422,6 +440,7 @@ export default function AdminDashboard() {
         resetCanchaForm();
       }
       setCanchaCrudStatus({ loading: false, error: null, success: 'Cancha eliminada correctamente.' });
+      refreshPlan();
     } catch (err) {
       setCanchaCrudStatus({
         loading: false,
@@ -466,7 +485,14 @@ export default function AdminDashboard() {
         error: null,
         success: editingCanchaId ? 'Cancha actualizada correctamente.' : 'Cancha creada correctamente.',
       });
+      refreshPlan();
     } catch (err) {
+      if (err.response?.data?.code === 'LIMIT_REACHED' || err.response?.data?.code === 'PLAN_LIMIT') {
+        const d = err.response.data;
+        setPlanLimitModal({ open: true, resource: d.resource, current: d.current, limit: d.limit, plan: d.plan });
+        setCanchaCrudStatus({ loading: false, error: null, success: null });
+        return;
+      }
       setCanchaCrudStatus({
         loading: false,
         error: err.response?.data?.error || 'No se pudo guardar la cancha.',
@@ -580,10 +606,17 @@ export default function AdminDashboard() {
         puntos_campeon: DEFAULT_CHAMPION_POINTS,
       });
       fetchTorneosAdmin(); // Recargar lista al crear
+      refreshPlan();
       
       // Ocultar mensaje de éxito después de 3 segundos
       setTimeout(() => setTorneoStatus(prev => ({ ...prev, success: false })), 3000);
     } catch (err) {
+      if (err.response?.data?.code === 'LIMIT_REACHED' || err.response?.data?.code === 'PLAN_LIMIT') {
+        const d = err.response.data;
+        setPlanLimitModal({ open: true, resource: d.resource, current: d.current, limit: d.limit, plan: d.plan });
+        setTorneoStatus({ loading: false, error: null, success: false });
+        return;
+      }
       setTorneoStatus({ 
         loading: false, 
         error: err.response?.data?.error || 'Ocurrió un error al crear el torneo', 
@@ -626,6 +659,8 @@ export default function AdminDashboard() {
     { id: 'inscripciones', label: 'Gestion de Inscripciones' },
     { id: 'cuadros', label: 'Cuadros y Cronogramas' },
     { id: 'live-control', label: 'Control en Vivo' },
+    { id: 'mi-plan', label: '⭐ Mi Plan' },
+    { id: 'configuracion', label: '🏛 Configuración' },
     ...(isAdminOrSuperAdmin ? [{ id: 'panel-control', label: '⚙ Panel de Control' }] : []),
     ...(isSuperAdmin ? [{ id: 'dev-tools', label: '🛠️ Dev Tools' }] : []),
   ];
@@ -634,32 +669,64 @@ export default function AdminDashboard() {
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
       <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-4 sm:p-6 flex flex-wrap gap-2">
-          {TAB_ITEMS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-bold border transition-colors ${
-                activeTab === tab.id
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-              }`}
-            >
-              <span className="inline-flex items-center gap-2">
-                <span>{tab.label}</span>
-                {tab.id === 'inscripciones' && pendingCount > 0 && (
-                  <span className="inline-flex min-w-[1.35rem] items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[11px] font-black leading-none text-white">
-                    {pendingCount}
+          {TAB_ITEMS.map((tab) => {
+            const isLiveLocked = tab.id === 'live-control' && clubPlan !== 'premium';
+            return (
+              <div key={tab.id} className={isLiveLocked ? 'relative group' : undefined}>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold border transition-colors ${
+                    activeTab === tab.id
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : isLiveLocked
+                        ? 'bg-white text-gray-400 border-gray-200 cursor-not-allowed'
+                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <span>{tab.label}</span>
+                    {isLiveLocked && <span className="text-amber-500 text-xs">🔒</span>}
+                    {tab.id === 'inscripciones' && pendingCount > 0 && (
+                      <span className="inline-flex min-w-[1.35rem] items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[11px] font-black leading-none text-white">
+                        {pendingCount}
+                      </span>
+                    )}
                   </span>
+                </button>
+                {isLiveLocked && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-56 rounded-xl bg-gray-900 text-white text-xs font-medium px-3 py-2 text-center shadow-lg z-20 pointer-events-none">
+                    Función exclusiva para Plan Grand Slam
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+                  </div>
                 )}
-              </span>
-            </button>
-          ))}
+              </div>
+            );
+          })}
         </div>
       </section>
 
       {activeTab === 'canchas' && (
         <>
+          {/* Estado del Plan */}
+          <PlanStatusCard
+            currentCourts={currentCourts}
+            currentTournamentsThisWeekend={currentTournamentsThisWeekend}
+            limits={planLimits}
+            isOverLimit={isOverLimit}
+            loading={planLoading}
+            onUpgrade={(resource) => {
+              const isCourt = resource === 'cancha';
+              setPlanLimitModal({
+                open: true,
+                resource,
+                current: isCourt ? currentCourts : currentTournamentsThisWeekend,
+                limit:   isCourt ? planLimits.max_courts : planLimits.max_simultaneous_tournaments,
+                plan:    clubPlan,
+              });
+            }}
+          />
+
           {/* Sección: Gestión de Canchas (Tiempo Real) */}
           <section>
             <div className="flex items-center justify-between mb-6">
@@ -777,13 +844,24 @@ export default function AdminDashboard() {
                 </label>
 
                 <div className="md:col-span-2 flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={canchaCrudStatus.loading}
-                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-60"
-                  >
-                    {canchaCrudStatus.loading ? 'Guardando...' : editingCanchaId ? 'Guardar cambios' : 'Agregar cancha'}
-                  </button>
+                  {!editingCanchaId && isOverLimit.courts ? (
+                    <button
+                      type="button"
+                      onClick={() => setPlanLimitModal({ open: true, resource: 'cancha', current: currentCourts, limit: planLimits.max_courts, plan: clubPlan })}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-90 text-white font-semibold rounded-lg transition-opacity shadow-sm"
+                    >
+                      <span>⚡</span>
+                      Subir de Plan
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={canchaCrudStatus.loading}
+                      className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-60"
+                    >
+                      {canchaCrudStatus.loading ? 'Guardando...' : editingCanchaId ? 'Guardar cambios' : 'Agregar cancha'}
+                    </button>
+                  )}
                 </div>
               </form>
 
@@ -855,7 +933,26 @@ export default function AdminDashboard() {
       {activeTab === 'torneos' && (
         <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 sm:p-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Configurar Nuevo Torneo</h2>
+          {/* Estado del Plan */}
+          <PlanStatusCard
+            currentCourts={currentCourts}
+            currentTournamentsThisWeekend={currentTournamentsThisWeekend}
+            limits={planLimits}
+            isOverLimit={isOverLimit}
+            loading={planLoading}
+            onUpgrade={(resource) => {
+              const isCourt = resource === 'cancha';
+              setPlanLimitModal({
+                open: true,
+                resource,
+                current: isCourt ? currentCourts : currentTournamentsThisWeekend,
+                limit:   isCourt ? planLimits.max_courts : planLimits.max_simultaneous_tournaments,
+                plan:    clubPlan,
+              });
+            }}
+          />
+
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 mt-6">Configurar Nuevo Torneo</h2>
           
           <form onSubmit={handleTorneoSubmit} className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -1070,23 +1167,34 @@ export default function AdminDashboard() {
             )}
 
             <div className="pt-4 border-t border-gray-100 flex justify-end">
-              <button
-                type="submit"
-                disabled={torneoStatus.loading}
-                className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm hover:shadow transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center"
-              >
-                {torneoStatus.loading ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Procesando...
-                  </>
-                ) : (
-                  'Publicar Torneo'
-                )}
-              </button>
+              {isOverLimit.tournaments ? (
+                <button
+                  type="button"
+                  onClick={() => setPlanLimitModal({ open: true, resource: 'torneo', current: currentTournamentsThisWeekend, limit: planLimits.max_simultaneous_tournaments, plan: clubPlan })}
+                  className="inline-flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-90 text-white font-semibold rounded-lg shadow-sm transition-opacity"
+                >
+                  <span>⚡</span>
+                  Subir de Plan
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={torneoStatus.loading}
+                  className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm hover:shadow transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center"
+                >
+                  {torneoStatus.loading ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Procesando...
+                    </>
+                  ) : (
+                    'Publicar Torneo'
+                  )}
+                </button>
+              )}
             </div>
           </form>
         </div>
@@ -1331,8 +1439,37 @@ export default function AdminDashboard() {
       </section>
       )}
 
+      {activeTab === 'mi-plan' && (
+        <MiPlan canchasCount={canchas.length} torneosCount={torneosConfigurados.length} />
+      )}
+
+      {activeTab === 'configuracion' && (
+        <ClubConfigTab />
+      )}
+
       {activeTab === 'live-control' && (
-        <AdminLiveControl torneos={torneosConfigurados} />
+        clubPlan !== 'premium' ? (
+          <div className="relative rounded-2xl overflow-hidden">
+            <div className="pointer-events-none blur-sm opacity-40 select-none">
+              <AdminLiveControl torneos={torneosConfigurados} />
+            </div>
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/60">
+              <div className="bg-white rounded-2xl shadow-xl border border-amber-200 p-8 max-w-sm text-center">
+                <p className="text-3xl mb-3">🏆</p>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">Función Premium</h3>
+                <p className="text-gray-500 text-sm mb-5">El control en vivo está disponible únicamente en el plan Premium.</p>
+                <button
+                  onClick={() => setPlanLimitModal({ open: true, resource: 'live_scoring', current: 0, limit: 0, plan: clubPlan })}
+                  className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold px-6 py-3 rounded-xl transition-all shadow-md shadow-amber-200"
+                >
+                  ⚡ Ver planes Premium
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <AdminLiveControl torneos={torneosConfigurados} canUseLive={true} />
+        )
       )}
 
       {activeTab === 'panel-control' && isAdminOrSuperAdmin && (
@@ -1343,6 +1480,16 @@ export default function AdminDashboard() {
         <DevToolsPanel />
       )}
 
+      <PlanLimitModal
+        open={planLimitModal.open}
+        resource={planLimitModal.resource}
+        plan={planLimitModal.plan}
+        limit={planLimitModal.limit}
+        current={planLimitModal.current}
+        onClose={() => setPlanLimitModal((prev) => ({ ...prev, open: false }))}
+      />
+
+      <SetGoBanner />
     </div>
   );
 }

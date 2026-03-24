@@ -5,6 +5,7 @@ const supabase = require('../services/supabase');
 const torneosController = require('../controllers/torneosController');
 
 const originalFrom = supabase.from;
+const originalRpc  = supabase.rpc;
 const TEST_CLUB_ID = '11111111-1111-4111-8111-111111111111';
 
 function createReq({ params = {}, body = {}, query = {}, headers = {} } = {}) {
@@ -114,11 +115,19 @@ function mockSupabaseWithQueue(queue, calls) {
         state.filters.push({ op: 'or', expression });
         return this;
       },
+      neq(column, value) {
+        state.filters.push({ op: 'neq', column, value });
+        return this;
+      },
       order(column, options) {
         state.order = { column, options };
         return this;
       },
       single() {
+        state.single = true;
+        return Promise.resolve(execute());
+      },
+      maybeSingle() {
         state.single = true;
         return Promise.resolve(execute());
       },
@@ -133,13 +142,38 @@ function mockSupabaseWithQueue(queue, calls) {
   };
 }
 
+/**
+ * Mockea supabase.rpc para que las llamadas a funciones RPC devuelvan
+ * respuestas predefinidas del objeto { fnName: response, ... }.
+ * Si una función no está en el mapa, falla con un error descriptivo.
+ *
+ * @param {Record<string, { data?: any, error?: any }>} responses
+ */
+function mockRpc(responses) {
+  supabase.rpc = (fnName, _params) => {
+    if (!(fnName in responses)) {
+      throw new Error(`supabase.rpc llamado con función inesperada: '${fnName}'`);
+    }
+    return Promise.resolve(responses[fnName]);
+  };
+}
+
 afterEach(() => {
   supabase.from = originalFrom;
+  supabase.rpc  = originalRpc;
 });
 
 test('crear torneo valido con ventana de inscripcion', async () => {
   const calls = [];
-  const queue = [{ data: [{ id: 'torneo_1' }], error: null }];
+  // Orden de llamadas con el overlap check:
+  // 1. clubes.select('plan').maybeSingle()  — consulta el plan del club
+  // 2. rpc('check_tournament_overlap')       — 0 torneos solapados (verde)
+  // 3. torneos.insert(...)                  — inserta el torneo
+  const queue = [
+    { data: { plan: 'basico' }, error: null },  // clubes
+    { data: [{ id: 'torneo_1' }], error: null }, // torneos insert
+  ];
+  mockRpc({ check_tournament_overlap: { data: 0, error: null } });
   const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
 
   const req = createReq({
@@ -162,13 +196,14 @@ test('crear torneo valido con ventana de inscripcion', async () => {
 
   assert.equal(res.statusCode, 201);
   assert.equal(res.payload.torneo.id, 'torneo_1');
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].table, 'torneos');
-  assert.equal(calls[0].action, 'insert');
-  assert.equal(calls[0].payload[0].fecha_inicio_inscripcion, '2026-03-01T10:00:00Z');
-  assert.equal(calls[0].payload[0].fecha_cierre_inscripcion, '2026-03-10T10:00:00Z');
-  assert.equal(calls[0].payload[0].fecha_fin, '2026-03-15T18:00:00Z');
-  assert.equal(calls[0].payload[0].estado, 'publicado');
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].table, 'clubes');   // plan lookup
+  assert.equal(calls[1].table, 'torneos');
+  assert.equal(calls[1].action, 'insert');
+  assert.equal(calls[1].payload[0].fecha_inicio_inscripcion, '2026-03-01T10:00:00Z');
+  assert.equal(calls[1].payload[0].fecha_cierre_inscripcion, '2026-03-10T10:00:00Z');
+  assert.equal(calls[1].payload[0].fecha_fin, '2026-03-15T18:00:00Z');
+  assert.equal(calls[1].payload[0].estado, 'publicado');
 
   assertQueueEmpty();
 });
@@ -259,7 +294,9 @@ test('crear torneo con canchas asignadas valida e inserta relaciones', async () 
   const calls = [];
   const cancha1 = '11111111-1111-4111-8111-111111111111';
   const cancha2 = '22222222-2222-4222-8222-222222222222';
+  // Orden: clubes (plan) → rpc (0 solapados) → canchas (validar) → torneos (insert) → torneo_canchas (relaciones)
   const queue = [
+    { data: { plan: 'basico' }, error: null },  // clubes
     {
       data: [
         { id: cancha1, esta_disponible: true },
@@ -270,6 +307,7 @@ test('crear torneo con canchas asignadas valida e inserta relaciones', async () 
     { data: [{ id: 'torneo_5' }], error: null },
     { error: null },
   ];
+  mockRpc({ check_tournament_overlap: { data: 0, error: null } });
   const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
 
   const req = createReq({
@@ -296,12 +334,13 @@ test('crear torneo con canchas asignadas valida e inserta relaciones', async () 
   assert.equal(res.payload.torneo.id, 'torneo_5');
   assert.deepEqual(res.payload.canchas_asignadas, [cancha1, cancha2]);
 
-  assert.equal(calls.length, 3);
-  assert.equal(calls[0].table, 'canchas');
-  assert.equal(calls[1].table, 'torneos');
-  assert.equal(calls[2].table, 'torneo_canchas');
-  assert.equal(calls[2].action, 'insert');
-  assert.equal(calls[2].payload.length, 2);
+  assert.equal(calls.length, 4);
+  assert.equal(calls[0].table, 'clubes');       // plan lookup
+  assert.equal(calls[1].table, 'canchas');      // validar canchas
+  assert.equal(calls[2].table, 'torneos');      // insert torneo
+  assert.equal(calls[3].table, 'torneo_canchas'); // relaciones
+  assert.equal(calls[3].action, 'insert');
+  assert.equal(calls[3].payload.length, 2);
 
   assertQueueEmpty();
 });
@@ -310,12 +349,15 @@ test('crear torneo falla si alguna cancha asignada no existe', async () => {
   const calls = [];
   const cancha1 = '11111111-1111-4111-8111-111111111111';
   const cancha2 = '22222222-2222-4222-8222-222222222222';
+  // Orden: clubes (plan) → rpc (0 solapados) → canchas (1 de 2 existe → falla)
   const queue = [
+    { data: { plan: 'basico' }, error: null },  // clubes
     {
       data: [{ id: cancha1, esta_disponible: true }],
       error: null,
     },
   ];
+  mockRpc({ check_tournament_overlap: { data: 0, error: null } });
   const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
 
   const req = createReq({
@@ -340,8 +382,9 @@ test('crear torneo falla si alguna cancha asignada no existe', async () => {
   assert.equal(res.statusCode, 400);
   assert.match(res.payload.error, /no existen/i);
   assert.deepEqual(res.payload.missingIds, [cancha2]);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].table, 'canchas');
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].table, 'clubes');
+  assert.equal(calls[1].table, 'canchas');
 
   assertQueueEmpty();
 });
@@ -349,12 +392,15 @@ test('crear torneo falla si alguna cancha asignada no existe', async () => {
 test('crear torneo falla si alguna cancha asignada no esta disponible', async () => {
   const calls = [];
   const cancha1 = '11111111-1111-4111-8111-111111111111';
+  // Orden: clubes (plan) → rpc (0 solapados) → canchas (no disponible → falla)
   const queue = [
+    { data: { plan: 'basico' }, error: null },  // clubes
     {
       data: [{ id: cancha1, esta_disponible: false }],
       error: null,
     },
   ];
+  mockRpc({ check_tournament_overlap: { data: 0, error: null } });
   const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
 
   const req = createReq({
@@ -379,8 +425,9 @@ test('crear torneo falla si alguna cancha asignada no esta disponible', async ()
   assert.equal(res.statusCode, 400);
   assert.match(res.payload.error, /no estan disponibles/i);
   assert.deepEqual(res.payload.unavailableIds, [cancha1]);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].table, 'canchas');
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].table, 'clubes');
+  assert.equal(calls[1].table, 'canchas');
 
   assertQueueEmpty();
 });
@@ -861,13 +908,6 @@ test('admin aprueba una inscripcion pendiente respetando cupo', async () => {
       error: null,
     },
     {
-      data: [
-        { torneo_id: torneoId, estado_inscripcion: 'aprobada', estado: 'confirmada' },
-        { torneo_id: torneoId, estado_inscripcion: 'pendiente', estado: 'pendiente' },
-      ],
-      error: null,
-    },
-    {
       data: {
         id: inscripcionId,
         torneo_id: torneoId,
@@ -877,6 +917,8 @@ test('admin aprueba una inscripcion pendiente respetando cupo', async () => {
       error: null,
     },
   ];
+  // El chequeo de cupos fue suprimido (inscripciones ilimitadas).
+  // Solo hay 2 llamadas DB: fetch inscripcion + update inscripcion.
 
   const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
 
@@ -892,11 +934,10 @@ test('admin aprueba una inscripcion pendiente respetando cupo', async () => {
   assert.match(res.payload.message, /aprobada/i);
   assert.equal(res.payload.inscripcion.estado_inscripcion, 'aprobada');
 
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 2);
   assert.equal(calls[0].table, 'inscripciones');
-  assert.equal(calls[1].table, 'inscripciones');
-  assert.equal(calls[2].action, 'update');
-  assert.equal(calls[2].payload.estado, 'confirmada');
+  assert.equal(calls[1].action, 'update');
+  assert.equal(calls[1].payload.estado, 'confirmada');
 
   assertQueueEmpty();
 });
@@ -1285,6 +1326,51 @@ test('obtenerEstadoCanchas devuelve canchas vacias cuando torneo no tiene asigna
   assert.equal(res.statusCode, 200);
   assert.equal(Array.isArray(res.payload.canchas), true);
   assert.equal(res.payload.canchas.length, 0);
+
+  assertQueueEmpty();
+});
+
+// ─── STRESS TEST ──────────────────────────────────────────────────────────────
+test('[STRESS] plan basico rechaza creacion de 3er torneo en el mismo fin de semana', async () => {
+  const calls = [];
+  // Simula: club con plan "basico" que ya tiene 2 torneos activos ese fin de semana.
+  // El RPC devuelve 2 → igual al límite → debe rechazar con 403 LIMIT_REACHED.
+  const queue = [
+    { data: { plan: 'basico' }, error: null }, // clubes plan lookup
+  ];
+  mockRpc({
+    check_tournament_overlap: { data: 2, error: null }, // ya hay 2 torneos solapados
+  });
+  const assertQueueEmpty = mockSupabaseWithQueue(queue, calls);
+
+  const req = createReq({
+    body: {
+      titulo: '3er Torneo Fin de Semana',
+      costo: 1000,
+      modalidad: 'Singles',
+      rama: 'Masculino',
+      categoria_id: 3,
+      fecha_inicio_inscripcion: '2026-03-20T10:00:00Z',
+      fecha_cierre_inscripcion: '2026-03-27T18:00:00Z',
+      fecha_inicio: '2026-03-28T09:00:00Z', // sábado
+      fecha_fin:    '2026-03-29T18:00:00Z', // domingo — mismo fin de semana
+    },
+  });
+  const res = createRes();
+
+  await torneosController.crearTorneo(req, res);
+
+  // El sistema debe rechazar con 403 LIMIT_REACHED
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.payload.code, 'LIMIT_REACHED');
+  assert.equal(res.payload.resource, 'torneo_simultaneo');
+  assert.equal(res.payload.current, 2);
+  assert.equal(res.payload.limit, 2);
+  assert.equal(res.payload.plan, 'basico');
+
+  // Solo se consultó la tabla clubes; nunca llegó al insert
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].table, 'clubes');
 
   assertQueueEmpty();
 });
