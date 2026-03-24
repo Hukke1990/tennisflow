@@ -241,11 +241,25 @@ const mercadopago = async (req, res) => {
     planAnterior = clubRow?.plan ?? null;
 
     // Obtener plan_id de la suscripción activa
-    const { data: subRow } = await supabase
+    // Primero buscar por preapproval_id (suscripción ya conocida).
+    // Si no se encuentra (caso preapproval_plan: el ID del plan template ≠ ID de instancia),
+    // hacer fallback por club_id para obtener el plan_id correcto.
+    const { data: subRowByPreapproval } = await supabase
       .from('suscripciones')
       .select('id, plan_id')
       .eq('preapproval_id', resourceId)
       .maybeSingle();
+
+    let subRow = subRowByPreapproval;
+
+    if (!subRow && clubId) {
+      const { data: subRowByClub } = await supabase
+        .from('suscripciones')
+        .select('id, plan_id')
+        .eq('club_id', clubId)
+        .maybeSingle();
+      subRow = subRowByClub;
+    }
 
     // ── Actualizar estado de la suscripción ─────────────────────────────────
     const nextPaymentDate =
@@ -256,7 +270,7 @@ const mercadopago = async (req, res) => {
     const upsertPayload = {
       club_id:          clubId,
       plan_id:          subRow?.plan_id ?? 'basico',
-      preapproval_id:   resourceId,
+      preapproval_id:   resourceId,   // actualiza al ID real de la instancia de suscripción
       status:           newSubscriptionStatus,
       next_payment_date: nextPaymentDate,
       payer_email:      mpData.payer_email ?? null,

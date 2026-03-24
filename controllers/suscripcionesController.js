@@ -130,17 +130,49 @@ const cancelar = async (req, res) => {
       return res.status(500).json({ error: 'Configuración de pago incompleta en el servidor.' });
     }
 
-    const mpResponse = await fetch(
-      `https://api.mercadopago.com/preapproval/${suscripcion.preapproval_id}`,
-      {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${mpAccessToken}`,
-          'Content-Type': 'application/json',
+    // Intentar cancelar con el preapproval_id guardado.
+    // Si falla (ej: el ID es un template y no una instancia), buscar la suscripción
+    // real por external_reference y cancelar esa.
+    let realPreapprovalId = suscripcion.preapproval_id;
+
+    const tryCancel = async (preapprovalId) => {
+      return fetch(
+        `https://api.mercadopago.com/preapproval/${preapprovalId}`,
+        {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${mpAccessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ status: 'cancelled' }),
         },
-        body: JSON.stringify({ status: 'cancelled' }),
-      },
-    );
+      );
+    };
+
+    let mpResponse = await tryCancel(realPreapprovalId);
+
+    // Si falla, buscar la instancia real por external_reference
+    if (!mpResponse.ok) {
+      console.warn(`[cancelar] preapproval_id ${realPreapprovalId} falló (${mpResponse.status}). Buscando por external_reference…`);
+      try {
+        const searchRes = await fetch(
+          `https://api.mercadopago.com/preapproval/search?external_reference=${clubId}&limit=5`,
+          { headers: { Authorization: `Bearer ${mpAccessToken}` } },
+        );
+        if (searchRes.ok) {
+          const searchData = await searchRes.json();
+          const active = (searchData.results ?? []).find(
+            (r) => r.status === 'authorized' || r.status === 'pending',
+          );
+          if (active) {
+            realPreapprovalId = active.id;
+            mpResponse = await tryCancel(realPreapprovalId);
+          }
+        }
+      } catch (searchErr) {
+        console.error('[cancelar] Error buscando suscripción en MP:', searchErr.message);
+      }
+    }
 
     if (!mpResponse.ok) {
       const mpError = await mpResponse.text();
@@ -151,11 +183,11 @@ const cancelar = async (req, res) => {
       });
     }
 
-    // Actualizar DB: suscripcion → cancelled, club → basico
+    // Actualizar DB: suscripcion → cancelled + actualizar preapproval_id real si cambió
     await Promise.all([
       supabase
         .from('suscripciones')
-        .update({ status: 'cancelled' })
+        .update({ status: 'cancelled', preapproval_id: realPreapprovalId })
         .eq('club_id', clubId),
       supabase
         .from('clubes')
