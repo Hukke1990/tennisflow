@@ -585,9 +585,42 @@ const listarClubes = async (_req, res) => {
   }
 };
 
+const activarClubManualmente = async (req, res) => {
+  try {
+    const clubId = String(req.params?.id || '').trim();
+    if (!clubId) return res.status(400).json({ error: 'Club ID requerido.' });
+
+    const { data: club, error: fetchError } = await supabase
+      .from('clubes')
+      .select('id, nombre, slug, is_active, plan')
+      .eq('id', clubId)
+      .maybeSingle();
+
+    if (fetchError || !club) return res.status(404).json({ error: 'Club no encontrado.' });
+
+    const { error: updateError } = await supabase
+      .from('clubes')
+      .update({ is_active: true })
+      .eq('id', clubId);
+
+    if (updateError) return res.status(500).json({ error: 'Error al activar el club.' });
+
+    // Marcar suscripción como authorized si existe
+    await supabase
+      .from('suscripciones')
+      .update({ status: 'authorized' })
+      .eq('club_id', clubId);
+
+    return res.json({ message: `Club "${club.nombre}" activado correctamente.`, club: { ...club, is_active: true } });
+  } catch (_) {
+    return res.status(500).json({ error: 'Error interno al activar el club.' });
+  }
+};
+
 module.exports = {
   crearClubConAdmin,
   listarClubes,
+  activarClubManualmente,
   listarTorneos,
   editarTorneo,
   softDeleteTorneo,

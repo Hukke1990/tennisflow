@@ -714,6 +714,7 @@ function ClubesTab() {
   const [clubs, setClubs] = useState([]);
   const [loadingClubs, setLoadingClubs] = useState(true);
   const [copied, setCopied] = useState(null);
+  const [activating, setActivating] = useState(null);
 
   const fetchClubs = useCallback(async () => {
     setLoadingClubs(true);
@@ -734,6 +735,19 @@ function ClubesTab() {
     navigator.clipboard.writeText(club.activation_link);
     setCopied(club.id);
     setTimeout(() => setCopied(null), 2000);
+  };
+
+  const handleActivar = async (club) => {
+    if (!window.confirm(`¿Activar el club "${club.nombre}" manualmente?`)) return;
+    setActivating(club.id);
+    try {
+      await axios.patch(`${API_URL}/api/super-admin/clubes/${club.id}/activar`);
+      await fetchClubs();
+    } catch (_) {
+      alert('Error al activar el club.');
+    } finally {
+      setActivating(null);
+    }
   };
 
   if (loadingClubs) return <Spinner />;
@@ -757,7 +771,7 @@ function ClubesTab() {
                 <th className="px-4 py-3 text-left">Slug</th>
                 <th className="px-4 py-3 text-left">Plan</th>
                 <th className="px-4 py-3 text-left">Estado</th>
-                <th className="px-4 py-3 text-left">Link de pago</th>
+                <th className="px-4 py-3 text-left">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -772,16 +786,28 @@ function ClubesTab() {
                       : <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/15 text-amber-300">Pago pendiente</span>}
                   </td>
                   <td className="px-4 py-3">
-                    {c.activation_link ? (
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(c)}
-                        className="inline-flex items-center gap-1.5 text-xs bg-white/5 hover:bg-white/10 border border-white/15 text-white/60 hover:text-white py-1.5 px-3 rounded-lg transition-colors"
-                      >
-                        <Copy className="h-3 w-3" />
-                        {copied === c.id ? '¡Copiado!' : 'Copiar link'}
-                      </button>
-                    ) : <span className="text-white/20">—</span>}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {c.activation_link && (
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(c)}
+                          className="inline-flex items-center gap-1.5 text-xs bg-white/5 hover:bg-white/10 border border-white/15 text-white/60 hover:text-white py-1.5 px-3 rounded-lg transition-colors"
+                        >
+                          <Copy className="h-3 w-3" />
+                          {copied === c.id ? '¡Copiado!' : 'Copiar link'}
+                        </button>
+                      )}
+                      {!c.is_active && (
+                        <button
+                          type="button"
+                          disabled={activating === c.id}
+                          onClick={() => handleActivar(c)}
+                          className="inline-flex items-center gap-1.5 text-xs bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 hover:text-emerald-200 py-1.5 px-3 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {activating === c.id ? 'Activando…' : '✓ Activar'}
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
