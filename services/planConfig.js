@@ -40,6 +40,15 @@ const PLAN_CONFIG = {
     currency: CURRENCY,
     label: 'Grand Slam',
   },
+  // ⚠️  PLAN TEMPORAL DE PRUEBAS — eliminar antes de producción real
+  test: {
+    max_courts: 100,
+    max_simultaneous_tournaments: 100,
+    has_live_scoring: true,
+    monthly_price_usd: 0,
+    currency: CURRENCY,
+    label: 'Test (1 ARS)',
+  },
 };
 
 /**

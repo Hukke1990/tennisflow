@@ -308,6 +308,8 @@ const getPlanes = (_req, res) => {
 const PLAN_PRICES_MP = {
   pro:     { amount: 50, reason: 'SetGo Pro — Suscripción mensual' },
   premium: { amount: 70, reason: 'SetGo Grand Slam — Suscripción mensual' },
+  // ⚠️  Plan temporal de pruebas — 1 ARS fijo
+  test:    { amount: 0,  reason: 'SetGo Test — Plan de prueba', amount_ars_override: 1 },
 };
 
 /**

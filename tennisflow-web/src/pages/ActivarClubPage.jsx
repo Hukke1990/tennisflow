@@ -22,6 +22,13 @@ const PLANES = [
     usd: 70,
     features: ['Todo lo de Pro', 'White label', 'Soporte prioritario'],
   },
+  {
+    id: 'test',
+    label: '⚠️ Test (1 ARS)',
+    usd: null,
+    ars_override: 1,
+    features: ['Solo para pruebas', 'Todas las funciones', 'Eliminar antes de producción'],
+  },
 ];
 
 export default function ActivarClubPage() {
@@ -150,7 +157,7 @@ export default function ActivarClubPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {PLANES.map((p) => {
-            const ars = cotizacion ? Math.round(p.usd * cotizacion) : null;
+            const ars = p.ars_override ?? (cotizacion && p.usd ? Math.round(p.usd * cotizacion) : null);
             const selected = planSel === p.id;
             return (
               <button
@@ -172,12 +179,17 @@ export default function ActivarClubPage() {
                   )}
                 </div>
                 <div className="mb-4">
-                  <span className="text-3xl font-bold text-white">${p.usd}</span>
-                  <span className="text-slate-400 text-sm ml-1">USD/mes</span>
-                  {ars && (
-                    <p className="text-slate-500 text-xs mt-1">
-                      ≈ ${ars.toLocaleString('es-AR')} ARS
-                    </p>
+                  {p.ars_override != null ? (
+                    <><span className="text-3xl font-bold text-white">${p.ars_override}</span>
+                    <span className="text-slate-400 text-sm ml-1">ARS/mes</span></>
+                  ) : (
+                    <><span className="text-3xl font-bold text-white">${p.usd}</span>
+                    <span className="text-slate-400 text-sm ml-1">USD/mes</span>
+                    {ars && (
+                      <p className="text-slate-500 text-xs mt-1">
+                        ≈ ${ars.toLocaleString('es-AR')} ARS
+                      </p>
+                    )}</>
                   )}
                 </div>
                 <ul className="space-y-1">

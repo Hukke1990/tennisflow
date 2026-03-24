@@ -34,6 +34,7 @@ const PLAN_MAP = {
   basico:  'basico',
   pro:     'pro',
   premium: 'premium',
+  test:    'test',
 };
 
 /**
@@ -44,6 +45,7 @@ const derivePlanFromReason = (reason = '') => {
   const r = reason.toLowerCase();
   if (r.includes('grand slam')) return 'premium';
   if (r.includes('pro'))        return 'pro';
+  if (r.includes('test'))       return 'test';
   return null;
 };
 

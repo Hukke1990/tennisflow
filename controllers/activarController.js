@@ -15,6 +15,8 @@ const PLAN_PRICES_ACTIVACION = {
   basico:  { amount: 30, reason: 'SetGo Básico — Suscripción mensual' },
   pro:     { amount: 50, reason: 'SetGo Pro — Suscripción mensual' },
   premium: { amount: 70, reason: 'SetGo Grand Slam — Suscripción mensual' },
+  // ⚠️  Plan temporal de pruebas — 1 ARS fijo
+  test:    { amount: 0,  reason: 'SetGo Test — Plan de prueba', amount_ars_override: 1 },
 };
 
 const DOLAR_FALLBACK = 1200;
@@ -100,8 +102,8 @@ const iniciarPago = async (req, res) => {
     }
 
     const cotizacion  = await fetchCotizacion();
-    const { amount, reason } = PLAN_PRICES_ACTIVACION[planType];
-    const monto_ars   = Math.round(amount * cotizacion);
+    const { amount, reason, amount_ars_override } = PLAN_PRICES_ACTIVACION[planType];
+    const monto_ars   = amount_ars_override ?? Math.round(amount * cotizacion);
 
     const appUrl    = (process.env.APP_URL || 'https://setgo-app.vercel.app').trim();
     const backBase  = (process.env.MP_BACK_URL || appUrl).trim();
