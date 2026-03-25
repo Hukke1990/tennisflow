@@ -149,7 +149,7 @@ function MockRankingScreen() {
   ];
 
   return (
-    <div className="w-full max-w-[280px] mx-auto rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-[#f0f2f5]">
+    <div className="w-full rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-[#f0f2f5]">
 
       {/* ── Status bar ── */}
       <div className="flex items-center justify-between px-3.5 py-2 bg-[#0a0f1e]">
@@ -275,7 +275,7 @@ function MockRankingScreen() {
 // ── Mock Torneos Screen (Cartelera) ───────────────────────────────────────────────────────────────────────
 function MockTorneosScreen() {
   return (
-    <div className="w-full max-w-[280px] mx-auto rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-[#f0f2f5]">
+    <div className="w-full rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-[#f0f2f5]">
 
       {/* ── Status bar ── */}
       <div className="flex items-center justify-between px-3.5 py-2 bg-[#0a0f1e]">
@@ -1106,52 +1106,108 @@ export default function LandingPage() {
 
       <GradientDivider from="gold" />
 
-      {/* ═════════════════════ APP SHOWCASE ═════════════════════════════════════ */}
+      {/* ═════════════════════ MULTIPLATFORM SHOWCASE ═══════════════════════════ */}
       <section className="relative overflow-hidden bg-gradient-to-br from-[#060f24] via-[#0a1633] to-[#040b1f] py-24">
+        {/* bg glows */}
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute left-1/4 top-1/2 h-72 w-72 -translate-y-1/2 rounded-full bg-[#a6ce39]/5 blur-3xl" />
-          <div className="absolute right-1/4 top-1/2 h-72 w-72 -translate-y-1/2 rounded-full bg-[#1a5689]/15 blur-3xl" />
+          <div className="absolute left-1/2 top-0 h-96 w-96 -translate-x-1/2 rounded-full bg-[#a6ce39]/5 blur-3xl" />
+          <div className="absolute left-1/4 bottom-0 h-64 w-64 rounded-full bg-[#1a5689]/15 blur-3xl" />
+          <div className="absolute right-1/4 bottom-0 h-64 w-64 rounded-full bg-[#a6ce39]/8 blur-3xl" />
         </div>
+
         <div className="relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-10">
-          <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-20">
 
-            {/* Player Card mock */}
-            <div className="order-2 flex justify-center lg:order-1 lg:justify-end">
-              <div className="relative">
-                <div className="absolute -inset-8 rounded-full bg-gradient-to-br from-[#a6ce39]/15 to-[#1a5689]/15 blur-2xl" />
-                <MockPlayerCard />
-              </div>
-            </div>
+          {/* Header copy */}
+          <div className="mb-16 text-center">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#a6ce39]/30 bg-[#a6ce39]/10 px-3 py-1 text-xs font-semibold text-[#a6ce39]">
+              Disponible en todos tus dispositivos
+            </span>
+            <h2 className="mt-5 text-3xl font-black leading-tight text-slate-100 sm:text-4xl">
+              Tu club en el bolsillo,<br />
+              <span className="text-[#a6ce39]">en cualquier pantalla.</span>
+            </h2>
+            <p className="mt-5 mx-auto max-w-xl text-base leading-relaxed text-slate-300">
+              SetGo funciona en el celular, la tablet y la computadora sin instalar nada.
+              Accedé desde cualquier navegador y llevá tu club siempre con vos.
+            </p>
 
-            {/* Copy */}
-            <div className="order-1 lg:order-2">
-              <span className="inline-flex items-center gap-2 rounded-full border border-[#a6ce39]/30 bg-[#a6ce39]/10 px-3 py-1 text-xs font-semibold text-[#a6ce39]">
-                Tu perfil de jugador
-              </span>
-              <h2 className="mt-5 text-3xl font-black leading-tight text-slate-100 sm:text-4xl">
-                Tu nivel,<br />
-                <span className="text-[#a6ce39]">profesionalizado.</span>
-              </h2>
-              <p className="mt-5 text-base leading-relaxed text-slate-300">
-                Cada jugador tiene su propia Player Card: ranking en Singles y Dobles,
-                puntos acumulados, torneos disputados y tendencia de posicion.
-              </p>
-              <ul className="mt-6 space-y-3">
-                {[
-                  'Medalla dorada para el top 3 del ranking',
-                  'Historial completo de torneos y partidos',
-                  'Comparativa automatica con rivales del club',
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2.5 text-sm text-slate-300">
-                    <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#a6ce39]/15 text-[#a6ce39]">
-                      <ShieldCheck className="h-3 w-3" />
-                    </span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
+            {/* Platform pills */}
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
+              {[
+                { icon: '📱', label: 'iOS & Android', sub: 'Desde el navegador' },
+                { icon: '🖥️', label: 'Mac & Windows', sub: 'App web completa' },
+                { icon: '⚡', label: 'Sin instalación', sub: 'Acceso instantáneo' },
+              ].map((p) => (
+                <div key={p.label} className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5">
+                  <span className="text-lg">{p.icon}</span>
+                  <div className="text-left">
+                    <p className="text-xs font-bold text-slate-100">{p.label}</p>
+                    <p className="text-[10px] text-slate-400">{p.sub}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
+
+          {/* 3 device frames */}
+          <div className="flex flex-col items-center gap-10 lg:flex-row lg:items-end lg:justify-center lg:gap-6">
+
+            {/* ── Tablet frame ── */}
+            <div className="order-2 lg:order-1 flex flex-col items-center gap-3">
+              {/* frame */}
+              <div className="relative rounded-[20px] border-[6px] border-slate-600 bg-slate-800 shadow-2xl shadow-black/60">
+                {/* camera */}
+                <div className="absolute -top-[3px] left-1/2 -translate-x-1/2 h-2 w-2 rounded-full bg-slate-500" />
+                {/* screen */}
+                <div className="overflow-hidden rounded-[14px] w-[320px]">
+                  <MockTorneosScreen />
+                </div>
+                {/* home bar */}
+                <div className="flex justify-center py-1.5">
+                  <div className="h-1 w-12 rounded-full bg-slate-600" />
+                </div>
+              </div>
+              <p className="text-xs font-semibold text-slate-400 tracking-wide uppercase">Tablet</p>
+            </div>
+
+            {/* ── Desktop frame (center, tallest) ── */}
+            <div className="order-1 lg:order-2 flex flex-col items-center gap-3 z-10">
+              {/* monitor body */}
+              <div className="relative rounded-t-xl border-[8px] border-slate-600 bg-slate-800 shadow-2xl shadow-[#a6ce39]/10 ring-1 ring-[#a6ce39]/20">
+                {/* camera dot */}
+                <div className="absolute -top-[5px] left-1/2 -translate-x-1/2 h-2 w-2 rounded-full bg-slate-500" />
+                {/* screen */}
+                <div className="overflow-hidden rounded-[8px] w-[420px]">
+                  <MockRankingScreen />
+                </div>
+              </div>
+              {/* stand */}
+              <div className="flex flex-col items-center">
+                <div className="h-6 w-6 bg-slate-700" />
+                <div className="h-2 w-20 rounded-full bg-slate-600" />
+              </div>
+              <p className="text-xs font-semibold text-[#a6ce39] tracking-wide uppercase">Computadora</p>
+            </div>
+
+            {/* ── Mobile frame ── */}
+            <div className="order-3 flex flex-col items-center gap-3">
+              <div className="relative rounded-[28px] border-[6px] border-slate-600 bg-slate-800 shadow-2xl shadow-black/60">
+                {/* camera notch */}
+                <div className="absolute top-1.5 left-1/2 -translate-x-1/2 h-2 w-10 rounded-full bg-slate-700" />
+                {/* screen */}
+                <div className="overflow-hidden rounded-[22px] w-[220px] mt-2">
+                  <MockPlayerCard />
+                </div>
+                {/* home indicator */}
+                <div className="flex justify-center py-2">
+                  <div className="h-1 w-16 rounded-full bg-slate-600" />
+                </div>
+              </div>
+              <p className="text-xs font-semibold text-slate-400 tracking-wide uppercase">Celular</p>
+            </div>
+
+          </div>
+
         </div>
       </section>
 
