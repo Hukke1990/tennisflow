@@ -13,6 +13,7 @@ import SetGoBanner from './SetGoBanner';
 import ClubConfigTab from './ClubConfigTab';
 import PlanStatusCard from './PlanStatusCard';
 import { usePlanRestrictions } from '../hooks/usePlanRestrictions';
+import AdminSidebar from './AdminSidebar';
 
 const DEFAULT_POINTS_BY_ROUND = {
   32: '5',
@@ -670,20 +671,8 @@ export default function AdminDashboard() {
   const bracketSizeByCupos = DEFAULT_BRACKET_SIZE_FOR_FORM;
   const roundsToConfigure = [32, 16, 8, 4, 2];
 
-  const TAB_ITEMS = [
-    { id: 'canchas', label: 'Canchas' },
-    { id: 'torneos', label: 'Creacion de Torneo' },
-    { id: 'inscripciones', label: 'Gestion de Inscripciones' },
-    { id: 'cuadros', label: 'Cuadros y Cronogramas' },
-    { id: 'live-control', label: 'Control en Vivo' },
-    { id: 'mi-plan', label: '⭐ Mi Plan' },
-    { id: 'configuracion', label: '🏛 Configuración' },
-    ...(isAdminOrSuperAdmin ? [{ id: 'panel-control', label: '⚙ Panel de Control' }] : []),
-    ...(isSuperAdmin ? [{ id: 'dev-tools', label: '🛠️ Dev Tools' }] : []),
-  ];
-
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
+    <div className="space-y-4">
 
       {/* Banner de pago rechazado / suscripción pausada */}
       {suscripcionPausada && (
@@ -708,44 +697,17 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-4 sm:p-6 flex flex-wrap gap-2">
-          {TAB_ITEMS.map((tab) => {
-            const isLiveLocked = tab.id === 'live-control' && clubPlan !== 'premium';
-            return (
-              <div key={tab.id} className={isLiveLocked ? 'relative group' : undefined}>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold border transition-colors ${
-                    activeTab === tab.id
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : isLiveLocked
-                        ? 'bg-white text-gray-400 border-gray-200 cursor-not-allowed'
-                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <span>{tab.label}</span>
-                    {isLiveLocked && <span className="text-amber-500 text-xs">🔒</span>}
-                    {tab.id === 'inscripciones' && pendingCount > 0 && (
-                      <span className="inline-flex min-w-[1.35rem] items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[11px] font-black leading-none text-white">
-                        {pendingCount}
-                      </span>
-                    )}
-                  </span>
-                </button>
-                {isLiveLocked && (
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-56 rounded-xl bg-gray-900 text-white text-xs font-medium px-3 py-2 text-center shadow-lg z-20 pointer-events-none">
-                    Función exclusiva para Plan Grand Slam
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </section>
+      <div className="flex flex-col lg:flex-row lg:items-start gap-5">
+        <AdminSidebar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          clubPlan={clubPlan}
+          isAdminOrSuperAdmin={isAdminOrSuperAdmin}
+          isSuperAdmin={isSuperAdmin}
+          pendingCount={pendingCount}
+        />
+
+        <div className="flex-1 min-w-0 space-y-8">
 
       {activeTab === 'canchas' && (
         <>
@@ -1520,6 +1482,9 @@ export default function AdminDashboard() {
       {activeTab === 'dev-tools' && isSuperAdmin && (
         <DevToolsPanel />
       )}
+
+        </div>
+      </div>
 
       <PlanLimitModal
         open={planLimitModal.open}

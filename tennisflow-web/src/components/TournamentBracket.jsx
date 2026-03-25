@@ -1422,7 +1422,12 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
       const mX = 12;
       let hY = 8;
 
-      if (club?.nombre) {
+      if (logoDataUrl) {
+        const logoSize = 14;
+        const logoX = pageW / 2 - logoSize / 2;
+        try { pdf.addImage(logoDataUrl, 'auto', logoX, hY - 2, logoSize, logoSize); } catch { /* ignorar */ }
+        hY += logoSize + 1;
+      } else if (club?.nombre) {
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(8);
         pdf.setTextColor(...GRAY);

@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 
 const MAX_SIZE_MB = 3;
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
@@ -23,6 +23,11 @@ export default function ImageDropzone({
   const [preview, setPreview] = useState(currentUrl);
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
+
+  // Sync preview when currentUrl is loaded async (e.g. after API fetch)
+  useEffect(() => {
+    setPreview((prev) => (prev ? prev : currentUrl));
+  }, [currentUrl]);
 
   const processFile = useCallback(
     (file) => {
