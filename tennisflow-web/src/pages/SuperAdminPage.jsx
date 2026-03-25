@@ -31,10 +31,12 @@ const planBadgeClass = (plan) => {
 
 // ── Componente: fila de club con inline plan selector ─────────────────────────
 function ClubRow({ club, onUpdated }) {
-  const [open, setOpen]       = useState(false);
-  const [plan, setPlan]       = useState(club.plan ?? 'basico');
-  const [saving, setSaving]   = useState(false);
-  const [msg, setMsg]         = useState('');
+  const [open, setOpen]             = useState(false);
+  const [plan, setPlan]             = useState(club.plan ?? 'basico');
+  const [saving, setSaving]         = useState(false);
+  const [msg, setMsg]               = useState('');
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [revoking, setRevoking]     = useState(false);
 
   const handleGrant = async () => {
     setSaving(true);
@@ -48,6 +50,22 @@ function ClubRow({ club, onUpdated }) {
       setMsg(err?.response?.data?.error || 'Error al conceder acceso.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRevoke = async () => {
+    setRevoking(true);
+    setMsg('');
+    try {
+      const { data } = await axios.patch(`${API_URL}/api/super-admin/clubes/${club.id}/restringir`);
+      setMsg(data.message || 'Acceso restringido.');
+      setConfirmRevoke(false);
+      setOpen(false);
+      onUpdated();
+    } catch (err) {
+      setMsg(err?.response?.data?.error || 'Error al restringir acceso.');
+    } finally {
+      setRevoking(false);
     }
   };
 
@@ -79,46 +97,76 @@ function ClubRow({ club, onUpdated }) {
           {sub?.next_payment_date ?? '—'}
         </td>
         <td className="px-4 py-3">
-          <button
-            type="button"
-            onClick={() => { setOpen((v) => !v); setMsg(''); }}
-            className="text-xs bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 text-violet-300 py-1 px-3 rounded-lg transition-colors font-semibold"
-          >
-            {open ? 'Cancelar' : 'Dar acceso gratuito'}
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => { setOpen((v) => !v); setConfirmRevoke(false); setMsg(''); }}
+              className="text-xs bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 text-violet-300 py-1 px-3 rounded-lg transition-colors font-semibold"
+            >
+              {open ? 'Cancelar' : 'Dar acceso gratuito'}
+            </button>
+            {club.is_active && (
+              <button
+                type="button"
+                onClick={() => { setConfirmRevoke((v) => !v); setOpen(false); setMsg(''); }}
+                className="text-xs bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 py-1 px-3 rounded-lg transition-colors font-semibold"
+              >
+                {confirmRevoke ? 'Cancelar' : 'Restringir acceso'}
+              </button>
+            )}
+          </div>
         </td>
       </tr>
 
-      {open && (
+      {(open || confirmRevoke || msg) && (
         <tr className="bg-slate-900/60">
           <td colSpan={7} className="px-6 py-4">
-            <div className="flex flex-wrap items-end gap-3">
-              <div>
-                <label className="block text-xs uppercase tracking-wider text-slate-400 mb-1.5 font-bold">Plan a asignar</label>
-                <select
-                  value={plan}
-                  onChange={(e) => setPlan(e.target.value)}
-                  className="rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50"
+            {open && (
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-slate-400 mb-1.5 font-bold">Plan a asignar</label>
+                  <select
+                    value={plan}
+                    onChange={(e) => setPlan(e.target.value)}
+                    className="rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50"
+                  >
+                    {PLAN_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleGrant}
+                  disabled={saving}
+                  className="rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-60 px-4 py-2 text-sm font-bold text-white transition-colors"
                 >
-                  {PLAN_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
+                  {saving ? 'Guardando...' : `Confirmar — plan ${plan}`}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={handleGrant}
-                disabled={saving}
-                className="rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-60 px-4 py-2 text-sm font-bold text-white transition-colors"
-              >
-                {saving ? 'Guardando...' : `Confirmar — plan ${plan}`}
-              </button>
-              {msg && (
-                <p className={`text-xs rounded px-3 py-2 border ${msg.startsWith('Error') ? 'text-red-300 bg-red-500/10 border-red-500/30' : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30'}`}>
-                  {msg}
+            )}
+
+            {confirmRevoke && (
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-sm text-red-300">
+                  ¿Restringir acceso al club <span className="font-bold">{club.nombre}</span>? Quedará inactivo y su suscripción se marcará como cancelada.
                 </p>
-              )}
-            </div>
+                <button
+                  type="button"
+                  onClick={handleRevoke}
+                  disabled={revoking}
+                  className="rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-60 px-4 py-2 text-sm font-bold text-white transition-colors"
+                >
+                  {revoking ? 'Restringiendo...' : 'Sí, restringir acceso'}
+                </button>
+              </div>
+            )}
+
+            {msg && (
+              <p className={`text-xs rounded px-3 py-2 border mt-2 ${msg.toLowerCase().startsWith('error') ? 'text-red-300 bg-red-500/10 border-red-500/30' : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30'}`}>
+                {msg}
+              </p>
+            )}
           </td>
         </tr>
       )}

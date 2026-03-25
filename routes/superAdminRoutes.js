@@ -5,6 +5,7 @@ const {
   listarClubes,
   activarClubManualmente,
   concederAccesoGratuito,
+  restringirAcceso,
   listarTorneos,
   editarTorneo,
   softDeleteTorneo,
@@ -25,6 +26,7 @@ router.post('/clubes', ...SA, crearClubConAdmin);
 router.get('/clubes', ...SA, listarClubes);
 router.patch('/clubes/:id/activar', ...SA, activarClubManualmente);
 router.patch('/clubes/:id/plan', ...SA, concederAccesoGratuito);
+router.patch('/clubes/:id/restringir', ...SA, restringirAcceso);
 
 // Torneos
 router.get('/torneos', ...CA, listarTorneos);

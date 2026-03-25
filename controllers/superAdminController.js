@@ -565,23 +565,37 @@ const resetearPuntos = async (req, res) => {
 const listarClubes = async (_req, res) => {
   try {
     const APP_URL = (process.env.APP_URL || 'https://setgo-app.vercel.app').trim();
-    const { data, error } = await supabase
-      .from('clubes')
-      .select('id, nombre, slug, plan, is_active, created_at, suscripciones(plan_id, status, preapproval_id, next_payment_date, updated_at)')
-      .order('created_at', { ascending: false });
 
-    if (error) return res.status(500).json({ error: 'Error al listar clubes.' });
+    const { data: clubesData, error: clubesError } = await supabase
+      .from('clubes')
+      .select('id, nombre, slug, plan, is_active')
+      .order('nombre', { ascending: true });
+
+    if (clubesError) return res.status(500).json({ error: 'Error al listar clubes.', detail: clubesError.message });
+
+    const clubIds = (clubesData || []).map((c) => c.id);
+
+    let subsMap = {};
+    if (clubIds.length > 0) {
+      const { data: subsData } = await supabase
+        .from('suscripciones')
+        .select('club_id, plan_id, status, preapproval_id, next_payment_date, updated_at')
+        .in('club_id', clubIds);
+
+      for (const sub of (subsData || [])) {
+        subsMap[sub.club_id] = sub;
+      }
+    }
 
     return res.json(
-      (data || []).map((club) => {
-        const sub = Array.isArray(club.suscripciones) ? club.suscripciones[0] ?? null : club.suscripciones ?? null;
+      (clubesData || []).map((club) => {
+        const sub = subsMap[club.id] ?? null;
         return {
           id:              club.id,
           nombre:          club.nombre,
           slug:            club.slug,
           plan:            club.plan,
           is_active:       club.is_active,
-          created_at:      club.created_at,
           suscripcion:     sub,
           activation_link: club.is_active === false
             ? `${APP_URL}/activar/${club.id}`
@@ -640,6 +654,41 @@ const concederAccesoGratuito = async (req, res) => {
   }
 };
 
+const restringirAcceso = async (req, res) => {
+  try {
+    const clubId = String(req.params?.id || '').trim();
+    if (!clubId) return res.status(400).json({ error: 'Club ID requerido.' });
+
+    const { data: club, error: fetchError } = await supabase
+      .from('clubes')
+      .select('id, nombre, slug')
+      .eq('id', clubId)
+      .maybeSingle();
+
+    if (fetchError || !club) return res.status(404).json({ error: 'Club no encontrado.' });
+
+    const { error: updateError } = await supabase
+      .from('clubes')
+      .update({ is_active: false })
+      .eq('id', clubId);
+
+    if (updateError) return res.status(500).json({ error: 'Error al restringir el club.' });
+
+    // Marcar suscripción como cancelled si existe
+    await supabase
+      .from('suscripciones')
+      .update({ status: 'cancelled' })
+      .eq('club_id', clubId);
+
+    return res.json({
+      message: `Acceso al club "${club.nombre}" restringido correctamente.`,
+      club:    { id: club.id, nombre: club.nombre, slug: club.slug, is_active: false },
+    });
+  } catch (_) {
+    return res.status(500).json({ error: 'Error interno al restringir acceso.' });
+  }
+};
+
 const activarClubManualmente = async (req, res) => {
   try {
     const clubId = String(req.params?.id || '').trim();
@@ -677,6 +726,7 @@ module.exports = {
   listarClubes,
   activarClubManualmente,
   concederAccesoGratuito,
+  restringirAcceso,
   listarTorneos,
   editarTorneo,
   softDeleteTorneo,
