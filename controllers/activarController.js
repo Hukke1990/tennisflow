@@ -194,6 +194,17 @@ const verificarPago = async (req, res) => {
     const mpToken = process.env.MP_ACCESS_TOKEN;
     if (!mpToken) return res.status(500).json({ error: 'Configuración incompleta.' });
 
+    // Primero verificar si el club ya fue activado (ej. por webhook) antes de consultar MP
+    const { data: clubEarly } = await supabase
+      .from('clubes')
+      .select('is_active, plan, slug')
+      .eq('id', clubId)
+      .maybeSingle();
+
+    if (clubEarly?.is_active) {
+      return res.json({ is_active: true, plan: clubEarly.plan, slug: clubEarly.slug });
+    }
+
     // Obtener el preapproval_id guardado en suscripciones para este club
     const { data: sub } = await supabase
       .from('suscripciones')
@@ -228,6 +239,27 @@ const verificarPago = async (req, res) => {
         }
       }
     } catch (_) { /* ignorar */ }
+
+    // Fallback: buscar sin external_reference (MP no siempre lo propaga del plan-template)
+    if (!mpStatus) {
+      try {
+        const searchRes2 = await fetch(
+          `https://api.mercadopago.com/preapproval/search?preapproval_plan_id=${sub.preapproval_id}`,
+          { headers: { Authorization: `Bearer ${mpToken}` } },
+        );
+        if (searchRes2.ok) {
+          const searchData2 = await searchRes2.json();
+          const instances2 = searchData2?.results ?? [];
+          const authorized2 = instances2.find((i) => i.status === 'authorized');
+          if (authorized2) {
+            mpStatus = 'authorized';
+            resolvedPlanId = sub.plan_id ?? 'basico';
+          } else if (instances2.length > 0) {
+            mpStatus = instances2[0].status;
+          }
+        }
+      } catch (_) { /* ignorar */ }
+    }
 
     // Fallback: consultar el template directamente
     if (!mpStatus) {

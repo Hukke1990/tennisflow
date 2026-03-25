@@ -1,6 +1,6 @@
 const supabase = require('../services/supabase');
 
-const ALLOWED_PLANS = new Set(['basico', 'pro', 'premium']);
+const ALLOWED_PLANS = new Set(['basico', 'pro', 'premium', 'test']);
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const TEMP_PASSWORD_MIN_LENGTH = 8;
@@ -567,21 +567,76 @@ const listarClubes = async (_req, res) => {
     const APP_URL = (process.env.APP_URL || 'https://setgo-app.vercel.app').trim();
     const { data, error } = await supabase
       .from('clubes')
-      .select('id, nombre, slug, plan, is_active, created_at')
+      .select('id, nombre, slug, plan, is_active, created_at, suscripciones(plan_id, status, preapproval_id, next_payment_date, updated_at)')
       .order('created_at', { ascending: false });
 
     if (error) return res.status(500).json({ error: 'Error al listar clubes.' });
 
     return res.json(
-      (data || []).map((club) => ({
-        ...club,
-        activation_link: club.is_active === false
-          ? `${APP_URL}/activar/${club.id}`
-          : null,
-      })),
+      (data || []).map((club) => {
+        const sub = Array.isArray(club.suscripciones) ? club.suscripciones[0] ?? null : club.suscripciones ?? null;
+        return {
+          id:              club.id,
+          nombre:          club.nombre,
+          slug:            club.slug,
+          plan:            club.plan,
+          is_active:       club.is_active,
+          created_at:      club.created_at,
+          suscripcion:     sub,
+          activation_link: club.is_active === false
+            ? `${APP_URL}/activar/${club.id}`
+            : null,
+        };
+      }),
     );
   } catch (_) {
     return res.status(500).json({ error: 'Error interno al listar clubes.' });
+  }
+};
+
+const concederAccesoGratuito = async (req, res) => {
+  try {
+    const clubId = String(req.params?.id || '').trim();
+    const plan   = normalizePlan(req.body?.plan);
+
+    if (!clubId) return res.status(400).json({ error: 'Club ID requerido.' });
+    if (!ALLOWED_PLANS.has(plan)) {
+      return res.status(400).json({ error: `Plan inválido. Valores aceptados: ${[...ALLOWED_PLANS].join(', ')}.` });
+    }
+
+    const { data: club, error: fetchError } = await supabase
+      .from('clubes')
+      .select('id, nombre, slug')
+      .eq('id', clubId)
+      .maybeSingle();
+
+    if (fetchError || !club) return res.status(404).json({ error: 'Club no encontrado.' });
+
+    const { error: updateError } = await supabase
+      .from('clubes')
+      .update({ is_active: true, plan })
+      .eq('id', clubId);
+
+    if (updateError) return res.status(500).json({ error: 'Error al actualizar el club.' });
+
+    // Upsert suscripción gratuita / manual
+    await supabase.from('suscripciones').upsert(
+      {
+        club_id:        clubId,
+        plan_id:        plan,
+        preapproval_id: null,
+        status:         'authorized',
+        external_reference: clubId,
+      },
+      { onConflict: 'club_id' },
+    );
+
+    return res.json({
+      message: `Acceso gratuito al plan "${plan}" concedido correctamente al club "${club.nombre}".`,
+      club:    { id: club.id, nombre: club.nombre, slug: club.slug, plan, is_active: true },
+    });
+  } catch (_) {
+    return res.status(500).json({ error: 'Error interno al conceder acceso.' });
   }
 };
 
@@ -621,6 +676,7 @@ module.exports = {
   crearClubConAdmin,
   listarClubes,
   activarClubManualmente,
+  concederAccesoGratuito,
   listarTorneos,
   editarTorneo,
   softDeleteTorneo,

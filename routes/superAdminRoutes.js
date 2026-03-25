@@ -4,6 +4,7 @@ const {
   crearClubConAdmin,
   listarClubes,
   activarClubManualmente,
+  concederAccesoGratuito,
   listarTorneos,
   editarTorneo,
   softDeleteTorneo,
@@ -23,6 +24,7 @@ const CA = [requireAuth, requireRole(['admin', 'super_admin'])];
 router.post('/clubes', ...SA, crearClubConAdmin);
 router.get('/clubes', ...SA, listarClubes);
 router.patch('/clubes/:id/activar', ...SA, activarClubManualmente);
+router.patch('/clubes/:id/plan', ...SA, concederAccesoGratuito);
 
 // Torneos
 router.get('/torneos', ...CA, listarTorneos);

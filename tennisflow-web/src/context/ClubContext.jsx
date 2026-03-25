@@ -169,11 +169,18 @@ export function ClubProvider({ children }) {
           filter: `id=eq.${id}`,
         },
         (payload) => {
-          const newPlan = payload.new?.plan;
-          if (newPlan) {
-            console.log(`[Realtime] Plan del club actualizado: ${newPlan}`);
-            updateClubPlan(newPlan);
-          }
+          const newPlan     = payload.new?.plan;
+          const newIsActive = payload.new?.is_active;
+          setClub((prev) => {
+            if (!prev) return prev;
+            const updates = {};
+            if (newPlan     !== undefined && prev.plan      !== newPlan)     updates.plan      = newPlan;
+            if (newIsActive !== undefined && prev.is_active !== newIsActive) updates.is_active = newIsActive;
+            if (Object.keys(updates).length === 0) return prev;
+            if (newPlan) console.log(`[Realtime] Plan del club actualizado: ${newPlan}`);
+            if (newIsActive !== undefined) console.log(`[Realtime] is_active del club actualizado: ${newIsActive}`);
+            return { ...prev, ...updates };
+          });
         },
       )
       .subscribe();

@@ -1,7 +1,7 @@
 /* eslint-disable react/prop-types */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import { Edit, Trash2, RefreshCcw, UserMinus, Search, X, Check, AlertTriangle, ChevronDown, ChevronUp, Copy } from 'lucide-react';
+import { Edit, Trash2, RefreshCcw, UserMinus, Search, X, Check, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -708,124 +708,12 @@ function RankingsTab() {
   );
 }
 
-// ── Clubes Tab ────────────────────────────────────────────────────────────────
-
-function ClubesTab() {
-  const [clubs, setClubs] = useState([]);
-  const [loadingClubs, setLoadingClubs] = useState(true);
-  const [copied, setCopied] = useState(null);
-  const [activating, setActivating] = useState(null);
-
-  const fetchClubs = useCallback(async () => {
-    setLoadingClubs(true);
-    try {
-      const { data } = await axios.get(`${API_URL}/api/super-admin/clubes`);
-      setClubs(Array.isArray(data) ? data : []);
-    } catch (_) {
-      setClubs([]);
-    } finally {
-      setLoadingClubs(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchClubs(); }, [fetchClubs]);
-
-  const handleCopy = (club) => {
-    if (!club.activation_link) return;
-    navigator.clipboard.writeText(club.activation_link);
-    setCopied(club.id);
-    setTimeout(() => setCopied(null), 2000);
-  };
-
-  const handleActivar = async (club) => {
-    if (!window.confirm(`¿Activar el club "${club.nombre}" manualmente?`)) return;
-    setActivating(club.id);
-    try {
-      await axios.patch(`${API_URL}/api/super-admin/clubes/${club.id}/activar`);
-      await fetchClubs();
-    } catch (_) {
-      alert('Error al activar el club.');
-    } finally {
-      setActivating(null);
-    }
-  };
-
-  if (loadingClubs) return <Spinner />;
-
-  return (
-    <>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-black text-white">Clubes</h2>
-        <button type="button" onClick={fetchClubs} className="p-2 rounded-lg bg-white/5 border border-white/15 text-white/50 hover:text-white hover:border-white/30 transition-colors" title="Recargar">
-          <RefreshCcw className="h-4 w-4" />
-        </button>
-      </div>
-      {clubs.length === 0 ? (
-        <p className="text-white/40 text-sm text-center py-10">No hay clubes registrados.</p>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-white/10">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-white/40">
-                <th className="px-4 py-3 text-left">Nombre</th>
-                <th className="px-4 py-3 text-left">Slug</th>
-                <th className="px-4 py-3 text-left">Plan</th>
-                <th className="px-4 py-3 text-left">Estado</th>
-                <th className="px-4 py-3 text-left">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clubs.map((c) => (
-                <tr key={c.id} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors">
-                  <td className="px-4 py-3 text-white font-medium">{c.nombre}</td>
-                  <td className="px-4 py-3 text-white/50 font-mono">{c.slug}</td>
-                  <td className="px-4 py-3 text-white/50 capitalize">{c.plan ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    {c.is_active
-                      ? <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-300">Activo</span>
-                      : <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/15 text-amber-300">Pago pendiente</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {c.activation_link && (
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(c)}
-                          className="inline-flex items-center gap-1.5 text-xs bg-white/5 hover:bg-white/10 border border-white/15 text-white/60 hover:text-white py-1.5 px-3 rounded-lg transition-colors"
-                        >
-                          <Copy className="h-3 w-3" />
-                          {copied === c.id ? '¡Copiado!' : 'Copiar link'}
-                        </button>
-                      )}
-                      {!c.is_active && (
-                        <button
-                          type="button"
-                          disabled={activating === c.id}
-                          onClick={() => handleActivar(c)}
-                          className="inline-flex items-center gap-1.5 text-xs bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 hover:text-emerald-200 py-1.5 px-3 rounded-lg transition-colors disabled:opacity-50"
-                        >
-                          {activating === c.id ? 'Activando…' : '✓ Activar'}
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </>
-  );
-}
-
 // ── Main Component ────────────────────────────────────────────────────────────
 
 const TABS = [
   { id: 'torneos', label: 'Torneos' },
   { id: 'jugadores', label: 'Jugadores' },
   { id: 'rankings', label: 'Rankings' },
-  { id: 'clubes', label: 'Clubes' },
 ];
 
 export default function AdminControlPanel({ onBack }) {
@@ -918,7 +806,6 @@ export default function AdminControlPanel({ onBack }) {
             {activeTab === 'torneos' && <TorneosTab />}
             {activeTab === 'jugadores' && <JugadoresTab />}
             {activeTab === 'rankings' && <RankingsTab />}
-            {activeTab === 'clubes' && <ClubesTab />}
           </>
         )}
       </div>
