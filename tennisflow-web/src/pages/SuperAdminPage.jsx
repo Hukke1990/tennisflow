@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { DEFAULT_CLUB_SLUG, buildClubPath } from '../context/ClubContext';
+import SuperAdminUsers from '../components/SuperAdminUsers';
 
 const API_URL = '';
 
@@ -296,8 +297,9 @@ export default function SuperAdminPage() {
         {/* Tab bar */}
         <div className="flex gap-1 mb-8 rounded-xl bg-white/5 border border-white/10 p-1 w-fit">
           {[
-            { key: 'alta',   label: 'Alta de Club' },
-            { key: 'clubes', label: 'Clubes y Suscripciones' },
+            { key: 'alta',     label: 'Alta de Club' },
+            { key: 'clubes',   label: 'Clubes y Suscripciones' },
+            { key: 'usuarios', label: 'Usuarios' },
           ].map((t) => (
             <button
               key={t.key}
@@ -469,6 +471,11 @@ export default function SuperAdminPage() {
               </div>
             )}
           </div>
+        )}
+
+        {/* ── TAB: Usuarios ── */}
+        {activeTab === 'usuarios' && (
+          <SuperAdminUsers clubs={clubs} />
         )}
 
       </div>

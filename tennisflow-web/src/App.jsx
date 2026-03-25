@@ -46,6 +46,27 @@ function App() {
         <Route path="/suscripcion/exito" element={<SuscripcionExitoPage />} />
         <Route path="/activar/:clubId" element={<ActivarClubPage />} />
 
+        {/*
+         * ── RUTA SUPER ADMIN MASTER ─────────────────────────────────────────
+         * /admin-master/:clubSlug → entra al panel admin de cualquier club
+         * sin pasar por ClubActiveGuard (ignora is_active).
+         * Solo accesible para super_admin.
+         */}
+        <Route
+          path="/admin-master/:clubSlug"
+          element={(
+            <SuperAdminRoute>
+              <ClubProvider>
+                <ProtectedRoute allowRoles={['super_admin']}>
+                  <MainLayout>
+                    <AdminPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              </ClubProvider>
+            </SuperAdminRoute>
+          )}
+        />
+
         <Route path="/:clubSlug" element={<ClubProvider><ClubActiveGuard><Outlet /></ClubActiveGuard></ClubProvider>}>
           {/* Index: muestra login o redirige a inicio segun autenticacion */}
           <Route index element={<ClubEntryPage />} />

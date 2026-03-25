@@ -721,6 +721,134 @@ const activarClubManualmente = async (req, res) => {
   }
 };
 
+// ── Gestión de Usuarios ──────────────────────────────────────────────────────
+
+const ROLES_VALIDOS = new Set(['jugador', 'admin', 'super_admin']);
+
+const listarUsuarios = async (req, res) => {
+  const clubId = req.query.club_id || null;
+  try {
+    // Obtener emails desde auth.users (paginado, máx 1000 para SaaS pequeño)
+    const { data: authData, error: authError } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+    if (authError) return res.status(500).json({ error: 'No se pudieron obtener los usuarios de Auth.' });
+
+    const emailMap = {};
+    for (const u of (authData?.users || [])) {
+      emailMap[u.id] = u.email || null;
+    }
+
+    // Query de perfiles sin join embebido para evitar errores de FK en PostgREST
+    let query = supabase
+      .from('perfiles')
+      .select('id, nombre_completo, apellido, rol, club_id')
+      .order('nombre_completo', { ascending: true });
+
+    if (clubId) query = query.eq('club_id', clubId);
+
+    const { data: perfiles, error: perfilesError } = await query;
+    if (perfilesError) return res.status(500).json({ error: perfilesError.message });
+
+    // Obtener nombres de clubes en una sola query aparte
+    const clubIds = [...new Set((perfiles || []).map((p) => p.club_id).filter(Boolean))];
+    const clubMap = {};
+    if (clubIds.length > 0) {
+      const { data: clubes } = await supabase
+        .from('clubes')
+        .select('id, nombre, slug')
+        .in('id', clubIds);
+      for (const c of (clubes || [])) {
+        clubMap[c.id] = c;
+      }
+    }
+
+    const result = (perfiles || []).map((p) => ({
+      id: p.id,
+      nombre_completo: p.nombre_completo,
+      apellido: p.apellido,
+      rol: p.rol || 'jugador',
+      club_id: p.club_id,
+      club_nombre: clubMap[p.club_id]?.nombre || null,
+      club_slug: clubMap[p.club_id]?.slug || null,
+      email: emailMap[p.id] || null,
+    }));
+
+    return res.json(result);
+  } catch (_) {
+    return res.status(500).json({ error: 'Error al listar usuarios.' });
+  }
+};
+
+const cambiarRol = async (req, res) => {
+  const { id } = req.params;
+  const callerUserId = req.authUser?.id;
+  const nuevoRol = String(req.body?.rol || '').trim().toLowerCase();
+
+  if (!ROLES_VALIDOS.has(nuevoRol)) {
+    return res.status(400).json({ error: 'Rol no válido. Usa: jugador, admin, super_admin.' });
+  }
+
+  // Protección: un super_admin no puede degradarse a sí mismo
+  if (String(id) === String(callerUserId) && nuevoRol !== 'super_admin') {
+    return res.status(403).json({ error: 'No puedes quitarte el rol de super_admin a ti mismo.' });
+  }
+
+  const { error } = await supabase
+    .from('perfiles')
+    .update({ rol: nuevoRol })
+    .eq('id', id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  return res.json({ ok: true });
+};
+
+const resetearPasswordUsuario = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(id);
+    if (authError || !authUser?.user) return res.status(404).json({ error: 'Usuario no encontrado.' });
+
+    const email = authUser.user.email;
+    if (!email) return res.status(400).json({ error: 'El usuario no tiene email registrado.' });
+
+    const appUrl = (process.env.APP_URL || 'https://setgo-app.vercel.app').trim();
+    const { data: linkData, error: resetError } = await supabase.auth.admin.generateLink({
+      type: 'recovery',
+      email,
+      options: { redirectTo: appUrl },
+    });
+
+    if (resetError) return res.status(500).json({ error: resetError.message });
+    return res.json({ ok: true, link: linkData?.properties?.action_link || null });
+  } catch (_) {
+    return res.status(500).json({ error: 'Error al generar link de reseteo.' });
+  }
+};
+
+const desvincularDeClub = async (req, res) => {
+  const { id } = req.params;
+  const callerUserId = req.authUser?.id;
+
+  if (String(id) === String(callerUserId)) {
+    return res.status(403).json({ error: 'No puedes desvincularte a ti mismo.' });
+  }
+
+  try {
+    // Eliminar de usuario_clubes
+    await supabase.from('usuario_clubes').delete().eq('user_id', id);
+
+    // Limpiar club_id del perfil
+    const { error } = await supabase
+      .from('perfiles')
+      .update({ club_id: null })
+      .eq('id', id);
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ ok: true });
+  } catch (_) {
+    return res.status(500).json({ error: 'Error al desvincular usuario.' });
+  }
+};
+
 module.exports = {
   crearClubConAdmin,
   listarClubes,
@@ -735,4 +863,8 @@ module.exports = {
   listarRankings,
   ajustarPuntos,
   resetearPuntos,
+  listarUsuarios,
+  cambiarRol,
+  resetearPasswordUsuario,
+  desvincularDeClub,
 };

@@ -14,6 +14,10 @@ const {
   listarRankings,
   ajustarPuntos,
   resetearPuntos,
+  listarUsuarios,
+  cambiarRol,
+  resetearPasswordUsuario,
+  desvincularDeClub,
 } = require('../controllers/superAdminController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 
@@ -41,5 +45,11 @@ router.patch('/jugadores/:id', ...CA, editarJugador);
 router.get('/rankings', ...CA, listarRankings);
 router.patch('/rankings/:id/puntos', ...CA, ajustarPuntos);
 router.post('/rankings/resetear', ...CA, resetearPuntos);
+
+// Usuarios
+router.get('/usuarios', ...SA, listarUsuarios);
+router.patch('/usuarios/:id/rol', ...SA, cambiarRol);
+router.post('/usuarios/:id/reset-password', ...SA, resetearPasswordUsuario);
+router.delete('/usuarios/:id/club', ...SA, desvincularDeClub);
 
 module.exports = router;
