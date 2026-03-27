@@ -25,7 +25,12 @@ export default function ForgotPasswordPage() {
     setLoading(false);
 
     if (resetError) {
-      setError('Ocurrió un error al enviar el email. Intentá de nuevo.');
+      const status = resetError.status ?? resetError?.code;
+      if (status === 429 || String(resetError.message).toLowerCase().includes('rate limit') || String(resetError.message).toLowerCase().includes('too many')) {
+        setError('Demasiados intentos. Esperá unos minutos antes de volver a intentarlo.');
+      } else {
+        setError('Ocurrió un error al enviar el email. Intentá de nuevo.');
+      }
       return;
     }
 
