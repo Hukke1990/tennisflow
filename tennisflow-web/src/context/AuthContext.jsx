@@ -160,6 +160,26 @@ export function AuthProvider({ children }) {
           window.location.hash.includes('access_token');
         if (hasHashTokens) return;
       }
+
+      // Cuando el usuario llega desde el email de recuperación de contraseña,
+      // Supabase puede redirigir a la URL base del sitio (/#) si la redirectTo
+      // no está en la lista de URLs permitidas. Detectamos el evento aquí y
+      // redirigimos al usuario a la página de nueva contraseña del club correcto.
+      if (event === 'PASSWORD_RECOVERY' && typeof window !== 'undefined') {
+        const alreadyOnRecoveryPage = window.location.pathname.includes('nueva-contrasenia');
+        if (!alreadyOnRecoveryPage) {
+          let clubSlug = '';
+          try {
+            clubSlug = window.localStorage.getItem('tennisflow.current-club-slug') || '';
+          } catch (_) {}
+          const recoveryPath = clubSlug ? `/${clubSlug}/nueva-contrasenia` : null;
+          if (recoveryPath) {
+            window.location.replace(recoveryPath);
+            return;
+          }
+        }
+      }
+
       syncSession(session);
     });
 

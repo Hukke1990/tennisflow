@@ -13,6 +13,8 @@ import DashboardPage from './pages/DashboardPage';
 import TorneosPage from './pages/TorneosPage';
 import LoginPage from './pages/LoginPage';
 import RegistroPage from './pages/RegistroPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import PerfilPage from './pages/PerfilPage';
 import AdminPage from './pages/AdminPage';
 import RankingsPage from './pages/RankingsPage';
@@ -75,6 +77,8 @@ function App() {
           <Route element={<AuthLayout />}>
             <Route path="login" element={<LoginPage />} />
             <Route path="registro" element={<RegistroPage />} />
+            <Route path="recuperar-contrasenia" element={<ForgotPasswordPage />} />
+            <Route path="nueva-contrasenia" element={<ResetPasswordPage />} />
           </Route>
 
           {/* Selector de club — accesible para usuarios autenticados; fuera del guard */}

@@ -101,7 +101,16 @@ export default function LoginPage() {
         </div>
 
         <div>
-          <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 mb-1.5">Contraseña</label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Contraseña</label>
+            <Link
+              to={toClubPath('/recuperar-contrasenia')}
+              className="text-[11px] font-semibold hover:text-white transition-colors"
+              style={{ color: '#A6CE39' }}
+            >
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </div>
           <div className="relative">
             <input
               type={showPassword ? 'text' : 'password'}
