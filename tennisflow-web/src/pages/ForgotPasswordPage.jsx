@@ -16,11 +16,10 @@ export default function ForgotPasswordPage() {
     setError('');
     setLoading(true);
 
-    const redirectTo = `${window.location.origin}${toClubPath('/nueva-contrasenia')}`;
-
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo,
-    });
+    // No pasamos redirectTo para evitar el error 500 de Supabase cuando la URL
+    // no está en la lista de URLs permitidas. El handler PASSWORD_RECOVERY en
+    // AuthContext detecta el evento y redirige a /:clubSlug/nueva-contrasenia.
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim());
 
     setLoading(false);
 
