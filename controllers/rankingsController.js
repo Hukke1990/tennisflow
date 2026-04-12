@@ -1,4 +1,7 @@
-const supabase = require('../services/supabase');
+﻿'use strict';
+const rankingsService = require('../services/rankingsService');
+const { handleError } = require('../utils/errors');
+const logger = require('../services/logger');
 
 const MODALIDADES = new Set(['Singles', 'Dobles']);
 const SEXOS = new Set(['Masculino', 'Femenino']);
@@ -288,113 +291,22 @@ const parseFilters = (query) => {
 
 const getRankings = async (req, res) => {
   try {
-    const { clubId, error: clubError } = resolveClubIdFromRequest(req);
-    if (clubError) {
-      return res.status(400).json({ error: clubError });
-    }
-
-    const { modalidad, sexo, categoria, error: filtersError } = parseFilters(req.query || {});
-
-    if (filtersError) {
-      return res.status(400).json({ error: filtersError });
-    }
-
-    const categoriaField = modalidad === 'Singles' ? 'categoria_singles' : 'categoria_dobles';
-    const { data, error } = await fetchRankingsCompat({ sexo, categoriaField, categoria, clubId });
-
-    if (error) {
-      console.error('Error al obtener rankings:', error);
-      return res.status(500).json({ error: 'Error al obtener rankings', details: error.message });
-    }
-
-    const rows = Array.isArray(data) ? data : [];
-
-    // Filtro de admins: doble capa
-    // 1) Si `rol` vino en la query (select options con rol), filtramos directamente en JS
-    // 2) Además, hacemos la segunda query como respaldo para cubrir es_admin=true
-    let adminIds = new Set();
-    if (rows.length > 0) {
-      const { adminIds: resolvedAdminIds, error: adminFilterError } = await fetchAdminProfileIdsCompat(clubId);
-      if (adminFilterError) {
-        console.warn('No se pudo resolver filtro de admins en ranking:', adminFilterError?.message || adminFilterError);
-      }
-      adminIds = resolvedAdminIds;
-    }
-
-    const sortedRows = rows
-      .filter((jugador) => {
-        if (adminIds.has(String(jugador?.id || '').trim())) return false;
-        // Filtro JS por rol (disponible si la query lo incluyó)
-        const rol = normalizeRole(jugador?.rol);
-        if (ADMIN_ROLES.has(rol)) return false;
-        if (jugador?.es_admin === true) return false;
-        return true;
-      })
-      .sort((a, b) => {
-        const aPoints = resolvePointsByModalidad(a, modalidad);
-        const bPoints = resolvePointsByModalidad(b, modalidad);
-        if (bPoints !== aPoints) {
-          return bPoints - aPoints;
-        }
-
-        const aName = String(a?.nombre_completo || '').trim().toLowerCase();
-        const bName = String(b?.nombre_completo || '').trim().toLowerCase();
-        if (aName !== bName) return aName.localeCompare(bName);
-
-        return String(a?.id || '').localeCompare(String(b?.id || ''));
-      });
-
-    const playerIds = sortedRows
-      .map((jugador) => String(jugador?.id || '').trim())
-      .filter(Boolean);
-
-    const { ids: clubTournamentIds, error: clubTorneosError } = await fetchClubTournamentIds(clubId);
-    if (clubTorneosError) {
-      console.error('No se pudieron obtener torneos del club para ranking:', clubTorneosError);
-      return res.status(500).json({ error: 'Error al obtener rankings', details: clubTorneosError.message });
-    }
-
-    const { winsByPlayer, error: tournamentWinsError } = await fetchTournamentWinsByPlayers(playerIds, clubTournamentIds);
-    if (tournamentWinsError) {
-      console.warn('No se pudo calcular torneos ganados, se usa fallback:', tournamentWinsError?.message || tournamentWinsError);
-    }
-
-    // For Dobles: find the most usual partner per player
-    let partnersByPlayer = new Map();
-    if (modalidad === 'Dobles' && playerIds.length > 0) {
-      const { partnersByPlayer: resolved, error: partnerError } = await fetchUsualPartnersForDobles(playerIds, clubId);
-      if (partnerError) {
-        console.warn('No se pudo calcular compañeros habituales:', partnerError?.message || partnerError);
-      } else {
-        partnersByPlayer = resolved;
-      }
-    }
-
-    const jugadores = sortedRows
-      .map((jugador) => ({
-        id: jugador.id,
-        nombre_completo: jugador.nombre_completo,
-        foto_url: jugador.foto_url,
-        ranking_puntos: Number(jugador.ranking_puntos ?? 0),
-        ranking_puntos_singles: Number(jugador.ranking_puntos_singles ?? jugador.ranking_puntos ?? 0),
-        ranking_puntos_dobles: Number(jugador.ranking_puntos_dobles ?? jugador.ranking_puntos ?? 0),
-        ranking_elo_singles: jugador.ranking_elo_singles,
-        ranking_elo_dobles: jugador.ranking_elo_dobles,
-        ranking_elo: jugador.ranking_elo,
-        torneos: Number(winsByPlayer.get(String(jugador.id || '')) ?? 0),
-        torneos_ganados: Number(winsByPlayer.get(String(jugador.id || '')) ?? 0),
-        victorias: Number(jugador.victorias || 0),
-        companero_habitual_id: partnersByPlayer.get(String(jugador.id || ''))?.id ?? null,
-        companero_habitual_nombre: partnersByPlayer.get(String(jugador.id || ''))?.nombre ?? null,
-      }));
-
-    return res.json(jugadores);
+    const rawClubId = req.query?.club_id ?? req.headers?.['x-club-id'];
+    const clubId    = String(rawClubId || '').trim();
+    const filters   = {
+      modalidad: req.query?.modalidad,
+      sexo:      req.query?.sexo,
+      categoria: req.query?.categoria,
+      q:         req.query?.q,
+    };
+    const data = await rankingsService.getRankings({ clubId, filters });
+    return res.status(200).json(data);
   } catch (err) {
-    console.error('Error inesperado en getRankings:', err);
-    return res.status(500).json({ error: 'Error interno del servidor' });
+    return handleError(res, err, logger);
   }
 };
 
 module.exports = {
   getRankings,
 };
+

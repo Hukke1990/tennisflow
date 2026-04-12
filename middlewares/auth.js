@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const supabase = require('../services/supabase');
 
 const ADMIN_ROLES = new Set(['admin', 'super_admin']);
@@ -75,6 +76,42 @@ const requireAuth = async (req, res, next) => {
   } catch (err) {
     return res.status(500).json({ error: 'No se pudo validar la autenticacion.' });
   }
+};
+
+/**
+ * Middleware para endpoints internos: valida el header x-internal-key
+ * contra INTERNAL_API_KEY (puede ser una lista de claves separadas por coma
+ * para facilitar la rotación sin downtime).
+ * Si INTERNAL_API_KEY no está configurada, se permite el paso
+ * (para facilitar despliegue gradual).
+ */
+const requireInternalKey = (req, res, next) => {
+  const rawKeys = (process.env.INTERNAL_API_KEY || '').trim();
+  if (!rawKeys) return next();
+
+  // Soporte para múltiples claves separadas por coma (key rotation)
+  const validKeys = rawKeys.split(',').map((k) => k.trim()).filter(Boolean);
+  const headerKey = (req.headers['x-internal-key'] || '').trim();
+
+  if (!headerKey) {
+    return res.status(403).json({ error: 'Acceso denegado. API key interna requerida.' });
+  }
+
+  const headerBuf = Buffer.from(headerKey);
+  const matched = validKeys.some((key) => {
+    try {
+      const keyBuf = Buffer.from(key);
+      if (headerBuf.length !== keyBuf.length) return false;
+      return crypto.timingSafeEqual(headerBuf, keyBuf);
+    } catch (_) {
+      return false;
+    }
+  });
+
+  if (!matched) {
+    return res.status(403).json({ error: 'Acceso denegado. API key interna requerida.' });
+  }
+  return next();
 };
 
 const requireRole = (allowedRoles = []) => {
@@ -156,4 +193,5 @@ module.exports = {
   requireAdmin,
   requireSelfOrRole,
   enforceJugadorIdForSelfOrAdmin,
+  requireInternalKey,
 };

@@ -1,194 +1,63 @@
-const supabase = require('../services/supabase');
+/**
+ * controllers/perfilController.js
+ *
+ * Controller ultra-liviano: solo lee req, llama service, devuelve res.
+ * Toda la lógica de negocio y validaciones están en services/perfilService.js.
+ * Toda la lógica de acceso a datos está en repositories/perfilRepository.js.
+ */
 
-const ADMIN_ROLES = new Set(['admin', 'super_admin']);
-const INTERNATIONAL_PHONE_REGEX = /^\+[1-9]\d{7,14}$/;
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+'use strict';
 
-const resolveClubIdFromRequestOptional = (req) => {
-  const rawClubId = req.query?.club_id ?? req.headers?.['x-club-id'];
-  const clubId = String(rawClubId || '').trim();
+const perfilService         = require('../services/perfilService');
+const { handleError }       = require('../utils/errors');
+const { resolveClubId, resolveClubIdOptional } = require('../utils/reqUtils');
+const logger                = require('../services/logger');
 
-  if (!clubId) {
-    return { clubId: null, error: null };
-  }
-
-  if (!UUID_REGEX.test(clubId)) {
-    return { clubId: null, error: 'club_id debe ser un UUID valido.' };
-  }
-
-  return { clubId, error: null };
-};
-
-const normalizeRole = (value) => {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'superadmin' || normalized === 'super_admin') return 'super_admin';
-  if (normalized === 'admin' || normalized === 'administrador') return 'admin';
-  if (normalized === 'jugador' || normalized === 'player') return 'jugador';
-  return '';
-};
-
-const parseCategoria = (rawValue, fieldName) => {
-  if (rawValue === null || rawValue === undefined || rawValue === '') {
-    return { value: null, error: null };
-  }
-
-  const parsed = Number.parseInt(String(rawValue), 10);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 5) {
-    return { value: null, error: `${fieldName} debe ser un numero entre 1 y 5.` };
-  }
-
-  return { value: parsed, error: null };
-};
-
-const normalizeTelefono = (rawValue) => {
-  const value = String(rawValue ?? '').trim();
-  if (!value) {
-    return { value: '', error: 'telefono es obligatorio.' };
-  }
-
-  if (!INTERNATIONAL_PHONE_REGEX.test(value)) {
-    return { value: '', error: 'telefono debe tener formato internacional. Ejemplo: +5491122334455' };
-  }
-
-  return { value, error: null };
-};
-
+/**
+ * GET /api/perfil/:id?club_id=...
+ * Obtiene el perfil público de un jugador.
+ */
 const obtenerPerfil = async (req, res) => {
   try {
     const { id } = req.params;
-    const { clubId, error: clubError } = resolveClubIdFromRequestOptional(req);
-    if (clubError) {
-      return res.status(400).json({ error: clubError });
-    }
+    const { clubId, error: clubError } = resolveClubId(req);
+    if (clubError) return res.status(400).json({ error: clubError });
 
-    let query = supabase
-      .from('perfiles')
-      .select('*')
-      .eq('id', id);
-
-    if (clubId) {
-      query = query.eq('club_id', clubId);
-    }
-
-    const { data, error } = await query.single();
-
-    if (error || !data) {
-      return res.status(404).json({ error: 'Perfil no encontrado' });
-    }
-    res.json(data);
+    const data = await perfilService.getPerfil(id, clubId);
+    return res.json(data);
   } catch (err) {
-    res.status(500).json({ error: 'Error interno del servidor' });
+    return handleError(res, err, logger);
   }
 };
 
+/**
+ * PUT /api/perfil/:id
+ * Actualiza el perfil (campos permitidos según rol).
+ */
 const actualizarPerfil = async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      nombre_completo,
-      apellido,
-      localidad,
-      foto_url,
-      mano_dominante,
-      estilo_reves,
-      altura,
-      peso,
-      telefono,
-      categoria,
-      categoria_singles,
-      categoria_dobles,
-    } = req.body;
-
-    const currentRole = normalizeRole(req.authUser?.rol);
-    const canEditCategorias = ADMIN_ROLES.has(currentRole);
-    const wantsToEditCategorias = (
-      categoria !== undefined
-      || categoria_singles !== undefined
-      || categoria_dobles !== undefined
-    );
-
-    if (wantsToEditCategorias && !canEditCategorias) {
-      return res.status(403).json({ error: 'Solo admin o super_admin pueden editar categorias.' });
-    }
-
-    const camposPermitidos = {};
-    if (nombre_completo !== undefined) camposPermitidos.nombre_completo = nombre_completo;
-    if (apellido !== undefined) camposPermitidos.apellido = apellido;
-    if (localidad !== undefined) camposPermitidos.localidad = localidad;
-    if (foto_url !== undefined) camposPermitidos.foto_url = foto_url;
-    if (mano_dominante !== undefined) camposPermitidos.mano_dominante = mano_dominante;
-    if (estilo_reves !== undefined) camposPermitidos.estilo_reves = estilo_reves;
-    if (altura !== undefined) camposPermitidos.altura = altura ? parseInt(altura) : null;
-    if (peso !== undefined) camposPermitidos.peso = peso ? parseInt(peso) : null;
-
-    if (telefono !== undefined) {
-      const { value, error } = normalizeTelefono(telefono);
-      if (error) return res.status(400).json({ error });
-      camposPermitidos.telefono = value;
-    }
-
-    if (categoria !== undefined) {
-      const { value, error } = parseCategoria(categoria, 'categoria');
-      if (error) return res.status(400).json({ error });
-      camposPermitidos.categoria = value;
-    }
-
-    if (categoria_singles !== undefined) {
-      const { value, error } = parseCategoria(categoria_singles, 'categoria_singles');
-      if (error) return res.status(400).json({ error });
-      camposPermitidos.categoria_singles = value;
-    }
-
-    if (categoria_dobles !== undefined) {
-      const { value, error } = parseCategoria(categoria_dobles, 'categoria_dobles');
-      if (error) return res.status(400).json({ error });
-      camposPermitidos.categoria_dobles = value;
-    }
-
-    // Compatibilidad: si llega solo categoria_singles y no categoria legacy, sincronizar categoria.
-    if (
-      canEditCategorias
-      && categoria === undefined
-      && categoria_singles !== undefined
-      && camposPermitidos.categoria_singles !== undefined
-    ) {
-      camposPermitidos.categoria = camposPermitidos.categoria_singles;
-    }
-
-    const { data, error } = await supabase
-      .from('perfiles')
-      .update(camposPermitidos)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error al actualizar perfil:', error);
-      return res.status(500).json({ error: error.message });
-    }
-
-    res.json({ message: 'Perfil actualizado correctamente', perfil: data });
+    const data = await perfilService.actualizarPerfil(id, req.body, req.authUser);
+    return res.json({ message: 'Perfil actualizado correctamente', perfil: data });
   } catch (err) {
-    res.status(500).json({ error: 'Error interno del servidor' });
+    return handleError(res, err, logger);
   }
 };
 
+/**
+ * GET /api/perfil/count?club_id=...
+ * Cuenta jugadores activos del club.
+ */
 const contarJugadoresPorClub = async (req, res) => {
   try {
-    const { clubId, error: clubError } = resolveClubIdFromRequestOptional(req);
+    const { clubId, error: clubError } = resolveClubIdOptional(req);
     if (clubError) return res.status(400).json({ error: clubError });
-    if (!clubId) return res.status(400).json({ error: 'club_id requerido' });
+    if (!clubId)   return res.status(400).json({ error: 'club_id requerido' });
 
-    const { count, error } = await supabase
-      .from('perfiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('club_id', clubId);
-
-    if (error) return res.status(500).json({ error: error.message });
-
-    res.json({ count: count ?? 0 });
+    const count = await perfilService.contarJugadores(clubId);
+    return res.json({ count });
   } catch (err) {
-    res.status(500).json({ error: 'Error interno del servidor' });
+    return handleError(res, err, logger);
   }
 };
 

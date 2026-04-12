@@ -1,4 +1,5 @@
-const supabase = require('../services/supabase');
+﻿const supabase = require('../services/supabase');
+const logger = require('../services/logger');
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DEFAULT_HORA_INICIO_DIA = '09:00';
@@ -772,7 +773,7 @@ const generarSorteo = async (req, res) => {
       .eq('torneo_id', torneo_id);
 
     if (errTC) {
-      console.error('Error al obtener canchas del torneo:', errTC);
+      logger.error('Error al obtener canchas del torneo:', errTC);
       return res.status(500).json({ error: 'Error al obtener canchas del torneo.' });
     }
 
@@ -788,7 +789,7 @@ const generarSorteo = async (req, res) => {
       .eq('esta_disponible', true);
 
     if (errC) {
-      console.error('Error al validar canchas del torneo:', errC);
+      logger.error('Error al validar canchas del torneo:', errC);
       return res.status(500).json({ error: 'Error al validar canchas del torneo.' });
     }
 
@@ -801,7 +802,7 @@ const generarSorteo = async (req, res) => {
     const { data: inscripcionesConfirmadas, error: errI } = await fetchApprovedInscriptionsForTournament(torneo_id);
 
     if (errI) {
-      console.error('Error al obtener inscripciones:', errI);
+      logger.error('Error al obtener inscripciones:', errI);
       return res.status(500).json({ error: 'Error al obtener inscripciones', details: errI.message });
     }
 
@@ -831,7 +832,7 @@ const generarSorteo = async (req, res) => {
 
     const { data: perfilesInscritos, error: perfilesError } = await fetchProfilesWithRankingFallback(playerIdsForProfiles);
     if (perfilesError) {
-      console.error('Error al obtener perfiles de inscritos:', perfilesError);
+      logger.error('Error al obtener perfiles de inscritos:', perfilesError);
       return res.status(500).json({ error: 'Error al obtener perfiles de inscritos', details: perfilesError.message });
     }
 
@@ -854,7 +855,7 @@ const generarSorteo = async (req, res) => {
       .in('jugador_id', playerIdsForProfiles);
 
     if (errDispInsc) {
-      console.error('Error al obtener disponibilidad de inscripcion:', errDispInsc);
+      logger.error('Error al obtener disponibilidad de inscripcion:', errDispInsc);
       return res.status(500).json({ error: 'Error al obtener disponibilidades del torneo.' });
     }
 
@@ -869,7 +870,7 @@ const generarSorteo = async (req, res) => {
         .in('jugador_id', jugadoresSinDisponibilidadInscripcion);
 
       if (errD) {
-        console.error('Error al obtener disponibilidad legacy:', errD);
+        logger.error('Error al obtener disponibilidad legacy:', errD);
         return res.status(500).json({ error: 'Error al obtener disponibilidades' });
       }
 
@@ -1216,7 +1217,7 @@ const generarSorteo = async (req, res) => {
         });
       }
 
-      console.error('Error insertando partidos:', errP);
+      logger.error('Error insertando partidos:', errP);
       return res.status(500).json({ error: 'Error al generar el cuadro de torneo.' });
     }
 
@@ -1244,7 +1245,7 @@ const generarSorteo = async (req, res) => {
     });
 
   } catch (err) {
-    console.error('Error en sorteo alg:', err);
+    logger.error('Error en sorteo alg:', err);
     res.status(500).json({ error: 'Error interno de servidor' });
   }
 };
@@ -1475,7 +1476,7 @@ const obtenerCuadroTorneo = async (req, res) => {
 
     const { data: partidosRaw, error } = await fetchPartidosCuadroCompat(torneoId);
     if (error) {
-      console.error('Error al obtener cuadro:', {
+      logger.error('Error al obtener cuadro:', {
         torneoId,
         message: error.message,
         details: error.details,
@@ -1486,7 +1487,7 @@ const obtenerCuadroTorneo = async (req, res) => {
     }
 
     if (!partidosRaw || partidosRaw.length === 0) {
-      console.info('Cuadro consultado sin partidos:', { torneoId, cantidadPartidos: 0 });
+      logger.info('Cuadro consultado sin partidos:', { torneoId, cantidadPartidos: 0 });
       return res.status(200).json([]);
     }
 
@@ -1633,7 +1634,7 @@ const obtenerCuadroTorneo = async (req, res) => {
       }
 
       if (perfilesError) {
-        console.error('Error al obtener perfiles para cuadro:', {
+        logger.error('Error al obtener perfiles para cuadro:', {
           torneoId,
           message: perfilesError.message,
           details: perfilesError.details,
@@ -1652,7 +1653,7 @@ const obtenerCuadroTorneo = async (req, res) => {
         .in('id', canchaIds);
 
       if (canchasError) {
-        console.error('Error al obtener canchas para cuadro:', {
+        logger.error('Error al obtener canchas para cuadro:', {
           torneoId,
           message: canchasError.message,
           details: canchasError.details,
@@ -1741,10 +1742,10 @@ const obtenerCuadroTorneo = async (req, res) => {
       };
     });
 
-    console.info('Cuadro obtenido correctamente:', { torneoId, cantidadPartidos: data.length });
+    logger.info('Cuadro obtenido correctamente:', { torneoId, cantidadPartidos: data.length });
     return res.status(200).json(data);
   } catch (err) {
-    console.error('Error inesperado al obtener cuadro:', {
+    logger.error('Error inesperado al obtener cuadro:', {
       torneoId: req.params.id,
       message: err.message,
       stack: err.stack,
@@ -1788,7 +1789,7 @@ const recalcularCronograma = async (req, res) => {
       .eq('torneo_id', torneo_id);
 
     if (errTC) {
-      console.error('Error al obtener canchas del torneo:', errTC);
+      logger.error('Error al obtener canchas del torneo:', errTC);
       return res.status(500).json({ error: 'Error al obtener canchas del torneo.' });
     }
 
@@ -1804,7 +1805,7 @@ const recalcularCronograma = async (req, res) => {
       .eq('esta_disponible', true);
 
     if (errC) {
-      console.error('Error al validar canchas del torneo:', errC);
+      logger.error('Error al validar canchas del torneo:', errC);
       return res.status(500).json({ error: 'Error al validar canchas del torneo.' });
     }
 
@@ -1821,7 +1822,7 @@ const recalcularCronograma = async (req, res) => {
       .order('id', { ascending: true });
 
     if (errP) {
-      console.error('Error al obtener partidos para cronograma:', errP);
+      logger.error('Error al obtener partidos para cronograma:', errP);
       return res.status(500).json({ error: 'Error al obtener partidos del torneo.' });
     }
 
@@ -1842,7 +1843,7 @@ const recalcularCronograma = async (req, res) => {
       .in('jugador_id', jugadorIds);
 
     if (errDispInsc) {
-      console.error('Error al obtener disponibilidad de inscripcion:', errDispInsc);
+      logger.error('Error al obtener disponibilidad de inscripcion:', errDispInsc);
       return res.status(500).json({ error: 'Error al obtener disponibilidades del torneo.' });
     }
 
@@ -1857,7 +1858,7 @@ const recalcularCronograma = async (req, res) => {
         .in('jugador_id', jugadoresSinDisponibilidadInscripcion);
 
       if (errD) {
-        console.error('Error al obtener disponibilidad legacy:', errD);
+        logger.error('Error al obtener disponibilidad legacy:', errD);
         return res.status(500).json({ error: 'Error al obtener disponibilidades' });
       }
 
@@ -2031,7 +2032,7 @@ const recalcularCronograma = async (req, res) => {
         .eq('id', match.id);
 
       if (updateError) {
-        console.error('Error actualizando cronograma de partido:', {
+        logger.error('Error actualizando cronograma de partido:', {
           partidoId: match.id,
           message: updateError.message,
           code: updateError.code,
@@ -2059,7 +2060,7 @@ const recalcularCronograma = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('Error al recalcular cronograma:', err);
+    logger.error('Error al recalcular cronograma:', err);
     return res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
@@ -2088,7 +2089,7 @@ const publicarCronograma = async (req, res) => {
       .eq('torneo_id', torneo_id);
 
     if (errCountTotal) {
-      console.error('Error al contar partidos del torneo:', errCountTotal);
+      logger.error('Error al contar partidos del torneo:', errCountTotal);
       return res.status(500).json({ error: 'Error al publicar cronograma' });
     }
 
@@ -2103,7 +2104,7 @@ const publicarCronograma = async (req, res) => {
       .or('fecha_hora.is.null,cancha_id.is.null');
 
     if (errCountSinAsignacion) {
-      console.error('Error al contar partidos incompletos del torneo:', errCountSinAsignacion);
+      logger.error('Error al contar partidos incompletos del torneo:', errCountSinAsignacion);
       return res.status(500).json({ error: 'Error al publicar cronograma' });
     }
 
@@ -2119,7 +2120,7 @@ const publicarCronograma = async (req, res) => {
       .single();
 
     if (errUpdate || !torneoActualizado) {
-      console.error('Error al actualizar estado del torneo al publicar cronograma:', errUpdate);
+      logger.error('Error al actualizar estado del torneo al publicar cronograma:', errUpdate);
       return res.status(500).json({ error: 'Error al publicar cronograma' });
     }
 
@@ -2132,7 +2133,7 @@ const publicarCronograma = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('Error al publicar cronograma:', err);
+    logger.error('Error al publicar cronograma:', err);
     return res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
@@ -2155,3 +2156,4 @@ module.exports = {
     buildFirstRoundPairsByBracketLines,
   },
 };
+
