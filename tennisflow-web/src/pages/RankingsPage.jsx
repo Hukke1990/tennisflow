@@ -830,6 +830,7 @@ export default function RankingsPage() {
               modalidad={modalidad}
               categoria={categoria}
               apiUrl={API_URL}
+              clubId={clubId}
               compact
               floating
               onClose={() => setSelectedPlayerId('')}

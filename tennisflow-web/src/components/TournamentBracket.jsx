@@ -822,7 +822,9 @@ export default function TournamentBracket({ torneoId, adminMode = false }) {
       const resolvedPairs = await Promise.all(
         missingIds.map(async (id) => {
           try {
-            const { data } = await axios.get(`${API_URL}/api/perfil/${encodeURIComponent(id)}`);
+            const { data } = await axios.get(`${API_URL}/api/perfil/${encodeURIComponent(id)}`, {
+              params: { club_id: torneoClubId },
+            });
             const resolvedPhoto = await resolveProfilePhotoUrl(data?.foto_url);
             const meta = {
               name: getNombreCompletoJugador(data),

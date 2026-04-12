@@ -1181,6 +1181,7 @@ function RankingSection({ sexo, titulo, jugadorId, clubId }) {
                 modalidad={modalidad}
                 categoria={categoria}
                 apiUrl={API_URL}
+                clubId={clubId}
                 compact
                 floating
                 onClose={() => setSelectedPlayerId('')}

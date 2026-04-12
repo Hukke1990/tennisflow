@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useClub } from '../context/ClubContext';
 import { supabase } from '../lib/supabase';
 import { PROFILE_PHOTO_BUCKET, resolveProfilePhotoUrl } from '../lib/profilePhoto';
 import {
@@ -247,6 +248,7 @@ function MiActividad({ userId }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [rivalesPorId, setRivalesPorId] = useState({});
+  const { clubId } = useClub();
 
   useEffect(() => {
     if (!userId) return;
@@ -258,7 +260,7 @@ function MiActividad({ userId }) {
 
   useEffect(() => {
     const rivalIds = Object.keys(stats?.h2h || {});
-    if (rivalIds.length === 0) {
+    if (rivalIds.length === 0 || !clubId) {
       setRivalesPorId({});
       return;
     }
@@ -268,7 +270,9 @@ function MiActividad({ userId }) {
     const resolverNombres = async () => {
       const resultados = await Promise.allSettled(
         rivalIds.map(async (rivalId) => {
-          const { data } = await axios.get(`${API_URL}/api/perfil/${rivalId}`);
+          const { data } = await axios.get(`${API_URL}/api/perfil/${rivalId}`, {
+            params: { club_id: clubId },
+          });
           const nombre = data?.nombre_completo
             || [data?.nombre, data?.apellido].filter(Boolean).join(' ').trim();
           return [rivalId, nombre || `${rivalId.slice(0, 8)}...`];

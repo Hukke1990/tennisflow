@@ -234,6 +234,7 @@ export default function RankingPlayerCard({
   modalidad,
   categoria,
   apiUrl,
+  clubId,
   compact = false,
   floating = false,
   onClose,
@@ -299,6 +300,7 @@ export default function RankingPlayerCard({
 
     const cacheKey = [
       playerId,
+      clubId || '',
       sexo || '',
       modalidad || '',
       String(categoria ?? ''),
@@ -319,7 +321,9 @@ export default function RankingPlayerCard({
 
       let perfil = {};
       try {
-        const response = await axios.get(`${apiUrl}/api/perfil/${playerId}`);
+        const response = await axios.get(`${apiUrl}/api/perfil/${playerId}`, {
+          params: { club_id: clubId },
+        });
         perfil = response?.data || {};
       } catch (_) {
         perfil = {};
@@ -396,7 +400,7 @@ export default function RankingPlayerCard({
     return () => {
       active = false;
     };
-  }, [apiUrl, cacheVersion, categoria, modalidad, playerId, selectedPlayer, sexo]);
+  }, [apiUrl, cacheVersion, categoria, clubId, modalidad, playerId, selectedPlayer, sexo]);
 
   if (!playerId) {
     return (

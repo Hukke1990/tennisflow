@@ -135,12 +135,12 @@ export default function InscripcionModal({ torneo, onClose, onSuccess }) {
   }, [diasEditables]);
 
   useEffect(() => {
-    if (!user?.id) return;
-    axios.get(`${API_URL}/api/perfil/${user.id}`)
+    if (!user?.id || !clubId) return;
+    axios.get(`${API_URL}/api/perfil/${user.id}`, { params: { club_id: clubId } })
       .then(({ data }) => setPerfil(data))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [user]);
+  }, [user, clubId]);
 
   useEffect(() => {
     setParejaQuery('');
