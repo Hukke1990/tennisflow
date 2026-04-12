@@ -21,6 +21,8 @@ const { getClubPlan, getPlanLimits }           = require('../utils/planResolver'
 const { getUsage }                              = require('../utils/usageTracker');
 const { getClubMetrics }                        = require('../utils/analyticsAggregator');
 const { generateInsights, shouldSuggestUpgrade } = require('../services/insightService');
+const { calculateChurnScore, classifyChurn }    = require('../services/churnService');
+const { generateRecommendations }               = require('../services/recommendationService');
 const supabase                                  = require('../services/supabase');
 const { handleError }                           = require('../utils/errors');
 const logger                                    = require('../services/logger');
@@ -74,9 +76,7 @@ const getClubUsage = async (req, res) => {
   }
 };
 
-module.exports = { getClubUsage, getClubAnalytics };
-
-// ─── GET /api/club/analytics ──────────────────────────────────────────────────
+module.exports = { getClubUsage, getClubAnalytics, getClubInsights };
 
 async function getClubAnalytics(req, res) {
   try {
@@ -109,6 +109,52 @@ async function getClubAnalytics(req, res) {
       metrics,
       insights,
       upgrade_suggested: shouldSuggestUpgrade(metrics, limits),
+    });
+  } catch (err) {
+    return handleError(res, err, logger);
+  }
+}
+
+// ─── GET /api/club/insights ───────────────────────────────────────────────────
+
+async function getClubInsights(req, res) {
+  try {
+    const clubId = req.authUser?.club_id;
+    if (!clubId) return res.status(400).json({ error: 'club_id requerido' });
+
+    const [plan, metrics] = await Promise.all([
+      getClubPlan(clubId),
+      getClubMetrics(clubId),
+    ]);
+
+    const limits  = getPlanLimits(plan);
+    const score   = calculateChurnScore(metrics, limits);
+    const risk    = classifyChurn(score);
+    const recommendations = generateRecommendations(metrics, limits, risk);
+
+    // FASE 6 — Log estructurado
+    logger.info('ai_insights_generated', {
+      club_id:    clubId,
+      plan,
+      churn_score: score,
+      churn_risk:  risk,
+    });
+
+    // FASE 7 — Alerta automática para clubs en alto riesgo
+    if (risk === 'high') {
+      logger.alert('high_churn_risk', {
+        alert_type: 'high_churn_risk',
+        club_id:    clubId,
+        plan,
+        churn_score: score,
+        metrics,
+      });
+    }
+
+    return res.status(200).json({
+      churn_score:     score,
+      churn_risk:      risk,
+      recommendations,
     });
   } catch (err) {
     return handleError(res, err, logger);
