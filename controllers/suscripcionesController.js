@@ -2,6 +2,7 @@
 const suscripcionesService = require('../services/suscripcionesService');
 const { handleError } = require('../utils/errors');
 const logger = require('../services/logger');
+const { trackEvent } = require('../utils/analytics');
 
 const resolveClubId = (req) =>
   req.params?.clubId || req.authUser?.club_id || req.query?.club_id || null;
@@ -50,6 +51,8 @@ const iniciar = async (req, res) => {
     const clubId   = resolveClubId(req);
     const planType = String(req.body?.plan_type || '').trim().toLowerCase();
     const data = await suscripcionesService.iniciar({ clubId, planType });
+    // FASE 10 — Tracking de conversión (fire-and-forget)
+    trackEvent('upgrade_click', { club_id: clubId, plan: planType }).catch(() => {});
     return res.status(200).json(data);
   } catch (err) {
     return handleError(res, err, logger);

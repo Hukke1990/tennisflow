@@ -356,11 +356,14 @@ export default function CarteleraTorneos() {
         });
       });
 
-      const data = Array.from(torneoMap.values());
-      if (!Array.isArray(data) || data.length === 0) {
+      const allFailed = todosRes.status === 'rejected'
+        && disponiblesRes.status === 'rejected'
+        && dashboardRes.status === 'rejected';
+      if (allFailed) {
         throw new Error('No se pudo obtener la lista de torneos.');
       }
 
+      const data = Array.from(torneoMap.values());
       const torneosOrdenados = [...data].sort((a, b) => new Date(b.fecha_inicio) - new Date(a.fecha_inicio));
       TORNEOS_CACHE.set(clubId, torneosOrdenados);
       setTorneos(torneosOrdenados);

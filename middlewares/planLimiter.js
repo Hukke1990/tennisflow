@@ -22,6 +22,22 @@
 
 const { getPlanLimits, getClubPlan } = require('../utils/planResolver');
 const { getUsage }                   = require('../utils/usageTracker');
+const { NEXT_PLAN }                  = require('../services/planRecommendationService');
+
+/** Etiqueta legible del métrico para mensajes de error */
+const METRIC_LABELS = {
+  partidos_mes:    'partidos mensuales',
+  torneos_activos: 'torneos activos',
+  jugadores:       'jugadores',
+};
+
+/** Mensaje context-aware por plan y métrico */
+const buildLimitMessage = (plan, metric, limit) => {
+  const next = NEXT_PLAN[plan];
+  const label = METRIC_LABELS[metric] || metric;
+  const nextStr = next ? `. Upgrade a ${next.charAt(0).toUpperCase() + next.slice(1)} para continuar` : '';
+  return `Tu plan ${plan} permite hasta ${limit} ${label}${nextStr}.`;
+};
 
 /**
  * Middleware factory: verifica límite de uso mensual Redis.
@@ -51,13 +67,17 @@ const enforcePlanLimit = (metric, getLimitFn) => async (req, res, next) => {
     const usage = await getUsage(clubId, metric);
 
     if (usage >= limit) {
+      const upgradeTarget = NEXT_PLAN[plan] ?? null;
       return res.status(403).json({
-        error:            'Límite de plan alcanzado',
-        code:             'PLAN_LIMIT_EXCEEDED',
+        error:             'Límite de plan alcanzado',
+        code:              'PLAN_LIMIT_EXCEEDED',
+        reason:            'limit_reached',
         metric,
         limit,
-        current:          usage,
-        upgrade_required: true,
+        current:           usage,
+        message:           buildLimitMessage(plan, metric, limit),
+        upgrade_required:  true,
+        upgrade_suggestion: upgradeTarget,
       });
     }
 
@@ -101,11 +121,15 @@ const enforceDoblesAllowed = () => async (req, res, next) => {
     const limits = getPlanLimits(plan);
 
     if (!limits.allow_dobles) {
+      const upgradeTarget = NEXT_PLAN[plan] ?? null;
       return res.status(403).json({
-        error:            'Tu plan no permite torneos de dobles',
-        code:             'PLAN_LIMIT_EXCEEDED',
-        metric:           'allow_dobles',
-        upgrade_required: true,
+        error:              'Tu plan no permite torneos de dobles',
+        code:               'PLAN_LIMIT_EXCEEDED',
+        reason:             'feature_not_allowed',
+        metric:             'allow_dobles',
+        message:            `Tu plan actual no incluye torneos de dobles${upgradeTarget ? `. Pasate a ${upgradeTarget.charAt(0).toUpperCase() + upgradeTarget.slice(1)} para activarlo` : ''}.`,
+        upgrade_required:   true,
+        upgrade_suggestion: upgradeTarget,
       });
     }
 

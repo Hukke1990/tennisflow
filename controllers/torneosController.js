@@ -4,6 +4,8 @@ const { handleError } = require('../utils/errors');
 const logger          = require('../services/logger');
 const { trackEvent }        = require('../utils/analytics');
 const { incrementCounter }  = require('../utils/analyticsCounters');
+const { getClubPlan, getPlanLimits } = require('../utils/planResolver');
+const { getPlanPressure, pressureToPct } = require('../services/planRecommendationService');
 
 const resolveClubId = (req) =>
   req.query?.club_id ?? req.headers?.['x-club-id'] ?? null;
@@ -37,6 +39,26 @@ const crearTorneo = async (req, res) => {
     // Analytics: torneo creado (fire-and-forget)
     trackEvent('torneo_creado', { club_id: clubId, user_id: req.authUser?.id }).catch(() => {});
     incrementCounter(clubId, 'torneos').catch(() => {});
+
+    // FASE 7 — Upgrade trigger: comprobar presión post-creación (fire-and-forget)
+    ;(async () => {
+      try {
+        const { getCounter } = require('../utils/analyticsCounters');
+        const [plan, current] = await Promise.all([
+          getClubPlan(clubId),
+          getCounter(clubId, 'torneos'),
+        ]);
+        const limits   = getPlanLimits(plan);
+        const pressure = getPlanPressure({ usage: { torneos: current, partidos: 0, canchas: null, jugadores_activos: null }, limits });
+        const pct      = pressureToPct(pressure);
+        if (pct >= 100) {
+          logger.alert('upgrade_trigger', { alert_type: 'upgrade_trigger', club_id: clubId, metric: 'torneos', plan, current, pressure_pct: pct });
+          trackEvent('upgrade_triggered',   { club_id: clubId, metric: 'torneos', plan, pressure_pct: pct }).catch(() => {});
+        } else if (pct >= 80) {
+          trackEvent('upgrade_opportunity', { club_id: clubId, metric: 'torneos', plan, pressure_pct: pct }).catch(() => {});
+        }
+      } catch (_) { /* no-op */ }
+    })();
 
     return res.status(201).json(data);
   } catch (err) {

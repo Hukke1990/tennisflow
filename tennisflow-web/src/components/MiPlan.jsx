@@ -117,6 +117,9 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
   const [suscripcionError, setSuscripcionError] = useState(null);
   const [pendingPlanId, setPendingPlanId] = useState(null); // plan al que cambiará
 
+  // Upgrade intelligence (FASE 4)
+  const [upgradeContext, setUpgradeContext] = useState(null);
+
   // Estados del flujo de upgrade
   const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [upgradeError, setUpgradeError] = useState(null);
@@ -135,6 +138,14 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
     axios.get('/api/perfil/count', { params: { club_id: clubId } })
       .then(({ data }) => setJugadoresCount(data.count ?? 0))
       .catch(() => setJugadoresCount(null));
+  }, [clubId]);
+
+  // Upgrade intelligence: cargar desde /api/club/insights
+  useEffect(() => {
+    if (!clubId) return;
+    axios.get('/api/club/insights')
+      .then(({ data }) => setUpgradeContext(data?.upgrade ?? null))
+      .catch(() => {}); // fallo silencioso
   }, [clubId]);
 
   useEffect(() => {
@@ -220,6 +231,14 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
   const isPremium = clubPlan === 'premium';
   const features = PLAN_FEATURES[clubPlan] || PLAN_FEATURES.basico;
 
+  // Datos de upgrade desde el backend (con fallbacks)
+  const upgradeReasons     = upgradeContext?.reasons         ?? [];
+  const recommendedPlan    = upgradeContext?.recommended_plan ?? null;
+  const pressurePct        = upgradeContext?.pressure_pct    ?? 0;
+  const upgradeCopywriting = upgradeContext?.copywriting      ?? null;
+  const hasUrgentReasons   = upgradeReasons.some(r => r.type === 'limit_reached');
+  const targetPlanForCta   = recommendedPlan ?? (clubPlan === 'basico' ? 'pro' : 'premium');
+
   return (
     <div className="max-w-2xl mx-auto py-6 px-4 space-y-5">
       {/* Badge de plan */}
@@ -230,12 +249,72 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
         {isPremium && (
           <span className="text-xs text-amber-600 font-medium">Plan activo con todas las funciones</span>
         )}
+        {upgradeCopywriting && !isPremium && (
+          <span className="text-xs text-gray-500 font-medium">{upgradeCopywriting}</span>
+        )}
         {suscripcion?.status === 'paused' && (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 border border-red-200 text-red-700 text-xs font-bold">
             ⚠️ Suscripción pausada — actualizá tu método de pago
           </span>
         )}
       </div>
+
+      {/* Upgrade reasons — alertas context-aware (FASE 4) */}
+      {!isPremium && upgradeReasons.length > 0 && (
+        <div className="space-y-2">
+          {upgradeReasons.map((reason, i) => (
+            <div
+              key={i}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium ${
+                reason.type === 'limit_reached'
+                  ? 'bg-red-50 border-red-200 text-red-700'
+                  : 'bg-amber-50 border-amber-200 text-amber-700'
+              }`}
+            >
+              <span>{reason.type === 'limit_reached' ? '🚫' : '⚠️'}</span>
+              <span className="flex-1">{reason.message}</span>
+              {reason.pct != null && (
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                  reason.type === 'limit_reached' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'
+                }`}>
+                  {reason.pct}%
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Barra de presión de plan (FASE 4) */}
+      {!isPremium && pressurePct > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm font-semibold text-gray-700">Presión del plan</span>
+            <span className={`text-sm font-bold ${
+              pressurePct >= 90 ? 'text-red-600' : pressurePct >= 70 ? 'text-amber-600' : 'text-gray-500'
+            }`}>
+              {pressurePct}%
+            </span>
+          </div>
+          <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                pressurePct >= 90 ? 'bg-red-500' : pressurePct >= 70 ? 'bg-amber-500' : 'bg-blue-400'
+              }`}
+              style={{ width: `${pressurePct}%` }}
+            />
+          </div>
+          {recommendedPlan && (
+            <p className="text-xs text-gray-500 mt-2">
+              {hasUrgentReasons ? '🔥' : '💡'} Recomendado para vos:{' '}
+              <span className="font-semibold text-gray-700">
+                {PLAN_LABELS[recommendedPlan] || recommendedPlan}
+              </span>
+              {hasUrgentReasons && ' — en base a tu uso actual'}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Banner de cambio de plan pendiente */}
       {pendingPlanId && (() => {
@@ -306,14 +385,19 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
 
       {/* Upgrade section */}
       {!isPremium && (
-        <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-6">
-          <h3 className="font-semibold text-amber-800 mb-1">
-            {clubPlan === 'basico' ? '¿Necesitás más capacidad? Pasate a Pro' : 'Desbloqueá todo con Premium'}
+        <div className={`bg-gradient-to-br border rounded-2xl p-6 ${hasUrgentReasons ? 'from-red-50 to-orange-50 border-red-200' : 'from-amber-50 to-orange-50 border-amber-200'}`}>
+          {/* Título dinámico: urgente si hay limit_reached, genérico si no */}
+          <h3 className={`font-semibold mb-1 ${hasUrgentReasons ? 'text-red-800' : 'text-amber-800'}`}>
+            {hasUrgentReasons
+              ? `🔥 Recomendado para vos: ${PLAN_LABELS[targetPlanForCta] || targetPlanForCta}`
+              : (clubPlan === 'basico' ? '¿Necesitás más capacidad? Pasate a Pro' : 'Desbloqueá todo con Premium')}
           </h3>
-          <p className="text-amber-700 text-sm mb-1">
-            {clubPlan === 'basico'
-              ? 'Con Pro gestionás hasta 5 torneos, 6 canchas y 500 jugadores.'
-              : 'Con Premium obtenés todo ilimitado, partidos en vivo y branding propio.'}
+          <p className={`text-sm mb-1 ${hasUrgentReasons ? 'text-red-700' : 'text-amber-700'}`}>
+            {hasUrgentReasons
+              ? `Porque estás usando el ${pressurePct}% de tu capacidad actual.`
+              : (clubPlan === 'basico'
+                  ? 'Con Pro gestionás hasta 5 torneos, 6 canchas y 500 jugadores.'
+                  : 'Con Premium obtenés todo ilimitado, partidos en vivo y branding propio.')}
           </p>
           <p className="text-amber-800 text-base font-bold mb-4">
             {clubPlan === 'basico' ? (
@@ -389,12 +473,18 @@ export default function MiPlan({ canchasCount = 0, torneosCount = 0 }) {
             <button
               type="button"
               disabled={upgradeLoading}
-              onClick={() => handleUpgrade(clubPlan === 'basico' ? 'pro' : 'premium')}
-              className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all shadow-md shadow-amber-200"
+              onClick={() => handleUpgrade(targetPlanForCta)}
+              className={`w-full disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all shadow-md ${
+                hasUrgentReasons
+                  ? 'bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 shadow-red-200'
+                  : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-amber-200'
+              }`}
             >
               {upgradeLoading
                 ? 'Redirigiendo a Mercado Pago…'
-                : (clubPlan === 'basico' ? 'Actualizar a Pro' : 'Actualizar a Premium')}
+                : (hasUrgentReasons
+                    ? `🔥 Actualizar a ${PLAN_LABELS[targetPlanForCta] || targetPlanForCta} ahora`
+                    : `Actualizar a ${PLAN_LABELS[targetPlanForCta] || targetPlanForCta}`)}
             </button>
           )}
           <p className="text-amber-600 text-xs mt-3 text-center">

@@ -6,6 +6,9 @@ const logger             = require('../services/logger');
 const { incrementUsage }    = require('../utils/usageTracker');
 const { trackEvent }        = require('../utils/analytics');
 const { incrementCounter }  = require('../utils/analyticsCounters');
+const { getClubPlan, getPlanLimits } = require('../utils/planResolver');
+const { getUsage }              = require('../utils/usageTracker');
+const { getPlanPressure, pressureToPct } = require('../services/planRecommendationService');
 
 const cargarResultado = async (req, res) => {
   try {
@@ -21,6 +24,22 @@ const cargarResultado = async (req, res) => {
       incrementUsage(clubId, 'partidos_mes').catch(() => {});
       trackEvent('partido_jugado', { club_id: clubId, partido_id: req.params.id }).catch(() => {});
       incrementCounter(clubId, 'partidos').catch(() => {});
+
+      // FASE 7 — Upgrade opportunity: si el uso mensual supera el 80% (fire-and-forget)
+      ;(async () => {
+        try {
+          const [plan, currentPartidos] = await Promise.all([
+            getClubPlan(clubId),
+            getUsage(clubId, 'partidos_mes'),
+          ]);
+          const limits   = getPlanLimits(plan);
+          const pressure = getPlanPressure({ usage: { torneos: 0, canchas: null, jugadores_activos: null, partidos: currentPartidos }, limits });
+          const pct      = pressureToPct(pressure);
+          if (pct >= 80) {
+            trackEvent('upgrade_opportunity', { club_id: clubId, metric: 'partidos_mes', plan, pressure_pct: pct }).catch(() => {});
+          }
+        } catch (_) { /* no-op */ }
+      })();
     }
 
     return res.status(200).json(data);

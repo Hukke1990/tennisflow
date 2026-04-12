@@ -17,6 +17,7 @@
 const PLAN_LIMITS = Object.freeze({
   basico: {
     max_torneos_activos: 1,
+    max_canchas:         2,
     max_jugadores:       50,
     max_partidos_mes:    100,
     allow_dobles:        false,
@@ -24,6 +25,7 @@ const PLAN_LIMITS = Object.freeze({
 
   pro: {
     max_torneos_activos: 5,
+    max_canchas:         6,
     max_jugadores:       500,
     max_partidos_mes:    1000,
     allow_dobles:        true,
@@ -31,6 +33,7 @@ const PLAN_LIMITS = Object.freeze({
 
   premium: {
     max_torneos_activos: Infinity,
+    max_canchas:         Infinity,
     max_jugadores:       Infinity,
     max_partidos_mes:    Infinity,
     allow_dobles:        true,
@@ -39,6 +42,7 @@ const PLAN_LIMITS = Object.freeze({
   // ⚠️  PLAN TEMPORAL DE PRUEBAS — sin restricciones
   test: {
     max_torneos_activos: Infinity,
+    max_canchas:         Infinity,
     max_jugadores:       Infinity,
     max_partidos_mes:    Infinity,
     allow_dobles:        true,

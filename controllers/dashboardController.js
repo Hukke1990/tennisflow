@@ -3,6 +3,16 @@ const dashboardService = require('../services/dashboardService');
 const { handleError }  = require('../utils/errors');
 const logger           = require('../services/logger');
 const { trackEvent }   = require('../utils/analytics');
+const { getClubPlan, getPlanLimits } = require('../utils/planResolver');
+const { getClubMetrics }             = require('../utils/analyticsAggregator');
+const { getUsage }                   = require('../utils/usageTracker');
+const { getUpgradeReasons }          = require('../services/upgradeReasonService');
+const {
+  getPlanPressure,
+  pressureToPct,
+  recommendPlan,
+  getPlanCopywriting,
+} = require('../services/planRecommendationService');
 
 const INSCRIBIBLE_STATES = new Set(['publicado', 'abierto']);
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -255,16 +265,69 @@ const getDashboard = async (req, res) => {
     const rawClubId = req.query?.club_id ?? req.headers?.['x-club-id'];
     const clubId    = String(rawClubId || '').trim();
     const jugadorId = String(req.query?.jugador_id || '').trim() || undefined;
-    const data      = await dashboardService.getDashboard({ clubId, jugadorId });
+
+    // Dashboard principal + upgrade context en paralelo (fail-safe)
+    const [data, upgradeContext] = await Promise.all([
+      dashboardService.getDashboard({ clubId, jugadorId }),
+      buildUpgradeContext(clubId),
+    ]);
 
     // Analytics: vista de dashboard (fire-and-forget)
     if (clubId) trackEvent('dashboard_view', { club_id: clubId, user_id: req.authUser?.id }).catch(() => {});
 
-    return res.status(200).json(data);
+    return res.status(200).json({ ...data, upgrade: upgradeContext });
   } catch (err) {
     return handleError(res, err, logger);
   }
 };
+
+/**
+ * Construye el contexto de upgrade para el dashboard usando analytics counters.
+ * Nunca lanza error — devuelve null en caso de fallo.
+ *
+ * @param {string} clubId
+ * @returns {Promise<object|null>}
+ */
+async function buildUpgradeContext(clubId) {
+  if (!clubId) return null;
+  try {
+    const [plan, metrics, partidosMes] = await Promise.all([
+      getClubPlan(clubId),
+      getClubMetrics(clubId),
+      getUsage(clubId, 'partidos_mes'),
+    ]);
+
+    const limits  = getPlanLimits(plan);
+    const usage   = {
+      torneos:           metrics.torneos  || 0,
+      canchas:           null,
+      jugadores_activos: null,
+      partidos:          partidosMes,
+    };
+
+    const pressure        = getPlanPressure({ usage, limits });
+    const pressurePct     = pressureToPct(pressure);
+    const recommendedPlan = recommendPlan({ usage, limits, currentPlan: plan });
+    const copywriting     = getPlanCopywriting(plan, pressure);
+
+    return {
+      current_plan:     plan,
+      recommended_plan: recommendedPlan,
+      pressure_pct:     pressurePct,
+      copywriting,
+      reasons:          getUpgradeReasons({ usage, limits, plan }),
+      banner: {
+        show:    pressurePct >= 70,
+        message: pressurePct >= 90
+          ? 'Estás al límite — upgrade recomendado'
+          : 'Estás cerca del límite de tu plan',
+        cta: 'Ver planes',
+      },
+    };
+  } catch (_) {
+    return null;
+  }
+}
 
 module.exports = { getDashboard };
 
