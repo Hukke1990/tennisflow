@@ -179,6 +179,13 @@ export default function SuperAdminPage() {
   const demoHome = buildClubPath(DEFAULT_CLUB_SLUG, '/inicio');
 
   const [activeTab, setActiveTab]       = useState('alta');
+
+  // ── Demo state ────────────────────────────────────────────────────────────
+  const [demoClubId, setDemoClubId]       = useState('');
+  const [demoLoading, setDemoLoading]     = useState(null); // 'seed' | 'reset' | null
+  const [demoMsg, setDemoMsg]             = useState(null); // { type: 'ok'|'error', text, resumen? }
+  const [demoConfirmReset, setDemoConfirmReset] = useState(false);
+
   const [form, setForm] = useState({
     nombreClub: '',
     slug: '',
@@ -295,11 +302,12 @@ export default function SuperAdminPage() {
         </div>
 
         {/* Tab bar */}
-        <div className="flex gap-1 mb-8 rounded-xl bg-white/5 border border-white/10 p-1 w-fit">
+        <div className="flex gap-1 mb-8 rounded-xl bg-white/5 border border-white/10 p-1 w-fit flex-wrap">
           {[
             { key: 'alta',     label: 'Alta de Club' },
             { key: 'clubes',   label: 'Clubes y Suscripciones' },
             { key: 'usuarios', label: 'Usuarios' },
+            { key: 'demo',     label: '🎾 Demo Data' },
           ].map((t) => (
             <button
               key={t.key}
@@ -478,7 +486,166 @@ export default function SuperAdminPage() {
           <SuperAdminUsers clubs={clubs} />
         )}
 
+        {/* ── TAB: Demo Data ── */}
+        {activeTab === 'demo' && (
+          <DemoPanel
+            clubs={clubs}
+            demoClubId={demoClubId}
+            setDemoClubId={setDemoClubId}
+            demoLoading={demoLoading}
+            setDemoLoading={setDemoLoading}
+            demoMsg={demoMsg}
+            setDemoMsg={setDemoMsg}
+            demoConfirmReset={demoConfirmReset}
+            setDemoConfirmReset={setDemoConfirmReset}
+          />
+        )}
+
       </div>
+    </div>
+  );
+}
+
+// ── Componente: panel de demo data ────────────────────────────────────────────
+function DemoPanel({
+  clubs,
+  demoClubId, setDemoClubId,
+  demoLoading, setDemoLoading,
+  demoMsg, setDemoMsg,
+  demoConfirmReset, setDemoConfirmReset,
+}) {
+  const handleSeed = async () => {
+    if (!demoClubId) return;
+    setDemoLoading('seed');
+    setDemoMsg(null);
+    setDemoConfirmReset(false);
+    try {
+      const { data } = await axios.post(`${API_URL}/api/super-admin/demo/seed`, { club_id: demoClubId });
+      setDemoMsg({ type: 'ok', text: data.message, resumen: data.resumen });
+    } catch (err) {
+      setDemoMsg({ type: 'error', text: err?.response?.data?.error || 'Error al generar el demo.' });
+    } finally {
+      setDemoLoading(null);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!demoClubId) return;
+    setDemoLoading('reset');
+    setDemoMsg(null);
+    setDemoConfirmReset(false);
+    try {
+      const { data } = await axios.delete(`${API_URL}/api/super-admin/demo/reset`, { data: { club_id: demoClubId } });
+      setDemoMsg({ type: 'ok', text: data.message });
+    } catch (err) {
+      setDemoMsg({ type: 'error', text: err?.response?.data?.error || 'Error al eliminar el demo.' });
+    } finally {
+      setDemoLoading(null);
+    }
+  };
+
+  const isLoading = demoLoading !== null;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-6 md:p-8 shadow-2xl shadow-black/20 space-y-6">
+      <div>
+        <h2 className="text-sm font-black uppercase tracking-wider text-slate-300 mb-1">Demo Data</h2>
+        <p className="text-xs text-slate-400">
+          Genera datos de demostración completos y realistas para mostrar la app a potenciales clientes.
+          Incluye 160 jugadores, rankings, torneos de singles y dobles, brackets completos y actualiza el perfil del admin del club.
+          Todos los registros llevan el prefijo <span className="font-mono text-amber-300">[DEMO]</span> para poder eliminarlos fácilmente.
+        </p>
+      </div>
+
+      {/* Selector de club */}
+      <div>
+        <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">Club destino</label>
+        <select
+          value={demoClubId}
+          onChange={(e) => { setDemoClubId(e.target.value); setDemoMsg(null); setDemoConfirmReset(false); }}
+          disabled={isLoading}
+          className="w-full max-w-sm rounded-xl border border-white/10 bg-slate-900/70 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-60"
+        >
+          <option value="">— Seleccioná un club —</option>
+          {clubs.map((c) => (
+            <option key={c.id} value={c.id}>{c.nombre} ({c.slug})</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Qué se genera */}
+      <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 text-xs text-slate-400 space-y-1">
+        <p className="text-slate-300 font-semibold mb-2">¿Qué incluye el demo?</p>
+        <p>🎾 <strong>160 jugadores</strong> (16M + 16F × 5 categorías) con rankings ELO por categoría</p>
+        <p>🏟️ <strong>6 canchas</strong> con distintas superficies (una en mantenimiento)</p>
+        <p>📋 <strong>14 torneos de singles</strong> (por sexo y categoría, estados variados) + <strong>4 dobles</strong> + 1 abierto futuro</p>
+        <p>📊 <strong>Brackets de 16</strong> (singles) y <strong>8 parejas</strong> (dobles) con resultados y scores reales</p>
+        <p>👤 <strong>Perfil del admin</strong> actualizado con datos biomédicos, ELO y actividad en Mi Actividad</p>
+      </div>
+
+      {/* Acciones */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <button
+          type="button"
+          onClick={handleSeed}
+          disabled={!demoClubId || isLoading}
+          className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:opacity-50 px-5 py-2.5 text-sm font-black text-white transition-all"
+        >
+          {demoLoading === 'seed' ? 'Generando...' : '✦ Generar datos de demo'}
+        </button>
+
+        {!demoConfirmReset ? (
+          <button
+            type="button"
+            onClick={() => setDemoConfirmReset(true)}
+            disabled={!demoClubId || isLoading}
+            className="rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 disabled:opacity-50 px-5 py-2.5 text-sm font-bold text-red-400 transition-colors"
+          >
+            🗑 Eliminar datos de demo
+          </button>
+        ) : (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-red-300">¿Confirmar eliminación de todos los datos [DEMO]?</span>
+            <button
+              type="button"
+              onClick={handleReset}
+              disabled={isLoading}
+              className="rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-60 px-4 py-2 text-sm font-bold text-white transition-colors"
+            >
+              {demoLoading === 'reset' ? 'Eliminando...' : 'Sí, eliminar todo'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDemoConfirmReset(false)}
+              disabled={isLoading}
+              className="text-xs text-slate-400 hover:text-white px-3 py-2 rounded-lg border border-white/10 transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Feedback */}
+      {demoMsg && (
+        <div className={`rounded-xl border p-4 text-sm ${
+          demoMsg.type === 'ok'
+            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+            : 'border-red-500/40 bg-red-500/10 text-red-300'
+        }`}>
+          <p className="font-semibold">{demoMsg.text}</p>
+          {demoMsg.resumen && (
+            <ul className="mt-2 text-xs space-y-0.5 text-emerald-300/80">
+              <li>Jugadores: {demoMsg.resumen.jugadores}</li>
+              <li>Canchas: {demoMsg.resumen.canchas}</li>
+              <li>Torneos: {demoMsg.resumen.torneos}</li>
+              <li>Inscripciones: {demoMsg.resumen.inscripciones}</li>
+              <li>Partidos: {demoMsg.resumen.partidos}</li>
+              {demoMsg.resumen.admin_actualizado && <li>✓ Perfil del admin actualizado (Mi Perfil + Mi Actividad)</li>}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

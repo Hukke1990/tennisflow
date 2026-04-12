@@ -19,6 +19,7 @@ const {
   resetearPasswordUsuario,
   desvincularDeClub,
 } = require('../controllers/superAdminController');
+const { seedDemo, resetDemo } = require('../controllers/demoController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 
 // super_admin only (crear clubes)
@@ -51,5 +52,9 @@ router.get('/usuarios', ...SA, listarUsuarios);
 router.patch('/usuarios/:id/rol', ...SA, cambiarRol);
 router.post('/usuarios/:id/reset-password', ...SA, resetearPasswordUsuario);
 router.delete('/usuarios/:id/club', ...SA, desvincularDeClub);
+
+// Demo data
+router.post('/demo/seed',  ...SA, seedDemo);
+router.delete('/demo/reset', ...SA, resetDemo);
 
 module.exports = router;
